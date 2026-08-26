@@ -1,0 +1,242 @@
+[
+    {
+        "activityShopId": 178997,
+        "name": "【城市挑战赛】深圳站-8.23",
+        "date": "2026-08-23",
+        "shopProvince": "广东省",
+        "shopCity": "深圳市",
+        "shopArea": "福田区",
+        "shopName": "闪电家卡牌潮玩",
+        "playerMaxCount": 128
+    },
+    {
+        "activityShopId": 179091,
+        "name": "【城市挑战赛】西安站-8.23",
+        "date": "2026-08-23",
+        "shopProvince": "陕西省",
+        "shopCity": "西安市",
+        "shopArea": "新城区",
+        "shopName": "果核TCG",
+        "playerMaxCount": 128
+    },
+    {
+        "activityShopId": 178637,
+        "name": "【城市挑战赛】苏州站-8.23",
+        "date": "2026-08-23",
+        "shopProvince": "江苏省",
+        "shopCity": "苏州市",
+        "shopArea": "相城区",
+        "shopName": "卓卡潮品(相城龙湖店)",
+        "playerMaxCount": 128
+    },
+    {
+        "activityShopId": 178670,
+        "name": "【城市挑战赛】北京站-8.23",
+        "date": "2026-08-23",
+        "shopProvince": "北京市",
+        "shopCity": "海淀区",
+        "shopArea": "",
+        "shopName": "joyspace",
+        "playerMaxCount": 128
+    },
+    {
+        "activityShopId": 178978,
+        "name": "【城市挑战赛】大连站-8.23",
+        "date": "2026-08-23",
+        "shopProvince": "辽宁省",
+        "shopCity": "大连市",
+        "shopArea": "甘井子区",
+        "shopName": "1001TCG",
+        "playerMaxCount": 64
+    },
+    {
+        "activityShopId": 178578,
+        "name": "【城市挑战赛】广州站-8.22",
+        "date": "2026-08-22",
+        "shopProvince": "广东省",
+        "shopCity": "广州市",
+        "shopArea": "越秀区",
+        "shopName": "超进化竞技馆",
+        "playerMaxCount": 128
+    },
+    {
+        "activityShopId": 178939,
+        "name": "【城市挑战赛】上海站-8.22",
+        "date": "2026-08-22",
+        "shopProvince": "上海市",
+        "shopCity": "闵行区",
+        "shopArea": "",
+        "shopName": "酷猫卡牌",
+        "playerMaxCount": 128
+    },
+    {
+        "activityShopId": 178959,
+        "name": "【城市挑战赛】济南站-8.22",
+        "date": "2026-08-22",
+        "shopProvince": "山东省",
+        "shopCity": "济南市",
+        "shopArea": "历下区",
+        "shopName": "POPBEES碰头聚玩",
+        "playerMaxCount": 128
+    },
+    {
+        "activityShopId": 175387,
+        "name": "【城市挑战赛】广州站-8.16",
+        "date": "2026-08-16",
+        "shopProvince": "广东省",
+        "shopCity": "广州市",
+        "shopArea": "海珠区",
+        "shopName": "猫岛巡礼卡牌店",
+        "playerMaxCount": 128
+    },
+    {
+        "activityShopId": 175370,
+        "name": "【城市挑战赛】长沙站-8.16",
+        "date": "2026-08-16",
+        "shopProvince": "湖南省",
+        "shopCity": "长沙市",
+        "shopArea": "岳麓区",
+        "shopName": "皮蛋卡牌",
+        "playerMaxCount": 128
+    },
+    {
+        "activityShopId": 175390,
+        "name": "【城市挑战赛】上海站-8.16",
+        "date": "2026-08-16",
+        "shopProvince": "上海市",
+        "shopCity": "徐汇区",
+        "shopArea": "",
+        "shopName": "CTC Club（徐汇店）",
+        "playerMaxCount": 128
+    },
+    {
+        "activityShopId": 175419,
+        "name": "【城市挑战赛】青岛站-8.16",
+        "date": "2026-08-16",
+        "shopProvince": "山东省",
+        "shopCity": "青岛市",
+        "shopArea": "城阳区",
+        "shopName": "AGO卡牌桌游俱乐部",
+        "playerMaxCount": 128
+    },
+    {
+        "activityShopId": 175473,
+        "name": "【城市挑战赛】天津站-8.16",
+        "date": "2026-08-16",
+        "shopProvince": "天津市",
+        "shopCity": "南开区",
+        "shopArea": "",
+        "shopName": "精锐牌谷",
+        "playerMaxCount": 128
+    },
+    {
+        "activityShopId": 175410,
+        "name": "【城市挑战赛】沈阳站-8.16",
+        "date": "2026-08-16",
+        "shopProvince": "辽宁省",
+        "shopCity": "沈阳市",
+        "shopArea": "和平区",
+        "shopName": "口袋部落",
+        "playerMaxCount": 128
+    },
+    {
+        "activityShopId": 175429,
+        "name": "【城市挑战赛】南京站-8.15",
+        "date": "2026-08-15",
+        "shopProvince": "江苏省",
+        "shopCity": "南京市",
+        "shopArea": "秦淮区",
+        "shopName": "赛高卡牌（南京旗舰店）",
+        "playerMaxCount": 128
+    },
+    {
+        "activityShopId": 175388,
+        "name": "【城市挑战赛】北京站-8.15",
+        "date": "2026-08-15",
+        "shopProvince": "北京市",
+        "shopCity": "东城区",
+        "shopArea": "",
+        "shopName": "宝库卡牌",
+        "playerMaxCount": 128
+    },
+    {
+        "activityShopId": 172063,
+        "name": "【城市挑战赛】 广州站-8.09",
+        "date": "2026-08-09",
+        "shopProvince": "广东省",
+        "shopCity": "广州市",
+        "shopArea": "番禺区",
+        "shopName": "惬意社",
+        "playerMaxCount": 128
+    },
+    {
+        "activityShopId": 171936,
+        "name": "【城市挑战赛】福州站-8.9",
+        "date": "2026-08-09",
+        "shopProvince": "福建省",
+        "shopCity": "福州市",
+        "shopArea": "台江区",
+        "shopName": "StepTcg一步卡牌",
+        "playerMaxCount": 128
+    },
+    {
+        "activityShopId": 172007,
+        "name": "【城市挑战赛】杭州站-8.9",
+        "date": "2026-08-09",
+        "shopProvince": "浙江省",
+        "shopCity": "杭州市",
+        "shopArea": "上城区",
+        "shopName": "深灰道馆",
+        "playerMaxCount": 128
+    },
+    {
+        "activityShopId": 172127,
+        "name": "【城市挑战赛】深圳站-8.8",
+        "date": "2026-08-08",
+        "shopProvince": "广东省",
+        "shopCity": "深圳市",
+        "shopArea": "南山区",
+        "shopName": "宝卡游艺(后海店)",
+        "playerMaxCount": 128
+    },
+    {
+        "activityShopId": 171957,
+        "name": "【城市挑战赛】成都站-8.8",
+        "date": "2026-08-08",
+        "shopProvince": "四川省",
+        "shopCity": "成都市",
+        "shopArea": "武侯区",
+        "shopName": "独角兽秘卡集社",
+        "playerMaxCount": 128
+    },
+    {
+        "activityShopId": 171979,
+        "name": "【城市挑战赛】 武汉站-8.8",
+        "date": "2026-08-08",
+        "shopProvince": "湖北省",
+        "shopCity": "武汉市",
+        "shopArea": "洪山区",
+        "shopName": "闪电家_武汉店",
+        "playerMaxCount": 128
+    },
+    {
+        "activityShopId": 172309,
+        "name": "【城市挑战赛】上海站-8.8",
+        "date": "2026-08-08",
+        "shopProvince": "上海市",
+        "shopCity": "浦东新区",
+        "shopArea": "",
+        "shopName": "叙叙亭",
+        "playerMaxCount": 128
+    },
+    {
+        "activityShopId": 171972,
+        "name": "【城市挑战赛】北京站-8.8",
+        "date": "2026-08-08",
+        "shopProvince": "北京市",
+        "shopCity": "朝阳区",
+        "shopArea": "",
+        "shopName": "泽萱卡牌",
+        "playerMaxCount": 128
+    }
+]
