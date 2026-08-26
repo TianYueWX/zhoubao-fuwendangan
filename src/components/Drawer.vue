@@ -38,7 +38,7 @@ function onKeydown(e: KeyboardEvent): void {
     >
       <!-- 遮罩 -->
       <div
-        class="absolute inset-0 bg-black/40 backdrop-blur-sm"
+        class="absolute inset-0 bg-ink/35 backdrop-blur-sm"
         @click="close()"
       ></div>
 
@@ -51,15 +51,15 @@ function onKeydown(e: KeyboardEvent): void {
         :style="{ background: 'var(--color-drawer-bg)' }"
       >
         <div
-          class="sticky top-0 z-10 flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-800"
+          class="sticky top-0 z-10 flex items-center justify-between px-5 py-4 border-b border-panel-border"
           :style="{ background: 'var(--color-drawer-bg)' }"
         >
-          <h3 class="font-display font-bold text-slate-800 dark:text-white truncate">
+          <h3 class="font-display font-bold text-ink truncate">
             {{ title }}
           </h3>
           <button
             @click="close()"
-            class="w-8 h-8 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 text-slate-400 hover:text-red-500 transition-colors shrink-0"
+            class="w-8 h-8 rounded-lg hover:bg-ink/5 text-ink-faint hover:text-brand transition-colors shrink-0"
           >
             ✕
           </button>

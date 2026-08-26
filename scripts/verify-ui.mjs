@@ -1,4 +1,4 @@
-/* 临时验证脚本:CDP 驱动 headless chromium 跑通 预设加载 → 总览 → 深色模式 */
+/* 临时验证脚本:CDP 驱动 headless chromium 跑通 预设加载 → 头版总览 → 传奇对比 → 周报叙事(宣纸单主题) */
 import { spawn } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 
@@ -82,8 +82,10 @@ mkdirSync('/home/TianYue/Downloads/state/shots', { recursive: true });
 
 console.log('== 1. 首屏(导入页)==');
 console.log('title:', await evalJs('document.title'));
-console.log('html class:', await evalJs('document.documentElement.className'));
+console.log('html class(应为空):', JSON.stringify(await evalJs('document.documentElement.className')));
 console.log('刊名:', await evalJs(`document.querySelector('h1')?.textContent`));
+console.log('页面底色(宣纸白):', await evalJs('getComputedStyle(document.body).backgroundColor'));
+console.log('无主题切换按钮:', await evalJs(`!document.body.textContent.includes('跟随系统')`));
 await shots('01-import-light');
 
 console.log('\n== 2. 点击一键加载预设包 ==');
@@ -95,19 +97,20 @@ const clicked = await evalJs(`(() => {
 })()`);
 console.log('click:', clicked);
 await sleep(9000); // worker 解析 + 分析
-console.log('== 3. 总览检查 ==');
+console.log('== 3. 头版检查 ==');
 console.log('刊号行:', await evalJs(`[...document.querySelectorAll('header div')].map(d => d.textContent?.trim()).find(t => t && t.startsWith('本期'))`));
+console.log('头条存在:', await evalJs(`!!document.body.textContent.includes('本期头条')`));
+console.log('头条大标题(综合分口径):', await evalJs(`(() => { const h = [...document.querySelectorAll('h2')].find(x => x.className.includes('headline-xl')); return h ? h.textContent.trim() : 'none'; })()`));
+console.log('头条含冠军转化:', await evalJs(`document.body.textContent.includes('夺冠') && document.body.textContent.includes('Top8 转化')`));
+console.log('报眼 KPI 行数:', await evalJs(`[...document.querySelectorAll('aside .py-3')].length`));
 console.log('Tier 榜存在:', await evalJs(`document.body.textContent.includes('英雄 Tier List')`));
-console.log('总览无旧传奇面板:', await evalJs(`!document.body.textContent.includes('最佳传奇')`));
 console.log('域对存在:', await evalJs(`document.body.textContent.includes('传奇域对分布')`));
-console.log('KPI 数据行数:', await evalJs(`document.querySelectorAll('[class*="text-[26px]"]').length`));
-console.log('检索条(范围):', await evalJs(`document.body.textContent.includes('范围')`));
-console.log('Top 阈值下拉:', await evalJs(`[...document.querySelectorAll('select')].some(s => s.textContent.includes('Top'))`));
+console.log('散点存在:', await evalJs(`document.body.textContent.includes('环境阶梯')`));
+console.log('范围条存在:', await evalJs(`document.body.textContent.includes('范围')`));
+console.log('周次选择器默认选中最新周:', await evalJs(`(() => { const s = document.querySelector('select[aria-label="选择周次"]'); return s ? s.value : 'no select'; })()`));
+console.log('周次选项数(含全部周):', await evalJs(`(() => { const s = document.querySelector('select[aria-label="选择周次"]'); return s ? s.options.length : 0; })()`));
 console.log('栏目条项数:', await evalJs(`document.querySelectorAll('nav[aria-label="卷宗导航"] button').length`));
 console.log('栏目条短标签:', await evalJs(`[...document.querySelectorAll('nav[aria-label="卷宗导航"] button')].map(b => b.textContent.trim()).join('|')`));
-console.log('无侧栏:', await evalJs(`!document.querySelector('aside')`));
-console.log('报头无装饰图标:', await evalJs(`document.querySelectorAll('header svg').length`));
-console.log('栏目条吸附偏移:', await evalJs(`getComputedStyle(document.querySelector('nav[aria-label="卷宗导航"]')).top`));
 console.log('总览图例符文数:', await evalJs(`[...document.querySelectorAll('section svg[role="img"]')].length`));
 await shots('02-overview-light');
 
@@ -121,14 +124,9 @@ const toLeg = await evalJs(`(() => {
 console.log('click 传奇栏目:', toLeg);
 await sleep(1200);
 console.log('页面标题:', await evalJs(`document.body.textContent.includes('传奇卡组对比')`));
-console.log('传奇选项数:', await evalJs(`document.querySelectorAll('select').length ? [...document.querySelectorAll('select')].find(s => s.textContent.includes('套'))?.options.length ?? 0 : 0`));
-console.log('默认对比列数(表头):', await evalJs(`(() => {
-  const ths = [...document.querySelectorAll('thead th')];
-  return ths.filter(t => t.textContent.includes('#') || /\\d+胜\\/\\d+轮/.test(t.textContent)).length;
-})()`));
 console.log('矩阵分类行:', await evalJs(`[...document.querySelectorAll('tbody tr td[colspan]')].map(t => t.textContent.trim()).filter(Boolean).join('|')`));
 console.log('矩阵行数(卡牌):', await evalJs(`document.querySelectorAll('tbody tr').length`));
-console.log('共通/部分/独有图例:', await evalJs(`document.body.textContent.includes('共通') && document.body.textContent.includes('独有')`));
+console.log('共通/独有图例:', await evalJs(`document.body.textContent.includes('共通') && document.body.textContent.includes('独有')`));
 // Top N 向下取
 const top5 = await evalJs(`(() => {
   const btns = [...document.querySelectorAll('button')];
@@ -138,27 +136,19 @@ const top5 = await evalJs(`(() => {
 })()`);
 console.log('click 前5:', top5);
 await sleep(800);
-console.log('前5后表头列数:', await evalJs(`(() => {
-  const ths = [...document.querySelectorAll('thead th')];
-  return ths.filter(t => t.textContent.includes('#') || /\\d+胜\\/\\d+轮/.test(t.textContent)).length;
-})()`));
 // 周过滤
 const wk = await evalJs(`(() => {
   const btns = [...document.querySelectorAll('button')];
-  const b = btns.find(x => /W\\d+/.test(x.textContent));
+  const b = btns.find(x => /W\\d+/.test(x.textContent) && x.textContent.trim().length <= 12);
   if (!b) return 'none';
   b.click(); return b.textContent.trim();
 })()`);
 console.log('周过滤 click:', wk);
-console.log('周过滤后矩阵列数:', await evalJs(`(() => {
-  const ths = [...document.querySelectorAll('thead th')];
-  return ths.filter(t => t.textContent.includes('#')).length;
-})()`));
 await sleep(800);
+console.log('周过滤后矩阵仍渲染:', await evalJs(`document.querySelectorAll('tbody tr').length > 5`));
 await shots('05-legendary-compare');
 
-
-console.log('\n== 4. 回到总览并切到趋势周报叙事(浅色)==');
+console.log('\n== 4. 回到头版并切到趋势对比叙事 ==');
 const backOv = await evalJs(`(() => {
   const b = [...document.querySelectorAll('nav[aria-label="卷宗导航"] button')].find(x => x.textContent.trim() === '总览');
   b?.click(); return !!b;
@@ -167,27 +157,27 @@ console.log('click 总览栏目:', backOv);
 await sleep(1000);
 const rep = await evalJs(`(() => {
   const btns = [...document.querySelectorAll('button')];
-  const b = btns.find(x => x.textContent.includes('趋势周报'));
+  const b = btns.find(x => x.textContent.trim() === '趋势对比');
   if (!b) return 'no button';
   b.click(); return 'ok';
 })()`);
 console.log('click:', rep);
 await sleep(1500);
 console.log('胜率变化榜:', await evalJs(`document.body.textContent.includes('胜率变化榜')`));
-console.log('复制周报按钮:', await evalJs(`document.body.textContent.includes('复制周报 Markdown')`));
+console.log('复制趋势报告按钮:', await evalJs(`document.body.textContent.includes('复制趋势报告 Markdown')`));
 console.log('热度上升榜:', await evalJs(`document.body.textContent.includes('热度上升')`));
 await shots('04-report-light');
 
-console.log('\n== 5. 切换深色主题 ==');
-await evalJs(`localStorage.setItem('riftbound-theme','dark'); location.reload()`);
-await sleep(3500);
-console.log('html class:', await evalJs('document.documentElement.className'));
-console.log('page bg:', await evalJs('getComputedStyle(document.body).backgroundColor'));
-console.log('brand color:', await evalJs('getComputedStyle(document.documentElement).getPropertyValue("--color-brand").trim()'));
-console.log('符文印渲染:', await evalJs(`document.querySelectorAll('header svg[role="img"]').length`));
-await shots('03-overview-dark');
+console.log('\n== 5. 单卡页:传奇/符文不应出现在万金油表 ==');
+const toCards = await evalJs(`(() => {
+  const b = [...document.querySelectorAll('nav[aria-label="卷宗导航"] button')].find(x => x.textContent.trim() === '单卡');
+  b?.click(); return !!b;
+})()`);
+console.log('click 单卡栏目:', toCards);
+await sleep(1500);
+console.log('表内无「传奇」类型行:', await evalJs(`![...document.querySelectorAll('tbody tr')].map(r => r.cells[2]?.textContent?.trim()).includes('传奇')`));
+console.log('表内无符文卡(如 翠意符文):', await evalJs(`!document.body.textContent.includes('翠意符文')`));
 
 ws.close();
 chrome.kill();
 console.log('\nDONE');
-

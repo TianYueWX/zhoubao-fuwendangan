@@ -1,8 +1,7 @@
 <script setup lang="ts">
 /**
- * ChartCard.vue · 通用 ECharts 卡片
+ * ChartCard.vue · 通用 ECharts 容器
  *  - 监听 props.option 变化 → setOption
- *  - 监听主题切换 → injectTheme + resize
  *  - 默认开启 toolbox:dataZoom + restore + saveAsImage
  *  - ResizeObserver 监听容器尺寸
  */
@@ -10,7 +9,6 @@ import { onMounted, onUnmounted, ref, watch } from 'vue';
 import * as echarts from 'echarts';
 import type { EChartsOption } from 'echarts';
 import { injectTheme, getChartColors } from '@/utils/theme';
-import { useTheme } from '@/composables/useTheme';
 import type { ChartOptionInput } from '@/composables/useChart';
 
 const props = withDefaults(
@@ -31,7 +29,6 @@ const props = withDefaults(
 const elRef = ref<HTMLDivElement | null>(null);
 let instance: echarts.ECharts | null = null;
 let observer: ResizeObserver | null = null;
-const { version: themeVersion } = useTheme();
 
 const emit = defineEmits<{
   (e: 'chart-click', params: Record<string, unknown>): void;
@@ -107,12 +104,6 @@ watch(
   () => refresh(),
   { deep: true }
 );
-
-// 主题切换:重新注入颜色 + resize
-watch(themeVersion, () => {
-  refresh();
-  requestAnimationFrame(() => instance?.resize());
-});
 </script>
 
 <template>

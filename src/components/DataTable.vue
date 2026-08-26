@@ -123,17 +123,17 @@ const pagerRange = computed<number[]>(() => {
       :value="search"
       @input="(e: Event) => (search = (e.target as HTMLInputElement).value)"
       :placeholder="props.searchPlaceholder"
-      class="filter-select w-full !py-2 placeholder-slate-400 dark:placeholder-slate-500"
+      class="filter-select w-full !py-2 placeholder-ink-faint"
     />
     <div class="overflow-x-auto" :style="{ maxHeight: props.maxHeight }">
       <table class="w-full text-sm">
         <thead class="sticky-thead">
-          <tr class="text-slate-500 dark:text-gray-400 border-b border-slate-200 dark:border-slate-700">
+          <tr class="text-ink-faint border-b border-panel-border text-xs">
             <th
               v-for="col in props.columns"
               :key="col.key"
               :class="[
-                'py-2 px-2 bg-white dark:bg-slate-900',
+                'py-2 px-2',
                 col.align === 'right'
                   ? 'text-right'
                   : col.align === 'center'
@@ -152,12 +152,11 @@ const pagerRange = computed<number[]>(() => {
             </th>
           </tr>
         </thead>
-        <tbody class="text-slate-700 dark:text-gray-300">
+        <tbody class="text-ink-muted">
           <tr
             v-for="(row, idx) in pagedRows"
             :key="idx"
-            class="table-row border-b border-slate-100 dark:border-slate-800/50"
-            :class="{ 'cursor-pointer': true }"
+            class="table-row border-b border-[rgba(59,74,90,0.08)] cursor-pointer"
             @click="emit('row-click', row)"
           >
             <td
@@ -180,7 +179,7 @@ const pagerRange = computed<number[]>(() => {
           <tr v-if="filteredRows.length === 0">
             <td
               :colspan="props.columns.length"
-              class="py-8 text-center text-slate-400 dark:text-slate-600"
+              class="py-8 text-center text-ink-faint"
             >
               {{ props.emptyText }}
             </td>
@@ -192,7 +191,7 @@ const pagerRange = computed<number[]>(() => {
     <!-- 分页 -->
     <div
       v-if="props.pageSize > 0 && filteredRows.length > props.pageSize"
-      class="flex items-center justify-between text-xs text-slate-500 dark:text-gray-400"
+      class="flex items-center justify-between text-xs text-ink-faint"
     >
       <span>共 {{ filteredRows.length }} 行 · 第 {{ page }}/{{ totalPages }} 页</span>
       <div class="flex items-center gap-1">
@@ -223,10 +222,7 @@ const pagerRange = computed<number[]>(() => {
   transition: all 0.15s;
 }
 .page-btn:hover:not(:disabled) {
-  background: rgba(0, 0, 0, 0.06);
-}
-html.dark .page-btn:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(59, 74, 90, 0.08);
 }
 .page-btn:disabled {
   opacity: 0.35;

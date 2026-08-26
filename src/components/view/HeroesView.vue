@@ -104,9 +104,9 @@ const heroRows = computed(() => {
 
 const search = ref('');
 const selected = computed({
-  get: () => store.filterHero || heroRows.value[0]?.hero || '',
+  get: () => store.focusHero || heroRows.value[0]?.hero || '',
   set: (v: string) => {
-    store.filterHero = v;
+    store.focusHero = v;
   }
 });
 
@@ -116,7 +116,7 @@ const options = computed(() => {
 });
 
 watch(
-  () => store.filterHero,
+  () => store.focusHero,
   () => {
     search.value = '';
   }
@@ -158,55 +158,53 @@ const coreCards = computed<CoreCardRow[]>(() => {
 </script>
 
 <template>
-  <div class="fade-in space-y-6">
+  <div class="fade-in space-y-8">
     <!-- 英雄选择器 -->
-    <section class="panel rounded-2xl p-4">
-      <div class="flex items-center gap-3 flex-wrap">
-        <div class="relative flex-1 min-w-[220px] max-w-sm">
-          <input
-            v-model="search"
-            type="text"
-            placeholder="搜索英雄(如 凯南 / 易 …)"
-            class="filter-select w-full !py-2 placeholder-slate-400"
-          />
-          <!-- 下拉候选 -->
-          <div
-            v-if="search && options.length > 0"
-            class="absolute z-30 mt-1 w-full card p-1 max-h-64 overflow-y-auto shadow-xl"
-          >
-            <button
-              v-for="o in options.slice(0, 12)"
-              :key="o.hero"
-              @click="
-                () => {
-                  selected = o.hero;
-                }
-              "
-              class="w-full text-left px-3 py-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 text-sm flex justify-between"
-            >
-              <span>{{ o.hero }}</span>
-              <span class="text-xs text-slate-400">{{ o.total }} 套</span>
-            </button>
-          </div>
-        </div>
-        <div v-if="row" class="flex items-center gap-2">
-          <TierBadge :tier="row.tier" />
-          <span class="text-lg font-bold text-slate-800 dark:text-white">{{ row.hero }}</span>
-        </div>
-        <select
-          v-model="selected"
-          class="mini-select ml-auto max-w-[240px]"
+    <section class="flex items-center gap-3 flex-wrap">
+      <div class="relative flex-1 min-w-[220px] max-w-sm">
+        <input
+          v-model="search"
+          type="text"
+          placeholder="搜索英雄(如 凯南 / 易 …)"
+          class="filter-select w-full !py-2 placeholder-ink-faint"
+        />
+        <!-- 下拉候选 -->
+        <div
+          v-if="search && options.length > 0"
+          class="absolute z-30 mt-1 w-full card p-1 max-h-64 overflow-y-auto shadow-xl"
         >
-          <option v-for="r in heroRows" :key="r.hero" :value="r.hero">
-            {{ r.hero }} ({{ r.total }})
-          </option>
-        </select>
+          <button
+            v-for="o in options.slice(0, 12)"
+            :key="o.hero"
+            @click="
+              () => {
+                selected = o.hero;
+              }
+            "
+            class="w-full text-left px-3 py-1.5 rounded-lg hover:bg-brand-soft text-sm flex justify-between"
+          >
+            <span>{{ o.hero }}</span>
+            <span class="text-xs text-ink-faint">{{ o.total }} 套</span>
+          </button>
+        </div>
       </div>
+      <div v-if="row" class="flex items-center gap-2">
+        <TierBadge :tier="row.tier" />
+        <span class="text-lg font-display font-bold text-ink">{{ row.hero }}</span>
+      </div>
+      <select
+        v-model="selected"
+        class="mini-select ml-auto max-w-[240px]"
+      >
+        <option v-for="r in heroRows" :key="r.hero" :value="r.hero">
+          {{ r.hero }} ({{ r.total }})
+        </option>
+      </select>
     </section>
 
     <template v-if="row && store.result">
       <!-- 指标卡(带周环比 Δ) -->
-      <div class="grid grid-cols-2 lg:grid-cols-5">
+      <div class="grid grid-cols-2 lg:grid-cols-5 divide-x divide-panel-border">
         <StatCard label="样本卡组" :value="row.total" :sub="`出场率 ${row.popularity.toFixed(1)}%`" />
         <StatCard
           label="Top8 率"
@@ -239,13 +237,14 @@ const coreCards = computed<CoreCardRow[]>(() => {
       </div>
 
       <!-- 周际趋势(v3) -->
-      <section class="panel rounded-2xl p-5">
+      <section>
         <SectionHeading
+          eyebrow="人物志 · Profile"
           :title="`${row.hero} 周际趋势`"
           note="出场率 / 胜率(贝叶斯收缩修正)/ Top8 率 · 数据包内周次"
         >
           <template #actions>
-            <span v-if="heroDelta" class="text-[11px] text-slate-400 tabular-nums">
+            <span v-if="heroDelta" class="text-[11px] text-ink-faint tabular-nums">
               环比:胜率
               {{ heroDelta.winRate != null ? `${heroDelta.winRate > 0 ? '+' : ''}${heroDelta.winRate.toFixed(1)}pp` : '—' }}
               · 出场率
@@ -254,14 +253,16 @@ const coreCards = computed<CoreCardRow[]>(() => {
           </template>
         </SectionHeading>
         <ChartCard v-if="trendOption" :option="trendOption" height="300px" />
-        <div v-else class="h-40 flex items-center justify-center text-slate-400 text-sm">
+        <div v-else class="h-40 flex items-center justify-center text-ink-faint text-sm">
           暂无周际数据
         </div>
       </section>
 
-      <div class="grid grid-cols-1 xl:grid-cols-2 gap-5">
+      <div class="hairline"></div>
+
+      <section class="grid grid-cols-1 xl:grid-cols-2 gap-8 xl:divide-x xl:divide-panel-border">
         <!-- 流派聚类 -->
-        <section class="panel rounded-2xl p-5">
+        <div class="xl:pr-8 min-w-0">
           <SectionHeading
             title="流派自动聚类"
             note="Jaccard 卡组相似度 ≥ 0.55 贪心聚类,最多 3 流派 + 其他"
@@ -274,61 +275,61 @@ const coreCards = computed<CoreCardRow[]>(() => {
               :style="{ borderLeft: `4px solid ${archColor(i)}` }"
             >
               <div class="flex items-center justify-between mb-2 flex-wrap gap-2">
-                <div class="font-semibold text-slate-800 dark:text-white">
-                  {{ a.name === '其他' ? '🔹 其他构筑' : `${i + 1} 号流派 · ${a.count} 套` }}
-                  <span class="text-xs font-normal text-slate-400 ml-2">{{ a.share.toFixed(0) }}%</span>
+                <div class="font-semibold text-ink">
+                  {{ a.name === '其他' ? '其他构筑' : `${i + 1} 号流派 · ${a.count} 套` }}
+                  <span class="text-xs font-normal text-ink-faint ml-2">{{ a.share.toFixed(0) }}%</span>
                 </div>
                 <div
                   v-if="a.avgRank !== null"
-                  class="text-xs text-slate-400 tabular-nums"
+                  class="text-xs text-ink-faint tabular-nums"
                 >
                   平均名次 {{ a.avgRank }}
                 </div>
               </div>
-              <div class="flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-500 dark:text-gray-400">
+              <div class="flex flex-wrap gap-x-3 gap-y-1 text-xs text-ink-muted">
                 <span v-for="cc in a.coreCards.slice(0, 6)" :key="cc.id" class="inline-flex items-center gap-1">
                   {{ cc.name }}
-                  <b class="text-slate-400">{{ cc.rate.toFixed(0) }}%</b>
+                  <b class="text-ink-faint">{{ cc.rate.toFixed(0) }}%</b>
                 </span>
               </div>
             </div>
           </div>
-          <div v-else class="py-10 text-center text-slate-400 text-sm">
+          <div v-else class="py-10 text-center text-ink-faint text-sm">
             该英雄 Top 样本不足 6 套,无法聚类
           </div>
-        </section>
+        </div>
 
         <!-- 核心卡 -->
-        <section class="panel rounded-2xl p-5">
-          <SectionHeading title="核心卡 Top 20" note="按高排名样本携带率排序;条形为携带率" />
+        <div class="xl:pl-8 min-w-0">
+          <SectionHeading eyebrow="装备单 · Loadout" title="核心卡 Top 20" note="按高排名样本携带率排序;条形为携带率" />
           <div class="overflow-y-auto max-h-[420px]">
             <table class="w-full text-sm">
               <thead class="sticky-thead">
-                <tr class="text-slate-400 border-b border-slate-200 dark:border-slate-700 text-xs">
-                  <th class="py-2 px-2 text-left bg-white dark:bg-slate-900">#</th>
-                  <th class="py-2 px-2 text-left bg-white dark:bg-slate-900">卡牌</th>
-                  <th class="py-2 px-2 text-right bg-white dark:bg-slate-900">稀有度</th>
-                  <th class="py-2 px-2 text-right bg-white dark:bg-slate-900">平均张数</th>
-                  <th class="py-2 px-2 text-right bg-white dark:bg-slate-900 w-[38%]">携带率</th>
+                <tr class="text-ink-faint border-b border-panel-border text-xs">
+                  <th class="py-2 px-2 text-left">#</th>
+                  <th class="py-2 px-2 text-left">卡牌</th>
+                  <th class="py-2 px-2 text-right">稀有度</th>
+                  <th class="py-2 px-2 text-right">平均张数</th>
+                  <th class="py-2 px-2 text-right w-[38%]">携带率</th>
                 </tr>
               </thead>
               <tbody>
                 <tr
                   v-for="c in coreCards"
                   :key="String(c.id)"
-                  class="border-b border-slate-100 dark:border-slate-800/50"
+                  class="border-b border-[rgba(59,74,90,0.08)]"
                 >
-                  <td class="py-1.5 px-2 text-slate-400 tabular-nums">{{ c.rank }}</td>
-                  <td class="py-1.5 px-2 font-medium text-slate-700 dark:text-gray-200">
+                  <td class="py-1.5 px-2 text-ink-faint tabular-nums">{{ c.rank }}</td>
+                  <td class="py-1.5 px-2 font-medium text-ink-muted">
                     {{ c.name }}
-                    <span class="text-[10px] text-slate-300 dark:text-slate-600 ml-1">{{ c.id }}</span>
+                    <span class="text-[10px] text-ink-faint ml-1">{{ c.id }}</span>
                   </td>
-                  <td class="py-1.5 px-2 text-right text-xs text-slate-400">{{ c.rarity }}</td>
+                  <td class="py-1.5 px-2 text-right text-xs text-ink-faint">{{ c.rarity }}</td>
                   <td class="py-1.5 px-2 text-right tabular-nums">{{ c.avg }}</td>
                   <td class="py-1.5 px-2">
                     <div class="flex items-center gap-2 justify-end">
                       <span class="tabular-nums text-xs w-11 text-right">{{ c.rate }}%</span>
-                      <div class="h-1.5 w-24 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                      <div class="h-1.5 w-24 bg-panel-border rounded-full overflow-hidden">
                         <div
                           class="h-full bg-brand rounded-full"
                           :style="{ width: `${Math.min(100, c.rate)}%` }"
@@ -340,11 +341,11 @@ const coreCards = computed<CoreCardRow[]>(() => {
               </tbody>
             </table>
           </div>
-        </section>
-      </div>
+        </div>
+      </section>
     </template>
 
-    <div v-else class="panel rounded-2xl p-16 text-center text-slate-400">
+    <div v-else class="py-16 text-center text-ink-faint">
       当前过滤条件下无英雄数据
     </div>
   </div>

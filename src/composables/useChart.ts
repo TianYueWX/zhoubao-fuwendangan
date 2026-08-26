@@ -3,7 +3,6 @@
  * ECharts 实例生命周期 hook
  *   - 自动注入主题色(tooltip / text / axis)
  *   - 监听 option 变化 → setOption
- *   - 监听主题 version 变化 → 重新 setOption + resize
  *   - 容器尺寸变化 → ResizeObserver 通知 instance
  *   - 组件卸载 → dispose
  * ============================================================== */
@@ -12,7 +11,6 @@ import { onMounted, onUnmounted, ref, watch, type Ref } from 'vue';
 import * as echarts from 'echarts';
 import type { EChartsOption } from 'echarts';
 import { injectTheme } from '@/utils/theme';
-import { useTheme } from './useTheme';
 
 /**
  * 图表 option 类型采用宽口径 `Record<string, unknown>` 而不是 `EChartsOption`。
@@ -30,7 +28,6 @@ export function useChart(
   const elRef = ref<HTMLElement | null>(null);
   let instance: echarts.ECharts | null = null;
   let observer: ResizeObserver | null = null;
-  const { version: themeVersion } = useTheme();
 
   function refresh(): void {
     if (!instance) return;
@@ -64,12 +61,6 @@ export function useChart(
 
   // 监听 option 变化
   watch(getOption, refresh, { deep: true });
-
-  // 主题切换:重新 setOption + 触发 resize
-  watch(themeVersion, () => {
-    refresh();
-    requestAnimationFrame(() => instance?.resize());
-  });
 
   return { elRef };
 }

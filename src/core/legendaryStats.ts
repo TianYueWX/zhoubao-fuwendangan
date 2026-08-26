@@ -3,8 +3,10 @@
  *
  * 传奇卡排行引擎(v3 新增):
  *   - 每套卡组恰好 1 张传奇卡(cardCategory === '传奇'),它定义卡组双色域
- *   - 按传奇聚合:样本 / Top8 率 / 出场率 / 加权真实胜率(Σwins/Σrounds)/
- *     最常见搭配英雄 / 卡图 / 禁卡标记
+ *   - 按传奇聚合:样本 / Top8 率 / 冠军率(rank=1 转化)/ 出场率 /
+ *     加权真实胜率(Σwins/Σrounds)/ 最常见搭配英雄 / 卡图 / 禁卡标记
+ *   - 头条「最佳传奇」用转化综合分 leadCompositeScore(Top8 率×60% + 冠军率×40%),
+ *     不使用胜率(胜率受轮数结构噪声影响大)
  *   - 纯函数,无 DOM / Vue 依赖;排行与对比组件只消费 LegendaryRow
  * ============================================================== */
 
@@ -30,6 +32,10 @@ export interface LegendaryRow {
   top8: number;
   /** Top8 率(%) */
   top8Rate: number;
+  /** 夺冠次数(rank = 1) */
+  champions: number;
+  /** 冠军转化率(%)= champions / total */
+  championRate: number;
   /** 出场率(%)= total / grandTotal */
   popularity: number;
   /** 加权真实胜率(%),无胜场数据为 null */
@@ -58,6 +64,7 @@ interface LegendaryAgg {
   variants: Set<string>;
   total: number;
   top8: number;
+  champions: number;
   winsSum: number;
   roundsSum: number;
   winDecks: number;
@@ -110,6 +117,7 @@ export function legendaryRows(
         variants: new Set(),
         total: 0,
         top8: 0,
+        champions: 0,
         winsSum: 0,
         roundsSum: 0,
         winDecks: 0,
@@ -120,6 +128,7 @@ export function legendaryRows(
     agg.variants.add(leg);
     agg.total += 1;
     if (d.rank >= 1 && d.rank <= 8) agg.top8 += 1;
+    if (d.rank === 1) agg.champions += 1;
     if (d.wins !== null && d.eventRounds !== null && d.eventRounds > 0) {
       agg.winsSum += d.wins;
       agg.roundsSum += d.eventRounds;
@@ -155,6 +164,8 @@ export function legendaryRows(
       total: a.total,
       top8: a.top8,
       top8Rate: a.total > 0 ? (a.top8 / a.total) * 100 : 0,
+      champions: a.champions,
+      championRate: a.total > 0 ? (a.champions / a.total) * 100 : 0,
       popularity: grandTotal > 0 ? (a.total / grandTotal) * 100 : 0,
       winRate: raw,
       winRateAdj: hasWin && prior != null ? shrinkWinRate(a.winsSum, a.roundsSum, prior, strength) : raw,
@@ -190,4 +201,30 @@ export function sortLegendaryRows(
   return [...rows]
     .filter((r) => r.total >= minSample)
     .sort((a, b) => metricValue(b, metric) - metricValue(a, metric) || b.total - a.total);
+}
+
+/** 头条转化综合分权重:Top8 率 60% + 冠军率 40% */
+const LEAD_TOP8_W = 0.6;
+const LEAD_CHAMPION_W = 0.4;
+
+/**
+ * 头条「最佳传奇」综合分(0-100):
+ *   Top8 率 × 60% + 冠军率 × 40%(均为对携带该传奇卡组的转化口径)。
+ * 刻意不用胜率:瑞士轮轮数与出勤结构会让胜率噪声远大于 Top8/夺冠转化。
+ */
+export function leadCompositeScore(r: LegendaryRow): number {
+  return r.top8Rate * LEAD_TOP8_W + r.championRate * LEAD_CHAMPION_W;
+}
+
+/**
+ * 头条候选排序:综合分降序,并列按样本数。
+ * minSample 由调用方按数据规模给定(建议 ≥ max(5, 样本量×2%))。
+ */
+export function sortLeadCandidates(
+  rows: readonly LegendaryRow[],
+  minSample: number
+): LegendaryRow[] {
+  return [...rows]
+    .filter((r) => r.total >= minSample)
+    .sort((a, b) => leadCompositeScore(b) - leadCompositeScore(a) || b.total - a.total);
 }

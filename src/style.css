@@ -3,14 +3,13 @@
 @tailwind utilities;
 
 /* ══════════════════════════════════════════════════════════════
- * 符文档案 · 周报 — 设计系统(古典卷宗版)
+ * 符文档案 · 周报 — 设计系统(报刊头版式 · 宣纸卷宗单主题)
  *
- * 主题一「宣纸·卷宗」(默认):宣纸白底 + 徽墨正文 + 朱砂朱批 + 远山黛分层 + 藤黄点缀
- * 主题二「墨夜·古籍」(html.dark):暖墨夜底,朱砂提亮
- * 全部颜色经 CSS 变量驱动,主题切换即时生效(ECharts 由 utils/theme.ts 读取)。
+ * 五色:宣纸白 #F4F1EA / 徽墨黑 #2C2C2C / 朱砂红 #B23A27
+ *       远山黛 #3B4A5A / 藤黄 #C59B46
+ * 全部颜色经 CSS 变量驱动,ECharts 由 utils/theme.ts 读取。
  * ══════════════════════════════════════════════════════════════ */
 
-/* ── 宣纸·卷宗(默认) ── */
 :root {
   --color-page-bg: #f4f1ea; /* 宣纸白 */
   --color-page-glow: rgba(178, 58, 39, 0.05); /* 朱砂微光 */
@@ -51,51 +50,7 @@
   --color-heat-ramp-2: #d9c49a;
   --color-heat-ramp-3: #c59b46;
   --color-heat-ramp-4: #b23a27;
-  scrollbar-thumb: rgba(59, 74, 90, 0.3);
-}
-
-/* ── 墨夜·古籍 ── */
-html.dark {
-  --color-page-bg: #171410; /* 暖墨夜 */
-  --color-page-glow: rgba(208, 85, 63, 0.06);
-  --color-header-bg: rgba(23, 20, 16, 0.9);
-  --color-panel-bg: rgba(31, 27, 22, 0.88);
-  --color-panel-border: rgba(226, 219, 204, 0.12);
-  --color-card-bg: rgba(255, 255, 255, 0.04);
-  --color-card-border: rgba(226, 219, 204, 0.12);
-  --color-thead-bg: #201c17;
-  --color-text-primary: #ede7da;
-  --color-text-muted: #a89f8f;
-  --color-text-subtle: #6f675a;
-  --color-axis-line: rgba(226, 219, 204, 0.18);
-  --color-split-line: rgba(226, 219, 204, 0.08);
-  --color-hairline: rgba(226, 219, 204, 0.16);
-  --color-tooltip-bg: rgba(31, 27, 22, 0.97);
-  --color-tooltip-border: rgba(197, 155, 70, 0.35);
-  --color-dropzone-bg: rgba(255, 255, 255, 0.02);
-  --color-dropzone-border: rgba(208, 85, 63, 0.4);
-  --color-dropzone-hover-bg: rgba(208, 85, 63, 0.06);
-  --color-dropzone-hover-border: rgba(208, 85, 63, 0.75);
-  --color-shadow: rgba(0, 0, 0, 0.4);
-  --color-brand: #d0553f; /* 朱砂红(夜版提亮) */
-  --color-brand-ink: #fff7f2;
-  --color-brand-soft: rgba(208, 85, 63, 0.12);
-  --color-brand-faint: rgba(208, 85, 63, 0.35);
-  --color-brand-glow: rgba(208, 85, 63, 0.35);
-  --color-accent: #c59b46;
-  --color-accent-ink: #241c0b;
-  --color-drawer-bg: #1c1915;
-  --color-map-area: #1f1c17;
-  --color-map-border: #3a342b;
-  --color-map-emphasis: #28231d;
-  --color-map-ramp-1: #171410;
-  --color-map-ramp-2: #4a4237;
-  --color-map-ramp-3: #c59b46;
-  --color-heat-ramp-1: #171410;
-  --color-heat-ramp-2: #3a2e1e;
-  --color-heat-ramp-3: #8a4b3a;
-  --color-heat-ramp-4: #d0553f;
-  scrollbar-thumb: rgba(226, 219, 204, 0.22);
+  --scrollbar-thumb: rgba(59, 74, 90, 0.3);
 }
 
 /* ════════════ Base ════════════ */
@@ -106,10 +61,9 @@ html.dark {
 
 html,
 body {
-  transition: background-color 0.3s, color 0.3s;
   background-color: var(--color-page-bg);
   color: var(--color-text-primary);
-  line-height: 1.7; /* 古籍留白:正文行距 1.6–1.8 */
+  line-height: 1.7; /* 古籍留白 */
 }
 
 body {
@@ -121,7 +75,7 @@ body {
   background-attachment: fixed;
 }
 
-/* 宣纸纤维纹理(3–4% 极低透明度,不干扰文字) */
+/* 宣纸纤维纹理(4% 极低透明度,不干扰文字) */
 body::before {
   content: "";
   position: fixed;
@@ -168,9 +122,9 @@ table,
   background-color: var(--color-brand);
 }
 
-/* ════════════ Panels & Cards(杂志式:扁平、细线、大留白) ════════════ */
+/* ════════════ 版面容器 ════════════ */
+/* 内容区块:扁平化(无底色/无边框),以留白与标题分隔 */
 .panel {
-  /* 内容区块不再使用卡片容器:留白 + 卷目标题分隔 */
   background: transparent;
   border: none;
   box-shadow: none;
@@ -188,14 +142,13 @@ table,
   border-color: var(--color-brand-faint);
 }
 
-/* 极简报头:与页面同底 + 轻微毛玻璃,细线分隔栏目 */
+/* 报头:与页面同底 + 轻微毛玻璃 */
 .masthead-solid {
   background: var(--color-header-bg);
   backdrop-filter: blur(12px);
-  transition: background-color 0.3s;
 }
 
-/* 发丝线(笔触式渐变分割,柔和过渡) */
+/* 发丝线(笔触式渐变分割) */
 .hairline {
   height: 1px;
   background: linear-gradient(
@@ -207,13 +160,46 @@ table,
   );
 }
 
-/* ════════════ 卷目标题:朱砂 kicker 线 ════════════ */
+/* 栏间竖细线(报纸分栏) */
+.col-rule > * + * {
+  border-left: 1px solid var(--color-panel-border);
+}
+@media (max-width: 1279px) {
+  .col-rule > * + * {
+    border-left: none;
+  }
+}
+
+/* ════════════ 标题体系 ════════════ */
+/* 卷目标题:朱砂 kicker 短线 */
 .sec-kicker {
   display: block;
   width: 28px;
   height: 3px;
   border-radius: 2px;
   background: var(--color-brand);
+}
+
+/* 眉题:朱砂小字距标签(版次/栏目名) */
+.eyebrow {
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  color: var(--color-brand);
+  font-weight: 600;
+}
+
+/* 头条大标题(衬线特黑) */
+.headline-xl {
+  font-family: "Noto Serif SC", "Songti SC", STSong, SimSun, serif;
+  font-weight: 900;
+  line-height: 1.25;
+  letter-spacing: 0.01em;
+}
+
+/* 导语(头条摘要) */
+.standfirst {
+  color: var(--color-text-muted);
+  line-height: 1.85;
 }
 
 /* ════════════ 按钮 ════════════ */
@@ -252,7 +238,7 @@ table,
   cursor: not-allowed;
 }
 
-/* ════════════ 符文金细线 ════════════ */
+/* ════════════ 符文金细线(页脚落款) ════════════ */
 .rune-rule {
   height: 1px;
   background: linear-gradient(
@@ -264,6 +250,7 @@ table,
   );
   opacity: 0.65;
 }
+
 /* ════════════ 输入控件(全局) ════════════ */
 .filter-select,
 .mini-select {
@@ -301,17 +288,14 @@ table,
   background: var(--color-dropzone-hover-bg);
 }
 .dropzone.loaded {
-  border-color: #4cc38a !important;
+  border-color: #3d8f66 !important;
   border-style: solid;
-  background: rgba(76, 195, 138, 0.08) !important;
+  background: rgba(61, 143, 102, 0.08) !important;
 }
 
 /* ════════════ Tables ════════════ */
 .table-row:hover {
-  background: rgba(0, 0, 0, 0.04);
-}
-html.dark .table-row:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(59, 74, 90, 0.05);
 }
 
 .sortable {
@@ -322,11 +306,11 @@ html.dark .table-row:hover {
   color: var(--color-brand);
 }
 
-/* sticky 表头底色:覆盖视图里历史遗留的 bg-white/dark:bg-slate-900 */
+/* sticky 表头底色 */
 .sticky-thead th {
-  background: var(--color-thead-bg);
-}
-html.dark .sticky-thead th {
+  position: sticky;
+  top: 0;
+  z-index: 10;
   background: var(--color-thead-bg);
 }
 
@@ -335,24 +319,9 @@ html.dark .sticky-thead th {
   background: var(--color-thead-bg);
 }
 
-/* ════════════ Theme Switcher ════════════ */
-.theme-btn {
-  transition: all 0.2s;
-}
-.theme-btn.active {
-  background: var(--color-brand);
-  color: var(--color-brand-ink);
-}
-
 /* ════════════ Utility ════════════ */
 .fade-in {
   animation: fadeIn 0.4s ease-out;
-}
-
-.sticky-thead th {
-  position: sticky;
-  top: 0;
-  z-index: 10;
 }
 
 /* 尊重系统减弱动效偏好 */

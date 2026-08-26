@@ -62,10 +62,14 @@ async function loadPreset(pkg: PresetPackageMeta): Promise<void> {
 </script>
 
 <template>
-  <section class="panel rounded-2xl p-6">
-    <SectionHeading title="内置预设数据包" note="免上传,一键加载随站点发布的全量数据包(5 个槽位自动填充)">
+  <section class="panel">
+    <SectionHeading
+      eyebrow="特稿 · 随报附赠"
+      title="内置预设数据包"
+      note="免上传,一键加载随站点发布的全量数据包(5 个槽位自动填充)"
+    >
       <template #actions>
-        <span v-if="store.isReady" class="text-[11px] text-green-600 dark:text-green-400">
+        <span v-if="store.isReady" class="text-[11px] text-delta-up">
           ✅ 基础数据已就绪
         </span>
       </template>
@@ -74,10 +78,10 @@ async function loadPreset(pkg: PresetPackageMeta): Promise<void> {
     <!-- file:// 环境降级提示 -->
     <div
       v-if="fetchFailed"
-      class="rounded-lg bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 px-4 py-3 text-sm text-amber-700 dark:text-amber-400"
+      class="rounded-lg bg-accent/10 border border-accent/30 px-4 py-3 text-sm text-accent-ink"
     >
       ⚠️ 无法读取内置数据包(当前为 file:// 直开或部署环境不含数据)。请通过
-      <code class="text-xs">npm run dev</code> 或部署到 Cloudflare Pages 后使用;或直接在上方手动上传。
+      <code class="text-xs">npm run dev</code> 或部署到 Cloudflare Pages 后使用;或直接在下方手动上传。
     </div>
 
     <!-- 包列表 -->
@@ -88,8 +92,8 @@ async function loadPreset(pkg: PresetPackageMeta): Promise<void> {
         class="card p-4 flex items-center justify-between gap-4 flex-wrap"
       >
         <div class="min-w-0">
-          <div class="font-semibold text-sm text-slate-800 dark:text-white">{{ pkg.label }}</div>
-          <div class="text-[11px] text-slate-400 mt-0.5 tabular-nums">
+          <div class="font-semibold text-sm text-ink">{{ pkg.label }}</div>
+          <div class="text-[11px] text-ink-faint mt-0.5 tabular-nums">
             {{ pkg.id }} · {{ pkg.fileCount }} 个文件
             <template v-if="pkg.files.length">
               · 槽位:{{
@@ -100,13 +104,13 @@ async function loadPreset(pkg: PresetPackageMeta): Promise<void> {
             </template>
           </div>
           <div v-if="loadingId === pkg.id && progress" class="mt-2 flex items-center gap-2">
-            <div class="flex-1 h-1.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+            <div class="flex-1 h-1.5 rounded-full bg-card-border overflow-hidden">
               <div
                 class="h-full rounded-full bg-brand transition-all duration-300"
                 :style="{ width: `${Math.round(progress.ratio * 100)}%` }"
               ></div>
             </div>
-            <span class="text-[10px] text-slate-400 tabular-nums whitespace-nowrap"
+            <span class="text-[10px] text-ink-faint tabular-nums whitespace-nowrap"
               >{{ progress.done }}/{{ progress.total }} · {{ progress.fileName.split('/').pop() }}</span
             >
           </div>
@@ -116,7 +120,7 @@ async function loadPreset(pkg: PresetPackageMeta): Promise<void> {
           class="px-5 py-2 text-sm rounded-xl font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow"
           :class="
             isLoaded(pkg)
-              ? 'bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400'
+              ? 'bg-delta-up/10 text-delta-up'
               : 'btn-brand'
           "
           @click="loadPreset(pkg)"
@@ -124,9 +128,9 @@ async function loadPreset(pkg: PresetPackageMeta): Promise<void> {
           {{ loadingId === pkg.id ? '⏳ 加载中…' : isLoaded(pkg) ? '✅ 已加载' : '🚀 一键加载' }}
         </button>
       </div>
-      <p v-if="error" class="text-sm text-red-500">❌ {{ error }}</p>
+      <p v-if="error" class="text-sm text-delta-down">❌ {{ error }}</p>
     </div>
 
-    <div v-else-if="!fetchFailed" class="text-sm text-slate-400">⏳ 读取预设清单…</div>
+    <div v-else-if="!fetchFailed" class="text-sm text-ink-faint">⏳ 读取预设清单…</div>
   </section>
 </template>

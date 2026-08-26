@@ -144,6 +144,8 @@ export function buildCardCatalog(
   const cardCategory = new Map<string, CardCategory>();
   const cardColors = new Map<string, readonly CardColor[]>();
   const cardImg = new Map<string, string>();
+  /** 卡图候选(先收集后统一裁决,保证 SC 语言优先) */
+  const imgCandidates: Array<{ rawNo: string; img: string; isSC: boolean }> = [];
 
   const VALID_COLORS: ReadonlySet<CardColor> = new Set<CardColor>([
     'red', 'green', 'blue', 'yellow', 'purple', 'orange', 'colorless'
@@ -173,7 +175,7 @@ export function buildCardCatalog(
     return '';
   }
 
-  // 1) 印刷版本 → 卡图(优先默认印刷)
+  // 1) 印刷版本 → 卡图候选(SC 简体中文优先,循环后统一裁决)
   for (const p of cPrints) {
     if (typeof p.card_id !== 'string' || !p.card_id) continue;
     if (typeof p.card_no_extend !== 'string' || !p.card_no_extend) continue;
@@ -214,8 +216,26 @@ export function buildCardCatalog(
 
     const img = p.img_cdn;
     if (typeof img === 'string' && img.startsWith('http')) {
-      // 同编号多印刷时保留第一个;is_default 的排前可后续优化
-      if (!cardImg.has(rawNo)) cardImg.set(rawNo, img);
+      // 先收集候选,循环结束后统一裁决(SC 简体中文印刷优先)
+      imgCandidates.push({
+        rawNo,
+        img,
+        isSC: String(p.language ?? '').trim().toUpperCase() === 'SC'
+      });
+    }
+  }
+
+  // 卡图裁决:同编号 SC 印刷优先;仅当该编号完全没有 SC 图时才回退其他语言,
+  // 保证卡面展示为简体中文(数据包缺 SC 印刷时不至于无图)。
+  const imgIsSC = new Map<string, boolean>();
+  for (const c of imgCandidates) {
+    const prev = imgIsSC.get(c.rawNo);
+    if (prev === undefined) {
+      cardImg.set(c.rawNo, c.img);
+      imgIsSC.set(c.rawNo, c.isSC);
+    } else if (!prev && c.isSC) {
+      cardImg.set(c.rawNo, c.img);
+      imgIsSC.set(c.rawNo, true);
     }
   }
 

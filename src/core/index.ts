@@ -30,7 +30,13 @@ export type { TierInput, TierOutput } from './tier';
 export { computeColorStats } from './colorStats';
 export { quickHeroRows } from './quickStats';
 export type { QuickHeroRow } from './quickStats';
-export { legendaryRows, sortLegendaryRows, metricValue } from './legendaryStats';
+export {
+  legendaryRows,
+  sortLegendaryRows,
+  sortLeadCandidates,
+  leadCompositeScore,
+  metricValue
+} from './legendaryStats';
 export type { LegendaryRow, LegendaryMetric } from './legendaryStats';
 export { shrinkWinRate, envPriorWinRate, shrinkBatch, SHRINK_STRENGTH } from './stats';
 export { buildDeltas, deltasFromRows, movers, hhi } from './delta';

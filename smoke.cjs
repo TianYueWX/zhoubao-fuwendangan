@@ -1525,6 +1525,7 @@ function buildCardCatalog(cBase, cPrints, cacheData) {
   const cardCategory = /* @__PURE__ */ new Map();
   const cardColors = /* @__PURE__ */ new Map();
   const cardImg = /* @__PURE__ */ new Map();
+  const imgCandidates = [];
   const VALID_COLORS = /* @__PURE__ */ new Set([
     "red",
     "green",
@@ -1590,7 +1591,22 @@ function buildCardCatalog(cBase, cPrints, cacheData) {
     cardColors.set(rawNo, meta.colors);
     const img = p.img_cdn;
     if (typeof img === "string" && img.startsWith("http")) {
-      if (!cardImg.has(rawNo)) cardImg.set(rawNo, img);
+      imgCandidates.push({
+        rawNo,
+        img,
+        isSC: String(p.language ?? "").trim().toUpperCase() === "SC"
+      });
+    }
+  }
+  const imgIsSC = /* @__PURE__ */ new Map();
+  for (const c of imgCandidates) {
+    const prev = imgIsSC.get(c.rawNo);
+    if (prev === void 0) {
+      cardImg.set(c.rawNo, c.img);
+      imgIsSC.set(c.rawNo, c.isSC);
+    } else if (!prev && c.isSC) {
+      cardImg.set(c.rawNo, c.img);
+      imgIsSC.set(c.rawNo, true);
     }
   }
   if (cacheData) {
@@ -2197,11 +2213,11 @@ function rateTiers(inputs, opts = {}) {
   return out;
 }
 function computeTiers(heroes2, opts = {}) {
-  const minSample = opts.minSample ?? MIN_TIER_SAMPLE;
+  const minSample2 = opts.minSample ?? MIN_TIER_SAMPLE;
   const keys = [];
   const inputs = [];
   for (const [hero, stat] of heroes2) {
-    if (stat.total < minSample) continue;
+    if (stat.total < minSample2) continue;
     keys.push(hero);
     inputs.push({
       winRate: stat.winRate,
@@ -2349,6 +2365,7 @@ function countCards(decks, catalog) {
   for (const deck of decks) {
     const seen = /* @__PURE__ */ new Set();
     for (const id of deck.cards.keys()) {
+      if (catalog.cardCategory.get(id) === "\u7B26\u6587") continue;
       const key = catalog.canonicalById.get(id) ?? id;
       if (seen.has(key)) continue;
       seen.add(key);
@@ -2379,10 +2396,10 @@ var CARD_COLOR_HEX = Object.freeze({
   colorless: "#94a3b8"
 });
 var TIER_COLORS = Object.freeze({
-  S: { bg: "bg-amber-100 dark:bg-amber-500/20 border-amber-300 dark:border-amber-500/40", text: "text-amber-700 dark:text-amber-400" },
-  A: { bg: "bg-rose-100 dark:bg-rose-500/20 border-rose-300 dark:border-rose-500/40", text: "text-rose-700 dark:text-rose-400" },
-  B: { bg: "bg-sky-100 dark:bg-sky-500/20 border-sky-300 dark:border-sky-500/40", text: "text-sky-700 dark:text-sky-400" },
-  C: { bg: "bg-slate-100 dark:bg-slate-500/20 border-slate-300 dark:border-slate-500/40", text: "text-slate-600 dark:text-slate-400" }
+  S: { bg: "bg-brand-soft border-brand-faint", text: "text-brand" },
+  A: { bg: "bg-[#f3ead6] border-[#d9c49a]", text: "text-[#7a5c1e]" },
+  B: { bg: "bg-[#e8ebee] border-[#b9c0c9]", text: "text-ink-muted" },
+  C: { bg: "bg-[#eeece5] border-[#d6d2c6]", text: "text-ink-faint" }
 });
 
 // src/core/archetype.ts
@@ -2449,9 +2466,9 @@ function quickHeroRows(decks, grandTotal, hasWinData, opts = {}) {
     })),
     { hasWinData }
   );
-  const minSample = MIN_TIER_SAMPLE;
+  const minSample2 = MIN_TIER_SAMPLE;
   rows.forEach((r, i) => {
-    if (r.total < minSample) return;
+    if (r.total < minSample2) return;
     const t = rated[i];
     if (t) {
       r.tier = t.tier;
@@ -2489,6 +2506,7 @@ function legendaryRows(decks, catalog, grandTotal, opts = {}) {
         variants: /* @__PURE__ */ new Set(),
         total: 0,
         top8: 0,
+        champions: 0,
         winsSum: 0,
         roundsSum: 0,
         winDecks: 0,
@@ -2499,6 +2517,7 @@ function legendaryRows(decks, catalog, grandTotal, opts = {}) {
     agg.variants.add(leg);
     agg.total += 1;
     if (d.rank >= 1 && d.rank <= 8) agg.top8 += 1;
+    if (d.rank === 1) agg.champions += 1;
     if (d.wins !== null && d.eventRounds !== null && d.eventRounds > 0) {
       agg.winsSum += d.wins;
       agg.roundsSum += d.eventRounds;
@@ -2531,6 +2550,8 @@ function legendaryRows(decks, catalog, grandTotal, opts = {}) {
       total: a.total,
       top8: a.top8,
       top8Rate: a.total > 0 ? a.top8 / a.total * 100 : 0,
+      champions: a.champions,
+      championRate: a.total > 0 ? a.champions / a.total * 100 : 0,
       popularity: grandTotal > 0 ? a.total / grandTotal * 100 : 0,
       winRate: raw,
       winRateAdj: hasWin && prior2 != null ? shrinkWinRate(a.winsSum, a.roundsSum, prior2, strength) : raw,
@@ -2550,13 +2571,21 @@ function metricValue(r, m) {
   if (m === "winRate") return r.winRateAdj ?? r.top8Rate;
   return r[m];
 }
-function sortLegendaryRows(rows, metric, minSample = 5) {
-  return [...rows].filter((r) => r.total >= minSample).sort((a, b) => metricValue(b, metric) - metricValue(a, metric) || b.total - a.total);
+function sortLegendaryRows(rows, metric, minSample2 = 5) {
+  return [...rows].filter((r) => r.total >= minSample2).sort((a, b) => metricValue(b, metric) - metricValue(a, metric) || b.total - a.total);
+}
+var LEAD_TOP8_W = 0.6;
+var LEAD_CHAMPION_W = 0.4;
+function leadCompositeScore(r) {
+  return r.top8Rate * LEAD_TOP8_W + r.championRate * LEAD_CHAMPION_W;
+}
+function sortLeadCandidates(rows, minSample2) {
+  return [...rows].filter((r) => r.total >= minSample2).sort((a, b) => leadCompositeScore(b) - leadCompositeScore(a) || b.total - a.total);
 }
 
 // src/core/delta.ts
 function buildDeltas(prev, curr, prevSamples, currSamples, opts = {}) {
-  const { minAbsDelta = 0.5, minSample = 10 } = opts;
+  const { minAbsDelta = 0.5, minSample: minSample2 = 10 } = opts;
   const keys = /* @__PURE__ */ new Set([...prev.keys(), ...curr.keys()]);
   function ranks(map) {
     const sorted = [...map.entries()].sort((a, b) => b[1] - a[1]);
@@ -2585,7 +2614,7 @@ function buildDeltas(prev, curr, prevSamples, currSamples, opts = {}) {
       rankChange: pr != null && cr != null ? pr - cr : null,
       prevSample,
       currSample,
-      significant: delta != null && Math.abs(delta) >= minAbsDelta && currSample >= minSample
+      significant: delta != null && Math.abs(delta) >= minAbsDelta && currSample >= minSample2
     });
   }
   return items;
@@ -2751,7 +2780,7 @@ ${lines.join("\n")}
 }
 function reportToMarkdown(r) {
   const head = [
-    `# \u7B26\u6587\u6218\u573A Meta \u5468\u62A5 \xB7 ${r.currLabel}`,
+    `# \u7B26\u6587\u6218\u573A Meta \u62A5\u544A \xB7 ${r.currLabel}`,
     "",
     `> \u5BF9\u6BD4 ${r.prevLabel}(${r.prevSample} \u5957) \u2192 ${r.currLabel}(${r.currSample} \u5957)`,
     `> \u73AF\u5883\u80DC\u7387 ${fmt1(r.envCurr ? r.envCurr * 100 : null)}${r.envDelta != null ? `(${r.envDelta > 0 ? "\u2191" : "\u2193"}${Math.abs(r.envDelta).toFixed(1)}pp)` : ""} \xB7 Meta \u96C6\u4E2D\u5EA6 HHI ${fmt0(r.hhiCurr)}(${r.hhiCurr - r.hhiPrev >= 0 ? "\u2191" : "\u2193"}${Math.abs(r.hhiCurr - r.hhiPrev).toFixed(0)})`,
@@ -2879,8 +2908,47 @@ if (!kx || kx.variants !== 2 || kx.total !== 269) {
   console.log("\u2713 \u865A\u7A7A\u4E4B\u5973 \u5F52\u5E76\u6B63\u786E(OGN-247 + OGN-299 \u2192 1 \u884C)");
 }
 console.log(`globalAllCards \u952E\u6570(\u89C4\u8303\u952E):${result.globalAllCards.size} | \u76EE\u5F55\u5361\u53F7\u6570:${result.catalog.byId.size}`);
-var runes = result.catalog.byId.size - result.globalAllCards.size;
-console.log(`\u5F52\u5E76/\u975E\u5168\u91CF\u5DEE\u8DDD(\u542B\u672A\u51FA\u573A\u5361\u4E0E\u7B26\u6587):${runes} | ${runes > 0 ? "\u2713 \u952E\u6570\u6536\u655B" : "(\u9700\u4EBA\u5DE5\u786E\u8BA4)"}`);
+var runeLeak = 0;
+for (const [key] of result.globalAllCards) {
+  const repId = result.catalog.canonicalId.get(key) ?? key;
+  if (result.catalog.cardCategory.get(repId) === "\u7B26\u6587") runeLeak += 1;
+}
+console.log(`\u7B26\u6587\u6CC4\u6F0F\u5230\u643A\u5E26\u7EDF\u8BA1:${runeLeak} \u4E2A\u952E ${runeLeak === 0 ? "\u2713 \u5DF2\u5254\u9664\u7B26\u6587" : "\u2717 \u7B26\u6587\u672A\u5254\u9664"}`);
+if (runeLeak > 0) process.exitCode = 1;
+{
+  const printRows = csv("card_prints_rows.csv");
+  const firstImg = /* @__PURE__ */ new Map();
+  const firstSC = /* @__PURE__ */ new Map();
+  for (const p of printRows) {
+    const no = String(p.card_no_extend ?? "").replace(/\*$/, "").trim();
+    const img = String(p.img_cdn ?? "");
+    if (!no || !img.startsWith("http")) continue;
+    if (!firstImg.has(no)) firstImg.set(no, img);
+    if (String(p.language ?? "").trim().toUpperCase() === "SC" && !firstSC.has(no)) {
+      firstSC.set(no, img);
+    }
+  }
+  let mismatch = 0;
+  for (const [no, img] of result.catalog.cardImg) {
+    const expect = firstSC.get(no) ?? firstImg.get(no);
+    if (expect && expect !== img) mismatch += 1;
+  }
+  console.log(`\u5361\u56FE SC \u4F18\u5148:\u76EE\u5F55\u6709\u56FE ${result.catalog.cardImg.size} \u7F16\u53F7,\u975E SC \u9996\u9009 ${mismatch} \u4E2A ${mismatch === 0 ? "\u2713" : "\u2717"}`);
+  if (mismatch > 0) process.exitCode = 1;
+}
+console.log("\n== \u5934\u6761\u5019\u9009(\u8F6C\u5316\u7EFC\u5408\u5206 = Top8\xD760% + \u51A0\u519B\xD740%)==");
+var minSample = Math.max(5, Math.floor(result.totalDecks * 0.02));
+var leadTop = sortLeadCandidates(legs, minSample).slice(0, 3);
+leadTop.forEach(
+  (r, i) => console.log(
+    `#${i + 1} ${r.name}(${r.cardNo}) n=${r.total} top8=${r.top8Rate.toFixed(1)}% \u51A0\u519B=${r.champions}\u6B21(${r.championRate.toFixed(1)}%) score=${leadCompositeScore(r).toFixed(2)}`
+  )
+);
+var scoreOk = leadTop.every(
+  (r, i) => i === 0 || leadCompositeScore(leadTop[i - 1]) >= leadCompositeScore(r)
+);
+console.log(`\u7EFC\u5408\u5206\u5355\u8C03\u6027: ${scoreOk ? "\u2713" : "\u2717"} | \u6700\u5C0F\u6837\u672C\u95E8\u69DB: ${minSample}`);
+if (!scoreOk || leadTop.length === 0) process.exitCode = 1;
 console.log("\n== \u5468\u73AF\u6BD4\u5F15\u64CE ==");
 var byWeek = /* @__PURE__ */ new Map();
 for (const d of result.allDecks) {
@@ -2938,7 +3006,7 @@ if (!rep) {
   console.log("\n-- Markdown \u9884\u89C8(\u524D 14 \u884C) --");
   console.log(mdLines.slice(0, 14).join("\n"));
   const checks = [
-    [`\u6807\u9898\u542B\u5F53\u671F\u5468\u6B21 ${rep.currLabel}`, md.includes(`# \u7B26\u6587\u6218\u573A Meta \u5468\u62A5 \xB7 ${rep.currLabel}`)],
+    [`\u6807\u9898\u542B\u5F53\u671F\u5468\u6B21 ${rep.currLabel}`, md.includes(`# \u7B26\u6587\u6218\u573A Meta \u62A5\u544A \xB7 ${rep.currLabel}`)],
     ["\u542B\u70ED\u5EA6\u4E0A\u5347\u699C", md.includes("## \u{1F525} \u70ED\u5EA6\u4E0A\u5347")],
     ["\u542B\u80DC\u7387\u53D8\u5316\u699C", md.includes("## \u{1F4CA} \u80DC\u7387\u53D8\u5316")],
     ["\u542B\u4F20\u5947\u70ED\u5EA6", md.includes("## \u2694\uFE0F \u4F20\u5947\u70ED\u5EA6")],

@@ -56,7 +56,7 @@ export const CARD_COLOR_HEX: Readonly<Record<CardColor, string>> = Object.freeze
 /** Tier 徽章配色(S 朱砂 / A 藤黄 / B 黛蓝 / C 灰) */
 export const TIER_COLORS: Readonly<Record<string, { bg: string; text: string }>> = Object.freeze({
   S: { bg: 'bg-brand-soft border-brand-faint', text: 'text-brand' },
-  A: { bg: 'bg-amber-100 dark:bg-amber-500/20 border-amber-300 dark:border-amber-500/40', text: 'text-amber-700 dark:text-amber-400' },
-  B: { bg: 'bg-slate-100 dark:bg-slate-500/20 border-slate-300 dark:border-slate-500/40', text: 'text-slate-600 dark:text-slate-300' },
-  C: { bg: 'bg-stone-100 dark:bg-stone-500/20 border-stone-300 dark:border-stone-500/40', text: 'text-stone-500 dark:text-stone-400' }
+  A: { bg: 'bg-[#f3ead6] border-[#d9c49a]', text: 'text-[#7a5c1e]' },
+  B: { bg: 'bg-[#e8ebee] border-[#b9c0c9]', text: 'text-ink-muted' },
+  C: { bg: 'bg-[#eeece5] border-[#d6d2c6]', text: 'text-ink-faint' }
 });

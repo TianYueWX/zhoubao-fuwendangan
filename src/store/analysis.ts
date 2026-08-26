@@ -3,12 +3,14 @@
  *
  * 全局响应式单例:
  *   - 6 个数据槽位(3 必需 CSV + 3 可选增强 JSON)
- *   - 全局过滤器(Top 阈值 / 日期范围 / 英雄 / 城市 / Combo 参数)
+ *   - 全局范围:周次选择(数据包可含一周或多周,默认聚焦最新一周)
+ *   - 英雄页下钻焦点 focusHero(仅英雄页消费)
  *   - 当前视图 + 分析结果
  * ============================================================== */
 
 import { reactive } from 'vue';
 import { runAnalysis } from '@/core';
+import { compareWeekBucket } from '@/utils/isoWeek';
 import type {
   AnalysisResult,
   DeckCacheData,
@@ -16,7 +18,8 @@ import type {
   RawCardBaseRow,
   RawCardPrintRow,
   RawDeckRow,
-  ShopRow
+  ShopRow,
+  WeekBucket
 } from '@/types';
 
 export interface SlotFile {
@@ -84,11 +87,6 @@ export const views: ReadonlyArray<ViewMeta> = Object.freeze([
   { id: 'decks', label: '卡组浏览器', emoji: '🃏' }
 ]);
 
-export interface TopPercentOption {
-  value: number;
-  label: string;
-}
-
 export const store = reactive({
   slots: [
     { rows: null, fileName: null, matched: false } as SlotFile,
@@ -107,20 +105,14 @@ export const store = reactive({
 
   cityOverrides: new Map<string, string>(),
 
-  /* ── 全局过滤器 ── */
-  topPercent: 0.15,
-  topPercentOptions: [
-    { value: 0.10, label: 'Top 10%' },
-    { value: 0.15, label: 'Top 15%' },
-    { value: 0.20, label: 'Top 20%' },
-    { value: 8, label: 'Top 8' }
-  ] as TopPercentOption[],
-  /** '' 表示不过滤 */
-  filterHero: '',
-  filterCity: '',
-  /** YYYY-MM-DD,'' 表示不限 */
-  filterDateFrom: '',
-  filterDateTo: '',
+  /* ── 全局范围:周次选择(数据包可含一周或多周) ── */
+  /** 选中周次标签(Deck.week.label);'' = 全部周汇总。分析完成后默认聚焦最新一周 */
+  filterWeek: '',
+  /**
+   * 英雄页下钻焦点:Overview Tier 行 / 散点点击后跳转英雄页时定位用,
+   * 仅 HeroesView 消费,不过滤其他视图的数据集。
+   */
+  focusHero: '',
 
   /* ── Combo 参数(UI 实时调节) ── */
   comboMinBase: 0.15,
@@ -203,33 +195,38 @@ export function clearSlots(): void {
   store.cityOverrides.clear();
   store.extras = { rankRows: null, shopRows: null, cacheData: null };
   store.result = null;
+  store.filterWeek = '';
+  store.focusHero = '';
 }
 
-export function resetFilters(): void {
-  store.filterHero = '';
-  store.filterCity = '';
-  store.filterDateFrom = '';
-  store.filterDateTo = '';
+/* ============================================================
+ * 周次选择辅助
+ * ============================================================ */
+
+/** 数据包内全部周次(按时间升序),供周次选择器使用 */
+export function weekBuckets(): WeekBucket[] {
+  const r = store.result;
+  if (!r) return [];
+  const seen = new Map<string, WeekBucket>();
+  for (const d of r.allDecks) {
+    if (d.week.label && !seen.has(d.week.label)) seen.set(d.week.label, d.week);
+  }
+  return [...seen.values()].sort(compareWeekBucket);
+}
+
+/** 最新一周的标签;无数据返回 '' */
+export function latestWeekLabel(): string {
+  const list = weekBuckets();
+  return list.length ? (list[list.length - 1]!.label ?? '') : '';
 }
 
 /**
- * 应用全局过滤器后的卡组集合。
+ * 应用全局范围(周次筛选)后的卡组集合。
+ * '' = 全部周汇总;趋势对比页刻意绕过本函数,始终用全量数据跨周计算。
  */
 export function applyGlobalFilters(decks: readonly NonNullable<AnalysisResult['allDecks']>[number][]): typeof decks {
-  let out = decks;
-  if (store.filterHero) {
-    out = out.filter((d) => d.hero === store.filterHero);
-  }
-  if (store.filterCity) {
-    out = out.filter((d) => d.city === store.filterCity);
-  }
-  if (store.filterDateFrom) {
-    out = out.filter((d) => !d.date || d.date >= store.filterDateFrom);
-  }
-  if (store.filterDateTo) {
-    out = out.filter((d) => !d.date || d.date <= store.filterDateTo);
-  }
-  return out;
+  if (!store.filterWeek) return decks;
+  return decks.filter((d) => d.week.label === store.filterWeek);
 }
 
 export function runStoredAnalysis(): boolean {
@@ -249,11 +246,13 @@ export function runStoredAnalysis(): boolean {
       baseRows: baseSlot.rows as RawCardBaseRow[],
       printRows: printSlot.rows as RawCardPrintRow[],
       cityOverrides: store.cityOverrides,
-      options: { topThreshold: store.topPercent },
       rankRows: store.extras.rankRows ?? undefined,
       shopRows: store.extras.shopRows ?? undefined,
       cacheData: store.extras.cacheData ?? undefined
     });
+    // 多周数据默认聚焦最新一周;单周数据等价于全部
+    store.filterWeek = latestWeekLabel();
+    store.focusHero = '';
     return true;
   } catch (e: unknown) {
     store.analysisError = e instanceof Error ? e : new Error(String(e));

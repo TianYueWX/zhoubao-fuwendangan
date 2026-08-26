@@ -1,8 +1,8 @@
 /* ================================================================
  * src/utils/reportMarkdown.ts
  *
- * 趋势周报 → Markdown(v3 新增,创作者一键复制发布)
- * 纯函数:输入 WeeklyReport,输出可直接粘贴到社媒/文档的周报文本。
+ * 趋势对比 → Markdown(v3 新增,创作者一键复制发布)
+ * 纯函数:输入 WeeklyReport,输出可直接粘贴到社媒/文档的趋势报告文本。
  * ============================================================== */
 
 import type { WeeklyReport, DeltaItem } from '@/core';
@@ -20,10 +20,10 @@ function moversLines(title: string, items: DeltaItem<string>[]): string {
   return `## ${title}\n${lines.join('\n')}\n`;
 }
 
-/** 周报 → Markdown 文本 */
+/** 趋势报告 → Markdown 文本 */
 export function reportToMarkdown(r: WeeklyReport): string {
   const head = [
-    `# 符文战场 Meta 周报 · ${r.currLabel}`,
+    `# 符文战场 Meta 报告 · ${r.currLabel}`,
     '',
     `> 对比 ${r.prevLabel}(${r.prevSample} 套) → ${r.currLabel}(${r.currSample} 套)`,
     `> 环境胜率 ${fmt1(r.envCurr ? r.envCurr * 100 : null)}${

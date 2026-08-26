@@ -18,8 +18,8 @@ withDefaults(
 </script>
 
 <template>
-  <div class="py-4 px-5 first:pl-0 last:pr-0 flex flex-col gap-1.5 border-l border-slate-200 dark:border-slate-800 first:border-l-0">
-    <div class="text-[11px] tracking-[0.14em] text-slate-400 dark:text-slate-500">
+  <div class="py-4 px-5 first:pl-0 last:pr-0 flex flex-col gap-1.5 border-l border-panel-border first:border-l-0">
+    <div class="text-[11px] tracking-[0.14em] text-ink-faint">
       {{ label }}
     </div>
     <div class="flex items-baseline gap-2 flex-wrap">
@@ -27,20 +27,20 @@ withDefaults(
         :class="[
           'text-[26px] font-bold tabular-nums leading-none',
           tone === 'good'
-            ? 'text-green-600 dark:text-green-400'
+            ? 'text-delta-up'
             : tone === 'warn'
-              ? 'text-amber-500 dark:text-amber-400'
+              ? 'text-accent'
               : tone === 'bad'
-                ? 'text-red-500'
+                ? 'text-delta-down'
                 : tone === 'accent'
                   ? 'text-brand'
-                  : 'text-slate-800 dark:text-white'
+                  : 'text-ink'
         ]"
       >
         {{ value }}
       </div>
       <DeltaBadge v-if="delta != null" :delta="delta" :suffix="deltaSuffix" />
     </div>
-    <div v-if="sub" class="text-[11px] text-slate-400 dark:text-slate-500">{{ sub }}</div>
+    <div v-if="sub" class="text-[11px] text-ink-faint">{{ sub }}</div>
   </div>
 </template>

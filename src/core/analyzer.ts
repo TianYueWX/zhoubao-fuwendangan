@@ -157,6 +157,8 @@ export function runAnalysis(input: AnalyzeInput): AnalysisResult {
 /* ============================================================
  * Helper: 计数每张卡在卡组集合中的携带 deck 数(同时供外部使用)
  * 按规范键(同名+副标题)归并:同一张卡的多印刷版本计为一张。
+ * 符文卡不在分析范围内(每套卡组按规则自动携带,携带率无信息量),
+ * 直接剔除,与 combo/colorStats 口径对齐。
  * ============================================================ */
 
 export function countCards(decks: readonly Deck[], catalog: CardCatalog): Map<string, number> {
@@ -164,6 +166,7 @@ export function countCards(decks: readonly Deck[], catalog: CardCatalog): Map<st
   for (const deck of decks) {
     const seen = new Set<string>();
     for (const id of deck.cards.keys()) {
+      if (catalog.cardCategory.get(id) === '符文') continue;
       const key = catalog.canonicalById.get(id) ?? id;
       if (seen.has(key)) continue;
       seen.add(key);

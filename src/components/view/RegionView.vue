@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * RegionView.vue · 🗺️ 地域差异
+ * RegionView.vue · 地域差异
  *   1. 城市 × 英雄 出场率分组柱状图(点击城市 → 全局过滤)
  *   2. 城市站点气泡地图
  *   3. 省份热度地图
@@ -43,8 +43,11 @@ const sortedHeroes = computed(() => {
     .map(([name, stat]) => [name, stat.total] as [string, number]);
 });
 
+/** 本页本地选中的城市(表格行点击高亮用,不做全局过滤) */
+const selectedCity = ref('');
+
 function setCity(city: string): void {
-  store.filterCity = store.filterCity === city ? '' : city;
+  selectedCity.value = selectedCity.value === city ? '' : city;
 }
 
 const regionBarOption = computed<ChartOptionInput | null>(() => {
@@ -117,7 +120,7 @@ const cityMapOption = computed<ChartOptionInput | null>(() => {
           return 10 + Math.sqrt((arr[2] ?? 0) / maxSize) * 22;
         },
         rippleEffect: { brushType: 'stroke', scale: 2.2 },
-        itemStyle: { color: getBrandColor(), shadowBlur: 8, shadowColor: 'rgba(232,181,74,.35)' },
+        itemStyle: { color: getBrandColor(), shadowBlur: 8, shadowColor: 'rgba(197,155,70,.35)' },
         label: { show: true, position: 'right', fontSize: 11 },
         zlevel: 2
       }
@@ -157,7 +160,7 @@ const provinceMapOption = computed<ChartOptionInput | null>(() => {
         zoom: 1.15,
         data,
         label: { show: false },
-        itemStyle: { borderColor: '#fff' },
+        itemStyle: { borderColor: '#fbf9f3' },
         emphasis: { label: { show: true } },
         select: { disabled: true }
       }
@@ -261,9 +264,9 @@ const eventRows = computed<EventRow[]>(() =>
 </script>
 
 <template>
-  <div class="fade-in space-y-5" v-if="store.result">
-    <div class="grid grid-cols-1 xl:grid-cols-2 gap-5">
-      <section class="panel rounded-2xl p-5">
+  <div class="fade-in space-y-8" v-if="store.result">
+    <div class="grid grid-cols-1 xl:grid-cols-2 gap-8 xl:divide-x xl:divide-panel-border">
+      <section class="xl:pr-8 min-w-0">
         <SectionHeading
           small
           title="城市×英雄 出场率"
@@ -272,18 +275,18 @@ const eventRows = computed<EventRow[]>(() =>
         <ChartCard :option="regionBarOption" height="380px" @chart-click="(p) => p.componentType === 'xAxis' && setCity(String(p.value))" />
       </section>
 
-      <section class="panel rounded-2xl p-5">
+      <section class="xl:pl-8 min-w-0">
         <div class="flex items-center justify-between mb-2 flex-wrap gap-2">
           <SectionHeading small title="城市×英雄 强度热力" />
-          <div class="flex gap-1 text-xs">
+          <div class="flex gap-1 text-xs mt-1">
             <button
-              :class="['px-2.5 py-1 rounded-lg transition-all', heatMode === 'top8' ? 'tab-active font-medium' : 'card text-slate-500']"
+              :class="['px-2.5 py-1 rounded-lg transition-all', heatMode === 'top8' ? 'tab-active font-medium' : 'card text-ink-muted']"
               @click="heatMode = 'top8'"
             >
               Top8 率
             </button>
             <button
-              :class="['px-2.5 py-1 rounded-lg transition-all', heatMode === 'win' ? 'tab-active font-medium' : 'card text-slate-500']"
+              :class="['px-2.5 py-1 rounded-lg transition-all', heatMode === 'win' ? 'tab-active font-medium' : 'card text-ink-muted']"
               @click="heatMode = 'win'"
               :disabled="!store.hasWinData"
               :title="store.hasWinData ? '' : '需导入 rank_data.json'"
@@ -292,57 +295,64 @@ const eventRows = computed<EventRow[]>(() =>
             </button>
           </div>
         </div>
-        <p class="text-[11px] text-slate-400 mb-1">仅统计 ≥5 套样本的城市×英雄组合</p>
+        <p class="text-[11px] text-ink-faint mb-1">仅统计 ≥5 套样本的城市×英雄组合</p>
         <ChartCard :option="heatOption" height="380px" />
       </section>
+    </div>
 
-      <section class="panel rounded-2xl p-5">
+    <div class="hairline"></div>
+
+    <div class="grid grid-cols-1 xl:grid-cols-2 gap-8 xl:divide-x xl:divide-panel-border">
+      <section class="xl:pr-8 min-w-0">
         <SectionHeading
           small
           title="城市站点地图"
           note="气泡大小 = 参赛卡组数"
         />
         <ChartCard v-if="cityMapOption" :option="cityMapOption" height="420px" />
-        <div v-else class="h-[300px] flex items-center justify-center text-slate-400 text-sm">地图数据未加载</div>
+        <div v-else class="h-[300px] flex items-center justify-center text-ink-faint text-sm">地图数据未加载</div>
       </section>
 
-      <section class="panel rounded-2xl p-5">
+      <section class="xl:pl-8 min-w-0">
         <SectionHeading small title="省份热度分布" />
         <ChartCard v-if="provinceMapOption" :option="provinceMapOption" height="420px" />
-        <div v-else class="h-[300px] flex items-center justify-center text-slate-400 text-sm">地图数据未加载</div>
+        <div v-else class="h-[300px] flex items-center justify-center text-ink-faint text-sm">地图数据未加载</div>
       </section>
     </div>
 
+    <div class="hairline"></div>
+
     <!-- 赛事一览 -->
-    <section class="panel rounded-2xl p-5">
-      <SectionHeading small title="赛事一览" />
+    <section>
+      <SectionHeading eyebrow="赛事志 · Events" small title="赛事一览" />
       <div class="overflow-x-auto max-h-[360px] overflow-y-auto">
         <table class="w-full text-sm">
           <thead class="sticky-thead">
-            <tr class="text-slate-400 border-b border-slate-200 dark:border-slate-700 text-xs">
-              <th class="py-2 px-2 text-left bg-white dark:bg-slate-900">日期</th>
-              <th class="py-2 px-2 text-left bg-white dark:bg-slate-900">赛事</th>
-              <th class="py-2 px-2 text-left bg-white dark:bg-slate-900">城市</th>
-              <th class="py-2 px-2 text-left bg-white dark:bg-slate-900">门店</th>
-              <th class="py-2 px-2 text-right bg-white dark:bg-slate-900">卡组数</th>
-              <th class="py-2 px-2 text-right bg-white dark:bg-slate-900">上限</th>
-              <th class="py-2 px-2 text-right bg-white dark:bg-slate-900">轮次</th>
+            <tr class="text-ink-faint border-b border-panel-border text-xs">
+              <th class="py-2 px-2 text-left">日期</th>
+              <th class="py-2 px-2 text-left">赛事</th>
+              <th class="py-2 px-2 text-left">城市</th>
+              <th class="py-2 px-2 text-left">门店</th>
+              <th class="py-2 px-2 text-right">卡组数</th>
+              <th class="py-2 px-2 text-right">上限</th>
+              <th class="py-2 px-2 text-right">轮次</th>
             </tr>
           </thead>
           <tbody>
             <tr
               v-for="e in eventRows"
               :key="String(e.date) + String(e.name)"
-              class="table-row border-b border-slate-100 dark:border-slate-800/50 cursor-pointer"
+              class="table-row border-b border-[rgba(59,74,90,0.08)] cursor-pointer"
+              :class="selectedCity && e.city === selectedCity ? 'bg-brand-soft' : ''"
               @click="setCity(String(e.city))"
             >
-              <td class="py-1.5 px-2 tabular-nums text-slate-500">{{ e.date }}</td>
-              <td class="py-1.5 px-2 text-slate-700 dark:text-gray-200">{{ e.name }}</td>
+              <td class="py-1.5 px-2 tabular-nums text-ink-muted">{{ e.date }}</td>
+              <td class="py-1.5 px-2 text-ink">{{ e.name }}</td>
               <td class="py-1.5 px-2">{{ e.city }}</td>
-              <td class="py-1.5 px-2 text-xs text-slate-400">{{ e.shopName }}</td>
+              <td class="py-1.5 px-2 text-xs text-ink-faint">{{ e.shopName }}</td>
               <td class="py-1.5 px-2 text-right tabular-nums font-semibold">{{ e.deckCount }}</td>
-              <td class="py-1.5 px-2 text-right tabular-nums text-slate-400">{{ e.playerMax ?? '—' }}</td>
-              <td class="py-1.5 px-2 text-right tabular-nums text-slate-400">{{ e.rounds ?? '—' }}</td>
+              <td class="py-1.5 px-2 text-right tabular-nums text-ink-faint">{{ e.playerMax ?? '—' }}</td>
+              <td class="py-1.5 px-2 text-right tabular-nums text-ink-faint">{{ e.rounds ?? '—' }}</td>
             </tr>
           </tbody>
         </table>

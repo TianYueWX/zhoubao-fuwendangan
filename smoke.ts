@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import Papa from 'papaparse';
-import { runAnalysis, legendaryRows, sortLegendaryRows, shrinkWinRate, envPriorWinRate, quickHeroRows, deltasFromRows, movers, hhi, buildWeeklyReport } from '@/core';
+import { runAnalysis, legendaryRows, sortLegendaryRows, sortLeadCandidates, leadCompositeScore, shrinkWinRate, envPriorWinRate, quickHeroRows, deltasFromRows, movers, hhi, buildWeeklyReport } from '@/core';
 import { reportToMarkdown } from '@/utils/reportMarkdown';
 import type { Deck } from '@/types';
 
@@ -130,8 +130,52 @@ if (!kx || kx.variants !== 2 || kx.total !== 269) {
   console.log('✓ 虚空之女 归并正确(OGN-247 + OGN-299 → 1 行)');
 }
 console.log(`globalAllCards 键数(规范键):${result.globalAllCards.size} | 目录卡号数:${result.catalog.byId.size}`);
-const runes = result.catalog.byId.size - result.globalAllCards.size;
-console.log(`归并/非全量差距(含未出场卡与符文):${runes} | ${runes > 0 ? '✓ 键数收敛' : '(需人工确认)'}`);
+// 符文剔除验证:全局携带统计中不应再出现任何「符文」类卡
+let runeLeak = 0;
+for (const [key] of result.globalAllCards) {
+  const repId = result.catalog.canonicalId.get(key) ?? key;
+  if (result.catalog.cardCategory.get(repId) === '符文') runeLeak += 1;
+}
+console.log(`符文泄漏到携带统计:${runeLeak} 个键 ${runeLeak === 0 ? '✓ 已剔除符文' : '✗ 符文未剔除'}`);
+if (runeLeak > 0) process.exitCode = 1;
+
+/* ── 卡图语言(SC 简体中文优先)验证 ── */
+{
+  const printRows = csv('card_prints_rows.csv');
+  const firstImg = new Map<string, string>();
+  const firstSC = new Map<string, string>();
+  for (const p of printRows) {
+    const no = String(p.card_no_extend ?? '').replace(/\*$/, '').trim();
+    const img = String(p.img_cdn ?? '');
+    if (!no || !img.startsWith('http')) continue;
+    if (!firstImg.has(no)) firstImg.set(no, img);
+    if (String(p.language ?? '').trim().toUpperCase() === 'SC' && !firstSC.has(no)) {
+      firstSC.set(no, img);
+    }
+  }
+  let mismatch = 0;
+  for (const [no, img] of result.catalog.cardImg) {
+    const expect = firstSC.get(no) ?? firstImg.get(no);
+    if (expect && expect !== img) mismatch += 1;
+  }
+  console.log(`卡图 SC 优先:目录有图 ${result.catalog.cardImg.size} 编号,非 SC 首选 ${mismatch} 个 ${mismatch === 0 ? '✓' : '✗'}`);
+  if (mismatch > 0) process.exitCode = 1;
+}
+
+/* ── 冠军转化 + 头条综合分验证 ── */
+console.log('\n== 头条候选(转化综合分 = Top8×60% + 冠军×40%)==');
+const minSample = Math.max(5, Math.floor(result.totalDecks * 0.02));
+const leadTop = sortLeadCandidates(legs, minSample).slice(0, 3);
+leadTop.forEach((r, i) =>
+  console.log(
+    `#${i + 1} ${r.name}(${r.cardNo}) n=${r.total} top8=${r.top8Rate.toFixed(1)}% 冠军=${r.champions}次(${r.championRate.toFixed(1)}%) score=${leadCompositeScore(r).toFixed(2)}`
+  )
+);
+const scoreOk = leadTop.every(
+  (r, i) => i === 0 || leadCompositeScore(leadTop[i - 1]!) >= leadCompositeScore(r)
+);
+console.log(`综合分单调性: ${scoreOk ? '✓' : '✗'} | 最小样本门槛: ${minSample}`);
+if (!scoreOk || leadTop.length === 0) process.exitCode = 1;
 
 /* ── 周环比引擎验证(包内按周分组,后两周对比)── */
 console.log('\n== 周环比引擎 ==');
@@ -195,7 +239,7 @@ if (!rep) {
   console.log('\n-- Markdown 预览(前 14 行) --');
   console.log(mdLines.slice(0, 14).join('\n'));
   const checks: [string, boolean][] = [
-    [`标题含当期周次 ${rep.currLabel}`, md.includes(`# 符文战场 Meta 周报 · ${rep.currLabel}`)],
+    [`标题含当期周次 ${rep.currLabel}`, md.includes(`# 符文战场 Meta 报告 · ${rep.currLabel}`)],
     ['含热度上升榜', md.includes('## 🔥 热度上升')],
     ['含胜率变化榜', md.includes('## 📊 胜率变化')],
     ['含传奇热度', md.includes('## ⚔️ 传奇热度')],

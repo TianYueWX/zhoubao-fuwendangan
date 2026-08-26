@@ -33,13 +33,13 @@ function onErr(): void {
   <div class="flex flex-col items-center gap-1 group relative">
     <div
       v-if="isBanned"
-      class="absolute -top-1 -right-1 z-10 px-1 rounded bg-red-500 text-white text-[9px] font-bold shadow"
+      class="absolute -top-1 -right-1 z-10 px-1 rounded bg-brand text-brand-ink text-[9px] font-bold shadow"
     >
       禁
     </div>
     <div
       :class="[
-        'relative overflow-hidden rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 transition-colors group-hover:border-brand-faint',
+        'relative overflow-hidden rounded-md border border-card-border bg-card-bg transition-colors group-hover:border-brand-faint',
         size === 'sm'
           ? 'w-11 h-[61px]'
           : size === 'lg'
@@ -73,14 +73,14 @@ function onErr(): void {
       />
       <div
         v-if="count != null && count > 0"
-        class="absolute bottom-0 right-0 px-1.5 py-0.5 bg-black/75 text-white text-[10px] font-bold rounded-tl-md"
+        class="absolute bottom-0 right-0 px-1.5 py-0.5 bg-ink/75 text-white text-[10px] font-bold rounded-tl-md"
       >
         ×{{ count }}
       </div>
     </div>
     <div
       v-if="showName"
-      class="text-[10px] leading-tight text-slate-500 dark:text-gray-400 text-center line-clamp-2 max-w-[74px]"
+      class="text-[10px] leading-tight text-ink-muted text-center line-clamp-2 max-w-[74px]"
       :title="`${name} (${id})`"
     >
       {{ name }}

@@ -30,7 +30,7 @@ const style = computed(() => {
   <span
     v-else
     :class="[
-      'inline-flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 text-slate-300 dark:text-slate-600',
+      'inline-flex items-center justify-center rounded-lg border border-card-border text-ink-faint',
       size === 'sm' ? 'w-6 h-6 text-xs' : 'w-8 h-8 text-sm'
     ]"
   >

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * ComboView.vue · 🔗 Combo 羁绊
+ * ComboView.vue · Combo 羁绊
  *  - Lift / 基础携带率双阈值实时调节
  *  - 结果表(分页 + 搜索)
  *  - 行点击 → 抽屉查看卡对详情
@@ -96,13 +96,14 @@ function openDetail(row: Record<string, unknown>): void {
 
 <template>
   <div class="fade-in space-y-5">
-    <section class="panel rounded-2xl p-5">
+    <section>
       <div class="flex items-start justify-between flex-wrap gap-4 mb-4">
         <SectionHeading
+          eyebrow="连协考 · Synergies"
           title="Combo 羁绊挖掘"
           note="Lift = P(A∩B) / (P(A)×P(B)):>1 正相关(真实配合),≈1 独立。已剔除符文卡;万金油污染由「最低携带率」门槛过滤。调高 Lift 找独家配合,调低找泛用搭配。"
         />
-        <select v-model="scope" class="mini-select max-w-[240px]">
+        <select v-model="scope" class="mini-select max-w-[240px] mt-1">
           <option v-for="o in scopeOptions" :key="String(o.value)" :value="o.value">{{ o.label }}</option>
         </select>
       </div>
@@ -111,7 +112,7 @@ function openDetail(row: Record<string, unknown>): void {
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
         <label class="card p-3 block">
           <div class="flex justify-between text-xs mb-2">
-            <span class="text-slate-500 dark:text-gray-400">最低 Lift</span>
+            <span class="text-ink-muted">最低 Lift</span>
             <b class="tabular-nums text-brand">{{ minLift.toFixed(2) }}</b>
           </div>
           <input
@@ -126,7 +127,7 @@ function openDetail(row: Record<string, unknown>): void {
         </label>
         <label class="card p-3 block">
           <div class="flex justify-between text-xs mb-2">
-            <span class="text-slate-500 dark:text-gray-400">最低携带率门槛</span>
+            <span class="text-ink-muted">最低携带率门槛</span>
             <b class="tabular-nums text-brand">{{ minBasePercent }}%</b>
           </div>
           <input
@@ -141,7 +142,7 @@ function openDetail(row: Record<string, unknown>): void {
         </label>
       </div>
 
-      <p class="text-xs text-slate-400 mb-3">
+      <p class="text-xs text-ink-faint mb-3">
         样本 {{ decks.length }} 套 · 命中 <b>{{ rows.length }}</b> 组卡对 · 点击行查看详情
       </p>
 
@@ -154,7 +155,7 @@ function openDetail(row: Record<string, unknown>): void {
         @row-click="openDetail"
       >
         <template #cell-lift="{ row }">
-          <span class="font-bold tabular-nums" :class="(row as ComboRow).lift >= 1.5 ? 'text-green-600 dark:text-green-400' : ''">
+          <span class="font-bold tabular-nums" :class="(row as ComboRow).lift >= 1.5 ? 'text-delta-up' : ''">
             {{ (row as ComboRow).lift }}
           </span>
         </template>
@@ -179,21 +180,21 @@ function openDetail(row: Record<string, unknown>): void {
           </div>
         </div>
         <div class="space-y-2 text-sm">
-          <div class="flex justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
-            <span class="text-slate-400">同现套数</span><b class="tabular-nums">{{ selected.count }} 套</b>
+          <div class="flex justify-between border-b border-panel-border pb-2">
+            <span class="text-ink-faint">同现套数</span><b class="tabular-nums">{{ selected.count }} 套</b>
           </div>
-          <div class="flex justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
-            <span class="text-slate-400">Lift</span><b class="tabular-nums text-brand">{{ selected.lift }}</b>
+          <div class="flex justify-between border-b border-panel-border pb-2">
+            <span class="text-ink-faint">Lift</span><b class="tabular-nums text-brand">{{ selected.lift }}</b>
           </div>
-          <div class="flex justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
-            <span class="text-slate-400">带 {{ selected.nameA }} 时也带 {{ selected.nameB }}</span>
+          <div class="flex justify-between border-b border-panel-border pb-2">
+            <span class="text-ink-faint">带 {{ selected.nameA }} 时也带 {{ selected.nameB }}</span>
             <b class="tabular-nums">{{ selected.coRate }}%</b>
           </div>
-          <div class="flex justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
-            <span class="text-slate-400">反向条件概率</span>
+          <div class="flex justify-between border-b border-panel-border pb-2">
+            <span class="text-ink-faint">反向条件概率</span>
             <b class="tabular-nums">{{ selected.coRateReverse }}%</b>
           </div>
-          <p class="text-[11px] text-slate-400 pt-2 leading-relaxed">
+          <p class="text-[11px] text-ink-faint pt-2 leading-relaxed">
             解读:Lift {{ selected.lift }} 表示同时携带两卡的倾向是随机情况 {{
               selected.lift.toFixed(1)
             }} 倍。

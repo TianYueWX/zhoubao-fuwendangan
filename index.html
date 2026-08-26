@@ -1,17 +1,17 @@
 <!DOCTYPE html>
-<html lang="zh-CN" class="light">
+<html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#171410" />
+    <meta name="theme-color" content="#F4F1EA" />
     <title>符文档案 · 周报 — Riftbound 城市赛 Meta 情报</title>
     <meta
       name="description"
-      content="符文档案 · 周报:Riftbound(符文战场)城市挑战赛每周 Meta 情报。英雄 Tier、传奇域对、万金油单卡、Combo 羁绊、地域地图与卡组浏览器。"
+      content="符文档案 · 周报:Riftbound(符文战场)城市挑战赛 Meta 情报,支持单周或多周数据包。英雄 Tier、传奇域对、万金油单卡、Combo 羁绊、地域地图与卡组浏览器。"
     />
     <link
       rel="icon"
-      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23171410'/%3E%3Cpath d='M16 5.5l8.5 10.5L16 26.5 7.5 16z' fill='none' stroke='%23B23A27' stroke-width='2.2'/%3E%3Cpath d='M16 11l4 5-4 5-4-5z' fill='%23C59B46'/%3E%3C/svg%3E"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23F4F1EA'/%3E%3Cpath d='M16 5.5l8.5 10.5L16 26.5 7.5 16z' fill='none' stroke='%23B23A27' stroke-width='2.2'/%3E%3Cpath d='M16 11l4 5-4 5-4-5z' fill='%23C59B46'/%3E%3C/svg%3E"
     />
 
     <!--
@@ -24,25 +24,6 @@
       href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800&family=Noto+Serif+SC:wght@600;700;900&display=swap"
       rel="stylesheet"
     />
-
-    <!--
-      主题预加载脚本:在 Vue 加载之前依据 localStorage / 系统偏好设置 html.class,
-      避免首屏白闪。读 / 写的 key 必须与 src/composables/useTheme.ts 的 STORAGE_KEY 一致。
-    -->
-    <script>
-      (function () {
-        try {
-          var t = localStorage.getItem('riftbound-theme');
-          var dark =
-            t === 'dark' ||
-            (t !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
-          document.documentElement.classList.toggle('dark', dark);
-          document.documentElement.classList.toggle('light', !dark);
-        } catch (e) {
-          /* localStorage 在某些隐私模式下不可用,降级到 light */
-        }
-      })();
-    </script>
 
     <!--
       中国地图数据(从 DataV GeoAtlas 离线打包,放在 public/china-geo.js):

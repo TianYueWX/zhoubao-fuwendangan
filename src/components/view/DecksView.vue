@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * DecksView.vue · 🃏 卡组浏览器
+ * DecksView.vue · 卡组浏览器
  *  - 多维筛选(名次 / 英雄搜索 / 胜场排序)
  *  - 列表分页;点击 → 抽屉查看完整构筑(按类型分组 + 卡图)
  *  - 一键复制 TTS 码
@@ -186,18 +186,19 @@ async function copyTTS(): Promise<void> {
 
 <template>
   <div class="fade-in space-y-5" v-if="store.result">
-    <section class="panel rounded-2xl p-5">
+    <section>
       <div class="flex items-start justify-between flex-wrap gap-4 mb-4">
         <SectionHeading
+          eyebrow="构筑库 · Decks"
           title="卡组浏览器"
           :note="`全部 ${rows.length} 套卡组 · 点击行查看完整构筑与卡图`"
         />
-        <div class="flex items-center gap-2 flex-wrap text-sm">
+        <div class="flex items-center gap-2 flex-wrap text-sm mt-1">
           <input
             v-model="heroSearch"
             type="text"
             placeholder="筛选英雄…"
-            class="mini-select w-36"
+            class="mini-select w-36 placeholder-ink-faint"
           />
           <select v-model.number="rankLimit" class="mini-select" title="名次上限">
             <option :value="0">全部名次</option>
@@ -240,7 +241,7 @@ async function copyTTS(): Promise<void> {
         <template #cell-winRate="{ row }">
           <span
             class="tabular-nums"
-            :class="(row as DeckRow).winRate != null && (row as DeckRow).winRate! >= 57 ? 'text-green-600 dark:text-green-400 font-semibold' : ''"
+            :class="(row as DeckRow).winRate != null && (row as DeckRow).winRate! >= 57 ? 'text-delta-up font-semibold' : ''"
           >
             {{ (row as DeckRow).winRate != null ? `${(row as DeckRow).winRate}%` : '—' }}
           </span>
@@ -254,23 +255,23 @@ async function copyTTS(): Promise<void> {
         <!-- 头部信息 -->
         <div class="card p-4 mb-4 space-y-2">
           <div class="flex items-center justify-between flex-wrap gap-2">
-            <div class="flex items-center gap-3">
-              <div class="text-center">
-                <div class="text-[10px] text-slate-400">名次</div>
-                <div class="text-xl font-bold text-slate-800 dark:text-white tabular-nums">
+            <div class="flex items-center gap-3 divide-x divide-panel-border">
+              <div class="text-center pr-3">
+                <div class="text-[10px] text-ink-faint">名次</div>
+                <div class="text-xl font-bold text-ink tabular-nums">
                   {{
                     selectedDeck.rank < Number.MAX_SAFE_INTEGER ? selectedDeck.rank : '—'
                   }}
                 </div>
               </div>
-              <div class="text-center" v-if="selectedDeck.wins !== null">
-                <div class="text-[10px] text-slate-400">胜场</div>
-                <div class="text-xl font-bold text-green-500 tabular-nums">
-                  {{ selectedDeck.wins }}<span class="text-xs text-slate-400">/{{ selectedDeck.eventRounds ?? '?' }}</span>
+              <div class="text-center px-3" v-if="selectedDeck.wins !== null">
+                <div class="text-[10px] text-ink-faint">胜场</div>
+                <div class="text-xl font-bold text-delta-up tabular-nums">
+                  {{ selectedDeck.wins }}<span class="text-xs text-ink-faint">/{{ selectedDeck.eventRounds ?? '?' }}</span>
                 </div>
               </div>
-              <div class="text-center">
-                <div class="text-[10px] text-slate-400">总张数</div>
+              <div class="text-center" :class="selectedDeck.wins !== null ? '' : 'px-3'">
+                <div class="text-[10px] text-ink-faint">总张数</div>
                 <div class="text-xl font-bold text-brand tabular-nums">{{ totalCopies }}</div>
               </div>
             </div>
@@ -282,7 +283,7 @@ async function copyTTS(): Promise<void> {
               {{ copied ? '✅ 已复制' : '📋 复制 TTS 码' }}
             </button>
           </div>
-          <div class="text-xs text-slate-400 leading-relaxed">
+          <div class="text-xs text-ink-faint leading-relaxed">
             {{ selectedDeck.activityName }}
             <span v-if="selectedDeck.date"> · {{ selectedDeck.date }}</span>
             <span v-if="selectedDeck.city && selectedDeck.city !== '未知'"> · {{ selectedDeck.city }}</span>
@@ -293,9 +294,9 @@ async function copyTTS(): Promise<void> {
         <!-- 分组卡表 -->
         <div class="space-y-5">
           <div v-for="g in groupedCards" :key="g.key">
-            <h4 class="text-xs font-bold text-slate-500 dark:text-gray-400 uppercase tracking-wider mb-2 sticky top-[60px] sticky-head-solid py-1 z-10">
+            <h4 class="text-xs font-bold text-ink-muted uppercase tracking-[0.18em] mb-2 sticky top-[60px] sticky-head-solid py-1 z-10">
               {{ g.label }}
-              <span class="text-slate-300 dark:text-slate-600 ml-1">{{
+              <span class="text-ink-faint ml-1">{{
                 g.cards.reduce((s, c) => s + c.count, 0)
               }}</span>
             </h4>
@@ -316,4 +317,3 @@ async function copyTTS(): Promise<void> {
     </Drawer>
   </div>
 </template>
-

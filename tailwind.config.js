@@ -1,6 +1,5 @@
 /** @type {import('tailwindcss').Config} */
 export default {
-  darkMode: 'class',
   content: [
     './index.html',
     './src/**/*.{vue,ts,tsx,html}'
@@ -8,15 +7,17 @@ export default {
   theme: {
     extend: {
       colors: {
-        // 主题色 token(由 src/style.css 中的 CSS 变量驱动,保证主题切换时不需重编译)
+        // 主题色 token(由 src/style.css 中的 CSS 变量驱动)
+        // 宣纸·卷宗单主题:宣纸白底 / 徽墨正文 / 朱砂强调 / 远山黛分层 / 藤黄点缀
+        paper: 'var(--color-page-bg)',
+        ink: 'var(--color-text-primary)',
+        'ink-muted': 'var(--color-text-muted)',
+        'ink-faint': 'var(--color-text-subtle)',
         'panel-bg': 'var(--color-panel-bg)',
         'panel-border': 'var(--color-panel-border)',
         'card-bg': 'var(--color-card-bg)',
         'card-border': 'var(--color-card-border)',
-        'text-primary': 'var(--color-text-primary)',
-        'text-muted': 'var(--color-text-muted)',
-        'text-subtle': 'var(--color-text-subtle)',
-        // 朱砂红(主题感知:宣纸 #B23A27 / 墨夜 #D0553F)与朱上文字色
+        // 朱砂红(核心强调)与其上的文字色
         brand: 'var(--color-brand)',
         'brand-ink': 'var(--color-brand-ink)',
         'brand-soft': 'var(--color-brand-soft)',
@@ -41,9 +42,9 @@ export default {
           c: '#94a3b8'
         },
         delta: {
-          up: '#4cc38a',
-          down: '#e05d5d',
-          flat: '#9aa3b5'
+          up: '#3d8f66',
+          down: '#c04437',
+          flat: '#8a8478'
         }
       },
       fontFamily: {

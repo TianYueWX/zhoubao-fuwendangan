@@ -47,7 +47,7 @@ const filterType = ref('');
 const filterColor = ref('');
 const filterEnergy = ref('');
 
-const typeOptions = ['单位', '英雄单位', '传奇', '法术', '装备'] as const;
+const typeOptions = ['单位', '英雄单位', '法术', '装备'] as const;
 
 const rows = computed(() => {
   const r = store.result;
@@ -74,6 +74,8 @@ const rows = computed(() => {
     const repId = r.catalog.canonicalId.get(key) ?? key;
     const meta = r.catalog.byId.get(repId);
     if (!meta) continue;
+    // 传奇是结构性卡牌(每套卡组必有 1 张),携带率恒为出场率本身,不进万金油表
+    if (meta.category === '传奇') continue;
     if (filterType.value && meta.category !== filterType.value) continue;
     if (filterColor.value && !meta.colors.includes(filterColor.value as never)) continue;
     if (filterEnergy.value !== '') {
@@ -114,13 +116,14 @@ const rows = computed(() => {
 
 <template>
   <div class="fade-in space-y-5">
-    <section class="panel rounded-2xl p-5">
+    <section>
       <div class="flex items-start justify-between gap-3 flex-wrap mb-4">
         <SectionHeading
+          eyebrow="常备单卡 · Staples"
           title="万金油单卡"
           note='携带率 = 使用该卡的卡组占比;"对照"为全环境口径差值'
         />
-        <select v-model="scope" class="mini-select max-w-[260px]">
+        <select v-model="scope" class="mini-select max-w-[260px] mt-1">
           <option v-for="o in scopeOptions" :key="String(o.value)" :value="o.value">
             {{ o.label }}
           </option>
@@ -148,30 +151,30 @@ const rows = computed(() => {
             {{ i - 1 === 7 ? '7+费' : `${i - 1} 费` }}
           </option>
         </select>
-        <span class="ml-auto text-xs text-slate-400">{{ rows.length }} 张卡</span>
+        <span class="ml-auto text-xs text-ink-faint">{{ rows.length }} 张卡</span>
       </div>
 
       <div class="overflow-x-auto max-h-[640px] overflow-y-auto">
         <table class="w-full text-sm">
           <thead class="sticky-thead">
-            <tr class="text-slate-400 border-b border-slate-200 dark:border-slate-700 text-xs">
-              <th class="py-2 px-2 text-left bg-white dark:bg-slate-900">#</th>
-              <th class="py-2 px-2 text-left bg-white dark:bg-slate-900">卡牌</th>
-              <th class="py-2 px-2 text-left bg-white dark:bg-slate-900">类型</th>
-              <th class="py-2 px-2 text-center bg-white dark:bg-slate-900">色域</th>
-              <th class="py-2 px-2 text-right bg-white dark:bg-slate-900">费</th>
-              <th class="py-2 px-2 text-right bg-white dark:bg-slate-900">均张</th>
-              <th class="py-2 px-2 text-right bg-white dark:bg-slate-900 w-[26%]">携带率</th>
-              <th class="py-2 px-2 text-right bg-white dark:bg-slate-900">对照Δ</th>
+            <tr class="text-ink-faint border-b border-panel-border text-xs">
+              <th class="py-2 px-2 text-left">#</th>
+              <th class="py-2 px-2 text-left">卡牌</th>
+              <th class="py-2 px-2 text-left">类型</th>
+              <th class="py-2 px-2 text-center">色域</th>
+              <th class="py-2 px-2 text-right">费</th>
+              <th class="py-2 px-2 text-right">均张</th>
+              <th class="py-2 px-2 text-right w-[26%]">携带率</th>
+              <th class="py-2 px-2 text-right">对照Δ</th>
             </tr>
           </thead>
           <tbody>
             <tr
               v-for="(c, i) in rows"
               :key="c.id"
-              class="table-row border-b border-slate-100 dark:border-slate-800/50"
+              class="table-row border-b border-[rgba(59,74,90,0.08)]"
             >
-              <td class="py-1.5 px-2 text-slate-400 tabular-nums">{{ i + 1 }}</td>
+              <td class="py-1.5 px-2 text-ink-faint tabular-nums">{{ i + 1 }}</td>
               <td class="py-1.5 px-2">
                 <div class="flex items-center gap-2.5">
                   <CardThumb
@@ -182,15 +185,15 @@ const rows = computed(() => {
                     :show-name="false"
                   />
                   <div class="min-w-0">
-                    <div class="font-medium text-slate-700 dark:text-gray-200 truncate">
+                    <div class="font-medium text-ink-muted truncate">
                       {{ c.name }}
                       <span
                         v-if="c.banned"
-                        class="ml-1 px-1 rounded bg-red-500 text-white text-[9px] font-bold align-middle"
+                        class="ml-1 px-1 rounded bg-brand text-brand-ink text-[9px] font-bold align-middle"
                         >禁</span
                       >
                     </div>
-                    <div class="text-[10px] text-slate-300 dark:text-slate-600">{{ c.id }}</div>
+                    <div class="text-[10px] text-ink-faint">{{ c.id }}</div>
                   </div>
                 </div>
               </td>
@@ -212,7 +215,7 @@ const rows = computed(() => {
                   <span class="tabular-nums text-xs w-12 text-right font-semibold">{{
                     c.rate.toFixed(1)
                   }}%</span>
-                  <div class="h-1.5 w-24 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                  <div class="h-1.5 w-24 bg-panel-border rounded-full overflow-hidden">
                     <div
                       class="h-full bg-brand rounded-full"
                       :style="{ width: `${Math.min(100, c.rate)}%` }"
@@ -224,17 +227,17 @@ const rows = computed(() => {
                 class="py-1.5 px-2 text-right tabular-nums text-xs"
                 :class="
                   c.diff >= 15
-                    ? 'text-green-600 dark:text-green-400'
+                    ? 'text-delta-up'
                     : c.diff <= -15
-                      ? 'text-red-500'
-                      : 'text-slate-400'
+                      ? 'text-delta-down'
+                      : 'text-ink-faint'
                 "
               >
                 {{ c.diff >= 0 ? '+' : '' }}{{ c.diff }}pp
               </td>
             </tr>
             <tr v-if="rows.length === 0">
-              <td colspan="8" class="py-10 text-center text-slate-400">当前筛选无数据</td>
+              <td colspan="8" class="py-10 text-center text-ink-faint">当前筛选无数据</td>
             </tr>
           </tbody>
         </table>
@@ -242,4 +245,3 @@ const rows = computed(() => {
     </section>
   </div>
 </template>
-

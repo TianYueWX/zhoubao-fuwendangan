@@ -30,13 +30,13 @@ const dir = computed<'up' | 'down' | 'flat' | 'none'>(() => {
 const cls = computed(() => {
   switch (dir.value) {
     case 'up':
-      return 'text-delta-up bg-emerald-500/10 border-emerald-500/30';
+      return 'text-delta-up bg-[#3d8f66]/10 border-[#3d8f66]/30';
     case 'down':
-      return 'text-delta-down bg-rose-500/10 border-rose-500/30';
+      return 'text-delta-down bg-[#c04437]/10 border-[#c04437]/30';
     case 'flat':
-      return 'text-delta-flat bg-slate-500/10 border-slate-500/30';
+      return 'text-ink-faint bg-ink-faint/10 border-ink-faint/30';
     default:
-      return 'text-text-subtle bg-slate-500/10 border-slate-500/20';
+      return 'text-ink-faint bg-ink-faint/10 border-ink-faint/20';
   }
 });
 

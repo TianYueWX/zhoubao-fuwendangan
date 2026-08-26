@@ -31,7 +31,7 @@ const unknownEvents = computed<string[]>(() => store.result?.cityUnknown ?? []);
 <template>
   <section
     v-if="store.result && unknownEvents.length > 0"
-    class="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700"
+    class="mt-4 pt-4 border-t border-panel-border"
   >
     <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
       <SectionHeading
@@ -45,13 +45,13 @@ const unknownEvents = computed<string[]>(() => store.result?.cityUnknown ?? []);
     </div>
     <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-x-4 gap-y-2 max-h-[240px] overflow-y-auto">
       <div v-for="ev in unknownEvents" :key="ev" class="space-y-1">
-        <div class="truncate text-xs text-slate-500 dark:text-gray-400" :title="ev">
+        <div class="truncate text-xs text-ink-muted" :title="ev">
           {{ ev }}
         </div>
         <select
           :value="store.cityOverrides.get(ev) ?? ''"
           @change="(e: Event) => onChange(ev, e)"
-          class="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-md px-2 py-1 text-xs text-slate-800 dark:text-white"
+          class="w-full bg-card-bg border border-card-border rounded-md px-2 py-1 text-xs text-ink"
         >
           <option value="">— 未指定 —</option>
           <option

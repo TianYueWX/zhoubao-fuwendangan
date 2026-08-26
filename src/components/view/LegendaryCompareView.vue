@@ -185,7 +185,8 @@ function onRowClick(row: Record<string, unknown>): void {
   toggleDeck((row as CandRow).deck);
 }
 
-/* ── 对比矩阵 ── */
+/* ── 对比矩阵 ──
+ * 符文卡不在分析范围内(每套卡组按规则自动携带,对比无意义),矩阵直接剔除。 */
 const GROUP_ORDER: ReadonlyArray<{ key: string; label: string }> = [
   { key: '传奇', label: '传奇' },
   { key: '英雄单位', label: '英雄单位' },
@@ -194,7 +195,6 @@ const GROUP_ORDER: ReadonlyArray<{ key: string; label: string }> = [
   { key: '法术', label: '法术' },
   { key: '装备', label: '装备' },
   { key: '战场', label: '战场' },
-  { key: '符文', label: '符文' },
   { key: '其他', label: '其他' }
 ];
 
@@ -218,6 +218,7 @@ const matrix = computed<Array<{ cat: string; rows: MatrixRow[] }> | null>(() => 
   const byKey = new Map<string, MatrixRow>();
   decks.forEach((d, di) => {
     for (const [id, cnt] of d.cards) {
+      if (catalog.cardCategory.get(id) === '符文') continue;
       const key = catalog.canonicalById.get(id) ?? id;
       const repId = catalog.canonicalId.get(key) ?? id;
       let row = byKey.get(key);
@@ -262,7 +263,7 @@ const matrix = computed<Array<{ cat: string; rows: MatrixRow[] }> | null>(() => 
 function cellCls(present: number, n: number): string {
   if (present === n) return '';
   if (present === 1) return 'bg-brand-soft text-brand font-semibold';
-  return 'bg-amber-100/80 dark:bg-amber-500/10';
+  return 'bg-[#f0e6cf]';
 }
 
 function rankLabel(d: Deck): string {
@@ -287,6 +288,7 @@ function winLine(d: Deck): string {
 <template>
   <div class="fade-in space-y-8" v-if="store.result">
     <SectionHeading
+      eyebrow="对读 · Head to Head"
       title="传奇卡组对比"
       note="同一张传奇的所有卡组,按名次优先排序(最佳 = 短时间窗口内成绩最好);向下取前 N 名或勾选自由组合,横向对比构筑差异。"
     />
@@ -295,7 +297,7 @@ function winLine(d: Deck): string {
     <section class="space-y-3">
       <div class="flex items-center gap-4 flex-wrap">
         <label class="flex items-center gap-2 text-sm">
-          <span class="text-xs text-slate-400">传奇</span>
+          <span class="text-xs text-ink-faint">传奇</span>
           <select v-model="selectedCardNo" class="mini-select min-w-[220px]">
             <option v-for="l in legendaries" :key="l.cardNo" :value="l.cardNo">
               {{ l.name }} ({{ l.total }} 套)
@@ -311,7 +313,7 @@ function winLine(d: Deck): string {
             size="sm"
             :show-name="false"
           />
-          <div class="text-xs text-slate-500 dark:text-gray-400 leading-relaxed">
+          <div class="text-xs text-ink-muted leading-relaxed">
             <span class="flex items-center gap-1.5">
               <RuneSeal
                 v-for="c in selectedRow.colors"
@@ -332,7 +334,7 @@ function winLine(d: Deck): string {
       <!-- 周过滤 + 向下取 -->
       <div class="flex items-center gap-4 flex-wrap text-sm">
         <div class="flex items-center gap-1.5">
-          <span class="text-xs text-slate-400">周次</span>
+          <span class="text-xs text-ink-faint">周次</span>
           <button
             v-for="w in [{ label: '', display: '全部' }, ...weekOptions.map(([label, bucket]) => ({ label, display: label, bucket }))]"
             :key="w.display"
@@ -341,7 +343,7 @@ function winLine(d: Deck): string {
               'px-2.5 py-1 rounded-md text-xs transition-colors',
               weekFilter === w.label
                 ? 'tab-active font-medium'
-                : 'card text-slate-500 hover:text-brand'
+                : 'card text-ink-muted hover:text-brand'
             ]"
           >
             {{ w.display }}
@@ -349,7 +351,7 @@ function winLine(d: Deck): string {
         </div>
 
         <div class="flex items-center gap-1.5">
-          <span class="text-xs text-slate-400">向下取</span>
+          <span class="text-xs text-ink-faint">向下取</span>
           <button
             v-for="n in TOP_N_OPTIONS"
             :key="n"
@@ -358,12 +360,12 @@ function winLine(d: Deck): string {
               'px-2.5 py-1 rounded-md text-xs tabular-nums transition-colors',
               topN === n
                 ? 'tab-active font-medium'
-                : 'card text-slate-500 hover:text-brand'
+                : 'card text-ink-muted hover:text-brand'
             ]"
           >
             前 {{ n }}
           </button>
-          <span class="text-[11px] text-slate-400">
+          <span class="text-[11px] text-ink-faint">
             已选 {{ selectedDecks.length }}/{{ MAX_COMPARE }} 套
           </span>
         </div>
@@ -418,13 +420,13 @@ function winLine(d: Deck): string {
         } 种卡`"
       >
         <template #actions>
-          <div class="flex items-center gap-3 text-[11px] text-slate-500">
+          <div class="flex items-center gap-3 text-[11px] text-ink-muted">
             <span class="inline-flex items-center gap-1">
-              <i class="w-3 h-3 rounded-sm border border-slate-300 dark:border-slate-600 bg-transparent"></i>
+              <i class="w-3 h-3 rounded-sm border border-card-border bg-transparent"></i>
               共通
             </span>
             <span class="inline-flex items-center gap-1">
-              <i class="w-3 h-3 rounded-sm bg-amber-200/80 dark:bg-amber-500/20"></i>
+              <i class="w-3 h-3 rounded-sm bg-[#f0e6cf]"></i>
               部分携带
             </span>
             <span class="inline-flex items-center gap-1">
@@ -435,10 +437,10 @@ function winLine(d: Deck): string {
         </template>
       </SectionHeading>
 
-      <div class="overflow-x-auto max-h-[680px] overflow-y-auto border border-slate-200 dark:border-slate-800 rounded-xl">
+      <div class="overflow-x-auto max-h-[680px] overflow-y-auto border border-card-border rounded-xl">
         <table class="w-full text-sm border-separate border-spacing-0">
           <thead class="sticky-thead">
-            <tr class="text-slate-400 text-xs">
+            <tr class="text-ink-faint text-xs">
               <th
                 class="py-2 px-3 text-left font-medium min-w-[230px] sticky left-0 z-[3]"
                 :style="{ background: 'var(--color-thead-bg)' }"
@@ -455,19 +457,19 @@ function winLine(d: Deck): string {
                   <div class="flex items-baseline gap-1.5">
                     <span
                       class="font-display font-black tabular-nums"
-                      :class="i === 0 ? 'text-brand' : 'text-slate-700 dark:text-gray-200'"
+                      :class="i === 0 ? 'text-brand' : 'text-ink-muted'"
                       >{{ rankLabel(d) }}</span
                     >
-                    <span class="text-[11px] text-slate-500 dark:text-gray-400 truncate">{{
+                    <span class="text-[11px] text-ink-muted truncate">{{
                       d.playerName
                     }}</span>
                   </div>
-                  <div class="text-[10px] text-slate-400 dark:text-slate-500 tabular-nums">
+                  <div class="text-[10px] text-ink-faint tabular-nums">
                     {{ d.week.label }}
                     <template v-if="d.city !== '未知'"> · {{ d.city }}</template>
                     <template v-if="winLine(d)"> · {{ winLine(d) }}</template>
                   </div>
-                  <div class="text-[10px] text-slate-400 dark:text-slate-500 tabular-nums">
+                  <div class="text-[10px] text-ink-faint tabular-nums">
                     共 {{ totalCopies(d) }} 张
                     <template v-if="d.hero"> · {{ d.hero }}</template>
                   </div>
@@ -480,15 +482,15 @@ function winLine(d: Deck): string {
               <tr>
                 <td
                   :colspan="selectedDecks.length + 1"
-                  class="px-3 py-1.5 text-[11px] font-bold tracking-[0.18em] text-slate-400 dark:text-slate-500 border-y border-slate-200 dark:border-slate-800"
-                  :style="{ background: 'var(--color-panel-bg)' }"
+                  class="px-3 py-1.5 text-[11px] font-bold tracking-[0.18em] text-ink-faint border-y border-panel-border"
+                  :style="{ background: 'var(--color-thead-bg)' }"
                 >
                   {{ g.cat }}
                 </td>
               </tr>
               <tr v-for="row in g.rows" :key="row.key">
                 <th
-                  class="py-1 px-3 text-left font-normal min-w-[230px] sticky left-0 z-[2] border-b border-slate-100 dark:border-slate-800/60"
+                  class="py-1 px-3 text-left font-normal min-w-[230px] sticky left-0 z-[2] border-b border-[rgba(59,74,90,0.08)]"
                   :style="{ background: 'var(--color-page-bg)' }"
                 >
                   <div class="flex items-center gap-2.5">
@@ -500,17 +502,17 @@ function winLine(d: Deck): string {
                       :show-name="false"
                     />
                     <div class="min-w-0">
-                      <div class="text-[13px] text-slate-700 dark:text-gray-200 truncate">
+                      <div class="text-[13px] text-ink-muted truncate">
                         {{ row.name }}
                       </div>
-                      <div class="text-[10px] text-slate-300 dark:text-slate-600">{{ row.id }}</div>
+                      <div class="text-[10px] text-ink-faint">{{ row.id }}</div>
                     </div>
                   </div>
                 </th>
                 <td
                   v-for="(c, di) in row.counts"
                   :key="di"
-                  class="py-1 px-1 text-center text-xs tabular-nums border-b border-slate-100 dark:border-slate-800/60"
+                  class="py-1 px-1 text-center text-xs tabular-nums border-b border-[rgba(59,74,90,0.08)]"
                   :class="cellCls(row.present, selectedDecks.length)"
                 >
                   {{ c != null ? `×${c}` : '—' }}
@@ -524,12 +526,12 @@ function winLine(d: Deck): string {
 
     <div
       v-else-if="selectedLegKey && sortedCandidates.length > 0"
-      class="panel p-10 text-center text-sm text-slate-400"
+      class="py-12 text-center text-sm text-ink-faint"
     >
       请从候选卡组中勾选或「向下取」选择要对比的卡组
     </div>
 
-    <div v-else-if="!selectedLegKey" class="panel p-10 text-center text-sm text-slate-400">
+    <div v-else-if="!selectedLegKey" class="py-12 text-center text-sm text-ink-faint">
       暂无传奇数据(需导入赛事卡组与卡牌基础)
     </div>
   </div>
