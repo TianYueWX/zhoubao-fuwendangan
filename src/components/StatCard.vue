@@ -10,8 +10,10 @@ withDefaults(
     tone?: 'default' | 'good' | 'warn' | 'bad' | 'accent';
     /** 环比差值(百分点),传入后显示 Δ 徽章 */
     delta?: number | null;
+    /** Δ 徽章数值后缀,默认 '%' */
+    deltaSuffix?: string;
   }>(),
-  { sub: undefined, tone: 'default', delta: null }
+  { sub: undefined, tone: 'default', delta: null, deltaSuffix: '%' }
 );
 </script>
 
@@ -35,7 +37,7 @@ withDefaults(
       >
         {{ value }}
       </div>
-      <DeltaBadge v-if="delta != null" :delta="delta" />
+      <DeltaBadge v-if="delta != null" :delta="delta" :suffix="deltaSuffix" />
     </div>
     <div v-if="sub" class="text-[11px] text-slate-400 dark:text-slate-500">{{ sub }}</div>
   </div>

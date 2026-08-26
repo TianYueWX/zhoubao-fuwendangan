@@ -10,14 +10,86 @@ import { computed, ref, watch } from 'vue';
 import { store, applyGlobalFilters } from '@/store/analysis';
 import StatCard from '@/components/StatCard.vue';
 import TierBadge from '@/components/TierBadge.vue';
-import { buildArchetypes } from '@/core';
-import { quickHeroRows } from '@/core';
-import { pickChartColor } from '@/utils/palette';
+import ChartCard from '@/components/ChartCard.vue';
+import { buildArchetypes, quickHeroRows } from '@/core';
+import { pickChartColor, CHART_PALETTE } from '@/utils/palette';
 import type { ArchetypeResult } from '@/types';
+import type { Deck } from '@/types';
 
 function archColor(i: number): string {
   return pickChartColor(i);
 }
+
+/* ── 周际趋势(所选英雄)── */
+interface TrendPoint {
+  label: string;
+  sample: number;
+  winRate: number | null;
+  popularity: number;
+  top8Rate: number;
+  total: number;
+}
+
+const heroTrend = computed<TrendPoint[] | null>(() => {
+  const r = store.result;
+  if (!r || !selected.value) return null;
+  const hero = selected.value;
+  const byWeek = new Map<string, Deck[]>();
+  for (const d of r.allDecks) {
+    const k = d.week.label || '未知';
+    const arr = byWeek.get(k);
+    if (arr) arr.push(d);
+    else byWeek.set(k, [d]);
+  }
+  const labels = [...byWeek.keys()].sort((a, b) => a.localeCompare(b));
+  return labels.map((label) => {
+    const decks = byWeek.get(label)!;
+    const rows = quickHeroRows(decks, decks.length, r.hasWinData);
+    const h = rows.find((x) => x.hero === hero);
+    return {
+      label,
+      sample: decks.length,
+      winRate: h?.winRate ?? null,
+      popularity: h?.popularity ?? 0,
+      top8Rate: h?.top8Rate ?? 0,
+      total: h?.total ?? 0
+    };
+  });
+});
+
+/** 最近两周环比(v3:周报口径) */
+const heroDelta = computed<{ popularity: number; winRate: number | null; top8Rate: number } | null>(() => {
+  const t = heroTrend.value;
+  if (!t || t.length < 2) return null;
+  const prev = t[t.length - 2]!;
+  const curr = t[t.length - 1]!;
+  return {
+    popularity: curr.popularity - prev.popularity,
+    winRate: curr.winRate != null && prev.winRate != null ? curr.winRate - prev.winRate : null,
+    top8Rate: curr.top8Rate - prev.top8Rate
+  };
+});
+
+const trendOption = computed(() => {
+  const t = heroTrend.value;
+  if (!t || t.length === 0) return null;
+  return {
+    grid: { left: 48, right: 24, top: 40, bottom: 40 },
+    legend: { top: 8, textStyle: { fontSize: 10 } },
+    tooltip: {
+      trigger: 'axis',
+      confine: true,
+      valueFormatter: (v: number | null) => (v == null ? '—' : `${v.toFixed(1)}%`)
+    },
+    xAxis: { type: 'category', data: t.map((p) => p.label), axisLabel: { fontSize: 10 } },
+    yAxis: { type: 'value', name: '%', axisLabel: { formatter: '{value}%' } },
+    series: [
+      { name: '出场率', type: 'line', smooth: true, symbolSize: 6, data: t.map((p) => p.popularity), itemStyle: { color: CHART_PALETTE[0] } },
+      { name: '胜率(收缩)', type: 'line', smooth: true, symbolSize: 6, data: t.map((p) => p.winRate), itemStyle: { color: CHART_PALETTE[1] } },
+      { name: 'Top8 率', type: 'line', smooth: true, symbolSize: 6, data: t.map((p) => p.top8Rate), itemStyle: { color: CHART_PALETTE[2] } }
+    ]
+  };
+});
 
 /* ── 过滤后的英雄行 + 选择器 ── */
 const filteredDecks = computed(() =>
@@ -132,16 +204,24 @@ const coreCards = computed<CoreCardRow[]>(() => {
     </section>
 
     <template v-if="row && store.result">
-      <!-- 指标卡 -->
+      <!-- 指标卡(带周环比 Δ) -->
       <div class="grid grid-cols-2 lg:grid-cols-5 gap-3">
         <StatCard label="样本卡组" :value="row.total" :sub="`出场率 ${row.popularity.toFixed(1)}%`" />
-        <StatCard label="Top8 率" :value="`${row.top8Rate.toFixed(1)}%`" tone="accent" />
+        <StatCard
+          label="Top8 率"
+          :value="`${row.top8Rate.toFixed(1)}%`"
+          tone="accent"
+          :delta="heroDelta?.top8Rate ?? null"
+          delta-suffix="pp"
+        />
         <StatCard
           v-if="row.winRate !== null"
           label="真实胜率"
           :value="`${row.winRate.toFixed(1)}%`"
           :tone="row.winRate >= 50 ? 'good' : 'warn'"
           :sub="`平均胜场 ${row.avgWins?.toFixed(2) ?? '—'}`"
+          :delta="heroDelta?.winRate ?? null"
+          delta-suffix="pp"
         />
         <StatCard
           v-else
@@ -156,6 +236,26 @@ const coreCards = computed<CoreCardRow[]>(() => {
           sub="Top 样本内出现过的卡牌"
         />
       </div>
+
+      <!-- 周际趋势(v3) -->
+      <section class="panel rounded-2xl p-5">
+        <div class="flex items-baseline justify-between mb-1 flex-wrap gap-2">
+          <h3 class="text-lg font-bold text-slate-800 dark:text-white">📈 {{ row.hero }} 周际趋势</h3>
+          <span v-if="heroDelta" class="text-[11px] text-slate-400 tabular-nums">
+            环比:胜率
+            {{ heroDelta.winRate != null ? `${heroDelta.winRate > 0 ? '+' : ''}${heroDelta.winRate.toFixed(1)}pp` : '—' }}
+            · 出场率
+            {{ `${heroDelta.popularity > 0 ? '+' : ''}${heroDelta.popularity.toFixed(1)}pp` }}
+          </span>
+        </div>
+        <p class="text-xs text-slate-400 mb-2">
+          出场率 / 胜率(贝叶斯收缩修正)/ Top8 率 · 数据包内周次
+        </p>
+        <ChartCard v-if="trendOption" :option="trendOption" height="300px" />
+        <div v-else class="h-40 flex items-center justify-center text-slate-400 text-sm">
+          暂无周际数据
+        </div>
+      </section>
 
       <div class="grid grid-cols-1 xl:grid-cols-2 gap-5">
         <!-- 流派聚类 -->

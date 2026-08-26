@@ -12,7 +12,8 @@
 | R2 | **P1 贝叶斯收缩**(stats.ts:shrinkWinRate/envPrior;quickStats 与 legendaryStats 默认启用);**P2 设计 tokens**(tailwind 域色/Tier/Δ + DeltaBadge + StatCard Δ 支持);**P0 预设管线**(prepare-preset.mjs + manifest.json + PresetLoader 一键加载 + preset.ts)+ **Worker 解析**(parse.worker + workerParse,FileDrop 大 JSON 走 Worker) | 收缩公式校验 ✓、影流之主小样本降位 ✓、预设脚本真实产出 4.6MB/5 文件 ✓、worker 独立 chunk ✓、构建通过 |
 | R3 | **delta 周环比引擎**(delta.ts:buildDeltas/deltasFromRows/movers/HHI);**总览双叙事切换**(本周聚焦/趋势周报:周报模式 = 包内周次分组真实环比,含 KPI Δ、热度升降榜、胜率变化榜);**移动端**(<lg 隐藏侧边栏,头部横向导航条,主区窄边距) | 真实数据周环比 ✓(卡莎 -3.5pp、菲奥娜 +2.3pp、HHI 578→632);构建通过 |
 | R4 | **周报引擎化**(core/report.ts:buildWeeklyReport 纯函数,含周际时间线/传奇 movers/域对 movers);**MetaTimeline 线图**(Top6 英雄周际出场率);**复制周报 Markdown**(utils/reportMarkdown.ts,创作者一键发布);总览周报模式补齐 | 周报 6/6 Markdown 断言 ✓(标题/上升榜/胜率榜/传奇/域对/免责);时间线叙事 ✓(易 10.1→12.9 走强、卡莎 10.6→7.5 退潮、域对 blue+red -2.9pp 自洽);构建通过 |
-| ⏳ R5+ | 其余视图迁移(英雄/单卡/地域/卡组 v3 化)、多包 Pinia store + IndexedDB(依赖放开后)、移动端图表适配、ChartCard PNG 导出 | — |
+| R5 | **英雄拆解 v3 化**:指标卡周环比 Δ(胜率/Top8 率,StatCard 支持 deltaSuffix)、周际趋势线图(出场率/收缩胜率/Top8 率);**全视图设计规格审计**(单卡 Δpp 对照列 ✓、地域双模式 ✓、Combo Lift 滑块 ✓、卡组抽屉+TTS ✓、PNG 导出 = ChartCard toolbox saveAsImage ✓) | 构建通过;视图内容层全部符合 §3 规格 |
+| ⏳ 待依赖放开 | 多包 Pinia store + IndexedDB(见 §3.5 契约);视图视觉层全面换肤(设计 tokens 已就绪,低风险) | — |
 
 > ⚠️ 环境限制:R2 尝试安装 pinia/dexie 被沙箱只读拦截(ERR_PNPM_EROFS)。store 暂用 v2 响应式单例(API 面按 Pinia 习惯组织),依赖放开后可平滑迁移。
 
@@ -169,6 +170,28 @@ analysis store:
   theme: 'dark' | 'light' | 'system'
   selectors: tierList / domainPairs / movers / deltas / quadrant / heatmap ...
 ```
+
+### 3.5 多包 store 契约(待依赖放开后实现)
+
+> 沙箱只读(ERR_PNPM_EROFS)无法安装 pinia/dexie,暂以 v2 响应式单例承载单包。以下为既定契约,依赖放开后按此实现,引擎层(delta/report)已就绪无需改动。
+
+```ts
+// src/store/packages.ts(目标实现)
+export const usePackages = defineStore('packages', () => {
+  const packages = ref<PackageRecord[]>([]);        // IndexedDB 镜像(Dexie 持久化,刷新不丢)
+  const activeIds = ref<string[]>([]);              // 多选激活(≥2 触发周环比对比)
+  const filters = reactive<GlobalFilters>({});      // 全局过滤(沿用 v2 applyGlobalFilters 语义)
+  const loadPreset = (id: string) => ...;           // manifest → fetchPresetFiles → runAnalysis
+  const loadUpload = (files: File[]) => ...;        // FileDrop 复用(Worker 解析)
+  const removePackage = (id: string) => ...;
+  const compare = computed(() =>                    // 跨包周报:复用 buildWeeklyReport 的 deltasFromRows 骨架
+    activeIds.length >= 2 ? buildPackageCompare(activeIds) : null);
+  return { packages, activeIds, filters, loadPreset, loadUpload, removePackage, compare };
+});
+// 跨包对比 = deltasFromRows(包A 聚合行, 包B 聚合行),与包内周次对比同构,仅数据源不同
+```
+
+**周报优先级**:有 ≥2 个激活包 → 跨包周环比;否则退化为包内周次对比(当前已实现)。
 
 ### 3.4 追加需求:最佳传奇排行横向对比(已实现首版)
 
