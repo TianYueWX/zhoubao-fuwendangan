@@ -2351,8 +2351,71 @@ var DEFAULT_ARCHETYPE_OPTIONS = Object.freeze({
   archMax: 3
 });
 
+// src/core/legendaryStats.ts
+function legendaryRows(decks, catalog, grandTotal) {
+  const byLeg = /* @__PURE__ */ new Map();
+  for (const d of decks) {
+    let leg = null;
+    let colors = [];
+    for (const id of d.cards.keys()) {
+      if (catalog.cardCategory.get(id) === "\u4F20\u5947") {
+        leg = id;
+        const cs2 = catalog.cardColors.get(id);
+        if (cs2) {
+          colors = [...cs2].filter((c) => c !== "colorless").sort();
+        }
+        break;
+      }
+    }
+    if (!leg) continue;
+    let agg = byLeg.get(leg);
+    if (!agg) {
+      agg = { colors, total: 0, top8: 0, winsSum: 0, roundsSum: 0, winDecks: 0, heroes: /* @__PURE__ */ new Map() };
+      byLeg.set(leg, agg);
+    }
+    agg.total += 1;
+    if (d.rank >= 1 && d.rank <= 8) agg.top8 += 1;
+    if (d.wins !== null && d.eventRounds !== null && d.eventRounds > 0) {
+      agg.winsSum += d.wins;
+      agg.roundsSum += d.eventRounds;
+      agg.winDecks += 1;
+    }
+    const hero = d.hero || "\u672A\u77E5";
+    agg.heroes.set(hero, (agg.heroes.get(hero) ?? 0) + 1);
+  }
+  const rows = [];
+  for (const [cardNo, a] of byLeg) {
+    const meta = catalog.byId.get(cardNo);
+    const topHero = [...a.heroes.entries()].sort((x, y) => y[1] - x[1])[0];
+    rows.push({
+      cardNo,
+      name: meta?.name ?? cardNo,
+      colors: a.colors,
+      total: a.total,
+      top8: a.top8,
+      top8Rate: a.total > 0 ? a.top8 / a.total * 100 : 0,
+      popularity: grandTotal > 0 ? a.total / grandTotal * 100 : 0,
+      winRate: a.winDecks > 0 && a.roundsSum > 0 ? a.winsSum / a.roundsSum * 100 : null,
+      avgWins: a.winDecks > 0 ? a.winsSum / a.winDecks : null,
+      topHero: topHero?.[0] ?? "\u2014",
+      topHeroRate: topHero && a.total > 0 ? topHero[1] / a.total * 100 : 0,
+      imgUrl: catalog.cardImg.get(cardNo) ?? null,
+      isBanned: meta?.isBanned ?? false
+    });
+  }
+  rows.sort((x, y) => y.total - x.total);
+  return rows;
+}
+function metricValue(r, m) {
+  if (m === "winRate") return r.winRate ?? r.top8Rate;
+  return r[m];
+}
+function sortLegendaryRows(rows, metric, minSample = 5) {
+  return [...rows].filter((r) => r.total >= minSample).sort((a, b) => metricValue(b, metric) - metricValue(a, metric) || b.total - a.total);
+}
+
 // smoke.ts
-var PKG = "C:/Users/Lenovo/Downloads/LOL\u7B26\u6587\u6218\u573A\u5361\u56FE/\u7B2C\u56DB\u8D5B\u5B63/state/\u57CE\u5E02\u8D5B\u7B2C\u56DB\u8D5B\u5B63\u7B2C\u4E09\u5468_\u5168\u91CF\u6570\u636E\u5305";
+var PKG = (0, import_node_path.resolve)(process.cwd(), "\u57CE\u5E02\u8D5B\u7B2C\u56DB\u8D5B\u5B63\u7B2C\u4E09\u5468_\u5168\u91CF\u6570\u636E\u5305");
 function csv(name) {
   const text = (0, import_node_fs.readFileSync)((0, import_node_path.resolve)(PKG, name), "utf8");
   return import_papaparse2.default.parse(text, { header: true, skipEmptyLines: true }).data ?? [];
@@ -2394,6 +2457,33 @@ if (d0) {
 var cities = new Set(result.allDecks.map((d) => d.city));
 console.log("\n\u57CE\u5E02\u6570:", cities.size, "| \u672A\u77E5:", result.allDecks.filter((d) => d.city === "\u672A\u77E5").length);
 console.log("combos:", result.combos.length, "| top1:", JSON.stringify(result.combos[0]?.nameA), "+", JSON.stringify(result.combos[0]?.nameB), "lift", result.combos[0]?.lift.toFixed(2));
+var legs = legendaryRows(result.allDecks, result.catalog, result.totalDecks);
+var covered = legs.reduce((s, r) => s + r.total, 0);
+console.log("\n== \u4F20\u5947\u6392\u884C(\u65B0\u5F15\u64CE)==");
+console.log("\u4F20\u5947\u79CD\u7C7B:", legs.length, "| \u8BC6\u522B\u5361\u7EC4:", covered, "/", result.totalDecks, "| \u8986\u76D6:", (covered / result.totalDecks * 100).toFixed(1) + "%");
+console.log("-- \u6309\u51FA\u573A\u7387 Top5 --");
+sortLegendaryRows(legs, "popularity").slice(0, 5).forEach(
+  (r, i) => console.log(`#${i + 1} ${r.name}(${r.cardNo}) n=${r.total} pop=${r.popularity.toFixed(1)}% win=${r.winRate?.toFixed(1)}% top8=${r.top8Rate.toFixed(1)}% hero=${r.topHero}(${r.topHeroRate.toFixed(0)}%) \u57DF=${r.colors.join("+")}`)
+);
+console.log("-- \u6309\u771F\u5B9E\u80DC\u7387 Top5 --");
+sortLegendaryRows(legs, "winRate").slice(0, 5).forEach(
+  (r, i) => console.log(`#${i + 1} ${r.name}(${r.cardNo}) n=${r.total} win=${r.winRate?.toFixed(1)}% top8=${r.top8Rate.toFixed(1)}% pop=${r.popularity.toFixed(1)}% hero=${r.topHero}`)
+);
+var legsSample = legendaryRows(result.uniqueSampleDecks, result.catalog, result.sampleSize);
+var legByColors = /* @__PURE__ */ new Map();
+for (const r of legsSample) {
+  const key = [...r.colors].sort().join("|");
+  legByColors.set(key, (legByColors.get(key) ?? 0) + r.total);
+}
+var csPairs = new Map(result.colorStats.pairs.map((p) => [p.colors.join("|"), p.decks]));
+var pairOk = 0;
+var pairMiss = 0;
+for (const [key, n] of legByColors) {
+  if (csPairs.get(key) === n) pairOk += 1;
+  else pairMiss += 1;
+}
+console.log(`\u57DF\u5BF9\u53E3\u5F84\u4E00\u81F4\u6027(Top \u6837\u672C ${result.sampleSize} \u5957,${legByColors.size} \u4E2A\u57DF\u5BF9): ${pairOk} \u4E00\u81F4 / ${pairMiss} \u4E0D\u4E00\u81F4`);
+console.log("\u5E73\u5747\u6BCF\u5957\u5361\u7EC4\u4F20\u5947\u6570:", (covered / result.totalDecks).toFixed(4));
 /*! Bundled license information:
 
 papaparse/papaparse.js:

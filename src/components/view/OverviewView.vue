@@ -11,7 +11,8 @@ import { store, applyGlobalFilters } from '@/store/analysis';
 import ChartCard from '@/components/ChartCard.vue';
 import StatCard from '@/components/StatCard.vue';
 import TierBadge from '@/components/TierBadge.vue';
-import { quickHeroRows } from '@/core';
+import { quickHeroRows, legendaryRows as computeLegendaryRows } from '@/core';
+import LegendaryCompare from '@/components/LegendaryCompare.vue';
 import { CARD_COLOR_HEX } from '@/utils/palette';
 import { CARD_COLOR_LABELS } from '@/types';
 import type { CardColor } from '@/types';
@@ -198,6 +199,14 @@ const pairOption = computed(() => {
   };
 });
 
+/* ── 传奇排行(横向对比)── */
+const legendaryRows = computed(() => {
+  const r = store.result;
+  if (!r) return [];
+  const decks = filteredDecks.value;
+  return computeLegendaryRows(decks, r.catalog, decks.length);
+});
+
 /* ── 下钻 ── */
 const drillHint = ref('');
 function gotoHero(hero: string): void {
@@ -311,5 +320,8 @@ function gotoHero(hero: string): void {
         当前过滤条件下无样本
       </div>
     </section>
+
+    <!-- 最佳传奇横向对比 -->
+    <LegendaryCompare :rows="legendaryRows" :has-win-data="store.result?.hasWinData ?? false" />
   </div>
 </template>

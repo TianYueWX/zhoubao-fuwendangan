@@ -2,9 +2,9 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import Papa from 'papaparse';
-import { runAnalysis } from '@/core';
+import { runAnalysis, legendaryRows, sortLegendaryRows } from '@/core';
 
-const PKG = 'C:/Users/Lenovo/Downloads/LOL符文战场卡图/第四赛季/state/城市赛第四赛季第三周_全量数据包';
+const PKG = resolve(process.cwd(), '城市赛第四赛季第三周_全量数据包');
 
 function csv(name: string): Record<string, string | null>[] {
   const text = readFileSync(resolve(PKG, name), 'utf8');
@@ -54,3 +54,37 @@ if (d0) {
 const cities = new Set(result.allDecks.map((d) => d.city));
 console.log('\n城市数:', cities.size, '| 未知:', result.allDecks.filter((d) => d.city === '未知').length);
 console.log('combos:', result.combos.length, '| top1:', JSON.stringify(result.combos[0]?.nameA), '+', JSON.stringify(result.combos[0]?.nameB), 'lift', result.combos[0]?.lift.toFixed(2));
+
+/* ── 传奇排行引擎验证 ── */
+const legs = legendaryRows(result.allDecks, result.catalog, result.totalDecks);
+const covered = legs.reduce((s, r) => s + r.total, 0);
+console.log('\n== 传奇排行(新引擎)==');
+console.log('传奇种类:', legs.length, '| 识别卡组:', covered, '/', result.totalDecks, '| 覆盖:', (covered / result.totalDecks * 100).toFixed(1) + '%');
+console.log('-- 按出场率 Top5 --');
+sortLegendaryRows(legs, 'popularity')
+  .slice(0, 5)
+  .forEach((r, i) =>
+    console.log(`#${i + 1} ${r.name}(${r.cardNo}) n=${r.total} pop=${r.popularity.toFixed(1)}% win=${r.winRate?.toFixed(1)}% top8=${r.top8Rate.toFixed(1)}% hero=${r.topHero}(${r.topHeroRate.toFixed(0)}%) 域=${r.colors.join('+')}`)
+  );
+console.log('-- 按真实胜率 Top5 --');
+sortLegendaryRows(legs, 'winRate')
+  .slice(0, 5)
+  .forEach((r, i) =>
+    console.log(`#${i + 1} ${r.name}(${r.cardNo}) n=${r.total} win=${r.winRate?.toFixed(1)}% top8=${r.top8Rate.toFixed(1)}% pop=${r.popularity.toFixed(1)}% hero=${r.topHero}`)
+  );
+// 与 colorStats 域对口径一致性:同一范围(Top 样本)下,传奇按颜色域归并后的 decks 数应等于域对 decks 数
+const legsSample = legendaryRows(result.uniqueSampleDecks, result.catalog, result.sampleSize);
+const legByColors = new Map<string, number>();
+for (const r of legsSample) {
+  const key = [...r.colors].sort().join('|');
+  legByColors.set(key, (legByColors.get(key) ?? 0) + r.total);
+}
+const csPairs = new Map(result.colorStats.pairs.map((p) => [p.colors.join('|'), p.decks]));
+let pairOk = 0;
+let pairMiss = 0;
+for (const [key, n] of legByColors) {
+  if (csPairs.get(key) === n) pairOk += 1;
+  else pairMiss += 1;
+}
+console.log(`域对口径一致性(Top 样本 ${result.sampleSize} 套,${legByColors.size} 个域对): ${pairOk} 一致 / ${pairMiss} 不一致`);
+console.log('平均每套卡组传奇数:', (covered / result.totalDecks).toFixed(4));
