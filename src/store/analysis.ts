@@ -63,6 +63,7 @@ export type ViewName =
   | 'heroes'
   | 'cards'
   | 'combo'
+  | 'legendary'
   | 'region'
   | 'decks';
 
@@ -78,6 +79,7 @@ export const views: ReadonlyArray<ViewMeta> = Object.freeze([
   { id: 'heroes', label: '英雄拆解', emoji: '🏆' },
   { id: 'cards', label: '单卡分析', emoji: '🌟' },
   { id: 'combo', label: 'Combo 羁绊', emoji: '🔗' },
+  { id: 'legendary', label: '传奇对比', emoji: '⚔️' },
   { id: 'region', label: '地域差异', emoji: '🗺️' },
   { id: 'decks', label: '卡组浏览器', emoji: '🃏' }
 ]);
@@ -127,6 +129,9 @@ export const store = reactive({
   result: null as AnalysisResult | null,
   isAnalyzing: false,
   analysisError: null as Error | null,
+
+  /** 当前数据来源刊名(如预设包 '第四赛季 · 第三周'),报头刊号行使用 */
+  sourceLabel: '',
 
   currentView: 'import' as ViewName,
 
@@ -236,6 +241,7 @@ export function runStoredAnalysis(): boolean {
 
   store.isAnalyzing = true;
   store.analysisError = null;
+  store.sourceLabel = '';
 
   try {
     store.result = runAnalysis({

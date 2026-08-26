@@ -7,3 +7,6 @@ dist/
 .env.local
 .vite/
 public/data/
+
+# UI 验证截图(临时)
+shots/

@@ -8,6 +8,7 @@ import OverviewView from './OverviewView.vue';
 import HeroesView from './HeroesView.vue';
 import CardsView from './CardsView.vue';
 import ComboView from './ComboView.vue';
+import LegendaryCompareView from './LegendaryCompareView.vue';
 import RegionView from './RegionView.vue';
 import DecksView from './DecksView.vue';
 
@@ -17,8 +18,18 @@ export const ViewComponents = {
   heroes: HeroesView,
   cards: CardsView,
   combo: ComboView,
+  legendary: LegendaryCompareView,
   region: RegionView,
   decks: DecksView
 } as const;
 
-export { ImportView, OverviewView, HeroesView, CardsView, ComboView, RegionView, DecksView };
+export {
+  ImportView,
+  OverviewView,
+  HeroesView,
+  CardsView,
+  ComboView,
+  LegendaryCompareView,
+  RegionView,
+  DecksView
+};

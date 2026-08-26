@@ -11,6 +11,7 @@ import { store, applyGlobalFilters } from '@/store/analysis';
 import StatCard from '@/components/StatCard.vue';
 import TierBadge from '@/components/TierBadge.vue';
 import ChartCard from '@/components/ChartCard.vue';
+import SectionHeading from '@/components/SectionHeading.vue';
 import { buildArchetypes, quickHeroRows } from '@/core';
 import { pickChartColor, CHART_PALETTE } from '@/utils/palette';
 import type { ArchetypeResult } from '@/types';
@@ -166,7 +167,7 @@ const coreCards = computed<CoreCardRow[]>(() => {
             v-model="search"
             type="text"
             placeholder="搜索英雄(如 凯南 / 易 …)"
-            class="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-xl px-4 py-2 text-sm text-slate-800 dark:text-white placeholder-slate-400"
+            class="filter-select w-full !py-2 placeholder-slate-400"
           />
           <!-- 下拉候选 -->
           <div
@@ -194,7 +195,7 @@ const coreCards = computed<CoreCardRow[]>(() => {
         </div>
         <select
           v-model="selected"
-          class="ml-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg px-3 py-2 text-sm max-w-[240px] text-slate-800 dark:text-white"
+          class="mini-select ml-auto max-w-[240px]"
         >
           <option v-for="r in heroRows" :key="r.hero" :value="r.hero">
             {{ r.hero }} ({{ r.total }})
@@ -205,7 +206,7 @@ const coreCards = computed<CoreCardRow[]>(() => {
 
     <template v-if="row && store.result">
       <!-- 指标卡(带周环比 Δ) -->
-      <div class="grid grid-cols-2 lg:grid-cols-5 gap-3">
+      <div class="grid grid-cols-2 lg:grid-cols-5">
         <StatCard label="样本卡组" :value="row.total" :sub="`出场率 ${row.popularity.toFixed(1)}%`" />
         <StatCard
           label="Top8 率"
@@ -239,18 +240,19 @@ const coreCards = computed<CoreCardRow[]>(() => {
 
       <!-- 周际趋势(v3) -->
       <section class="panel rounded-2xl p-5">
-        <div class="flex items-baseline justify-between mb-1 flex-wrap gap-2">
-          <h3 class="text-lg font-bold text-slate-800 dark:text-white">📈 {{ row.hero }} 周际趋势</h3>
-          <span v-if="heroDelta" class="text-[11px] text-slate-400 tabular-nums">
-            环比:胜率
-            {{ heroDelta.winRate != null ? `${heroDelta.winRate > 0 ? '+' : ''}${heroDelta.winRate.toFixed(1)}pp` : '—' }}
-            · 出场率
-            {{ `${heroDelta.popularity > 0 ? '+' : ''}${heroDelta.popularity.toFixed(1)}pp` }}
-          </span>
-        </div>
-        <p class="text-xs text-slate-400 mb-2">
-          出场率 / 胜率(贝叶斯收缩修正)/ Top8 率 · 数据包内周次
-        </p>
+        <SectionHeading
+          :title="`${row.hero} 周际趋势`"
+          note="出场率 / 胜率(贝叶斯收缩修正)/ Top8 率 · 数据包内周次"
+        >
+          <template #actions>
+            <span v-if="heroDelta" class="text-[11px] text-slate-400 tabular-nums">
+              环比:胜率
+              {{ heroDelta.winRate != null ? `${heroDelta.winRate > 0 ? '+' : ''}${heroDelta.winRate.toFixed(1)}pp` : '—' }}
+              · 出场率
+              {{ `${heroDelta.popularity > 0 ? '+' : ''}${heroDelta.popularity.toFixed(1)}pp` }}
+            </span>
+          </template>
+        </SectionHeading>
         <ChartCard v-if="trendOption" :option="trendOption" height="300px" />
         <div v-else class="h-40 flex items-center justify-center text-slate-400 text-sm">
           暂无周际数据
@@ -260,10 +262,10 @@ const coreCards = computed<CoreCardRow[]>(() => {
       <div class="grid grid-cols-1 xl:grid-cols-2 gap-5">
         <!-- 流派聚类 -->
         <section class="panel rounded-2xl p-5">
-          <h3 class="text-lg font-bold text-slate-800 dark:text-white mb-1">🧬 流派自动聚类</h3>
-          <p class="text-xs text-slate-400 mb-4">
-            Jaccard 卡组相似度 ≥ 0.55 贪心聚类,最多 3 流派 + 其他
-          </p>
+          <SectionHeading
+            title="流派自动聚类"
+            note="Jaccard 卡组相似度 ≥ 0.55 贪心聚类,最多 3 流派 + 其他"
+          />
           <div v-if="archetypes" class="space-y-4">
             <div
               v-for="(a, i) in archetypes.list"
@@ -298,8 +300,7 @@ const coreCards = computed<CoreCardRow[]>(() => {
 
         <!-- 核心卡 -->
         <section class="panel rounded-2xl p-5">
-          <h3 class="text-lg font-bold text-slate-800 dark:text-white mb-1">🧾 核心卡 Top 20</h3>
-          <p class="text-xs text-slate-400 mb-3">按高排名样本携带率排序;条形为携带率</p>
+          <SectionHeading title="核心卡 Top 20" note="按高排名样本携带率排序;条形为携带率" />
           <div class="overflow-y-auto max-h-[420px]">
             <table class="w-full text-sm">
               <thead class="sticky-thead">
@@ -329,7 +330,7 @@ const coreCards = computed<CoreCardRow[]>(() => {
                       <span class="tabular-nums text-xs w-11 text-right">{{ c.rate }}%</span>
                       <div class="h-1.5 w-24 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
                         <div
-                          class="h-full bg-indigo-400 rounded-full"
+                          class="h-full bg-brand rounded-full"
                           :style="{ width: `${Math.min(100, c.rate)}%` }"
                         ></div>
                       </div>

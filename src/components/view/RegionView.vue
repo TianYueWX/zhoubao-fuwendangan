@@ -9,11 +9,12 @@
  */
 import { computed, onMounted, ref } from 'vue';
 import ChartCard from '@/components/ChartCard.vue';
+import SectionHeading from '@/components/SectionHeading.vue';
 import { store } from '@/store/analysis';
 import { UNKNOWN_CITY } from '@/utils/cityRegex';
 import { ensureChinaMap, CITY_COORDS } from '@/utils/chinaMap';
 import { CHART_PALETTE } from '@/utils/palette';
-import { themedAxes } from '@/utils/theme';
+import { themedAxes, getChartColors, getBrandColor } from '@/utils/theme';
 import type { ChartOptionInput } from '@/types';
 
 onMounted(() => {
@@ -88,14 +89,15 @@ const cityMapOption = computed<ChartOptionInput | null>(() => {
     pts.push({ name: city, value: [coord[0], coord[1], total] });
   }
   const maxSize = Math.max(1, ...pts.map((p) => p.value[2]));
+  const cc = getChartColors();
   return {
     geo: {
       map: 'china',
       roam: true,
       zoom: 1.15,
       label: { show: false },
-      itemStyle: { areaColor: '#e8ecf5', borderColor: '#b6c2d9' },
-      emphasis: { label: { show: true }, itemStyle: { areaColor: '#dbe3f5' } },
+      itemStyle: { areaColor: cc.mapArea, borderColor: cc.mapBorder },
+      emphasis: { label: { show: true }, itemStyle: { areaColor: cc.mapEmphasis } },
       select: { disabled: true }
     },
     tooltip: {
@@ -115,7 +117,7 @@ const cityMapOption = computed<ChartOptionInput | null>(() => {
           return 10 + Math.sqrt((arr[2] ?? 0) / maxSize) * 22;
         },
         rippleEffect: { brushType: 'stroke', scale: 2.2 },
-        itemStyle: { color: '#6366f1', shadowBlur: 8, shadowColor: 'rgba(99,102,241,.6)' },
+        itemStyle: { color: getBrandColor(), shadowBlur: 8, shadowColor: 'rgba(232,181,74,.35)' },
         label: { show: true, position: 'right', fontSize: 11 },
         zlevel: 2
       }
@@ -129,6 +131,7 @@ const provinceMapOption = computed<ChartOptionInput | null>(() => {
   const prov = store.result.provinceStats;
   const data = Array.from(prov.entries()).map(([name, value]) => ({ name, value }));
   const maxPv = Math.max(1, ...data.map((d) => d.value));
+  const cc = getChartColors();
   return {
     visualMap: {
       min: 0,
@@ -137,7 +140,7 @@ const provinceMapOption = computed<ChartOptionInput | null>(() => {
       orient: 'horizontal',
       left: 'center',
       bottom: 6,
-      inRange: { color: ['#e0e7ff', '#818cf8', '#4f46e5'] }
+      inRange: { color: [...cc.mapRamp] }
     },
     tooltip: {
       formatter: (p: unknown) => {
@@ -189,6 +192,7 @@ const heatOption = computed<ChartOptionInput | null>(() => {
   }
 
   const { axisBase } = themedAxes();
+  const cc = getChartColors();
   const suffix = heatMode.value === 'win' ? '%' : '%';
   return {
     grid: { left: 110, right: 60, top: 30, bottom: 70 },
@@ -201,7 +205,7 @@ const heatOption = computed<ChartOptionInput | null>(() => {
       orient: 'horizontal',
       left: 'center',
       bottom: 6,
-      inRange: { color: ['#f5f5f4', '#c7d2fe', '#818cf8', '#4f46e5'] },
+      inRange: { color: [...cc.heatRamp] },
       formatter: (v: unknown) => `${Number(v) || 0}${suffix}`
     },
     tooltip: {
@@ -227,7 +231,7 @@ const heatOption = computed<ChartOptionInput | null>(() => {
           formatter: (p: unknown) => String((p as { value: [number, number, number] }).value[2]),
           fontSize: 10
         },
-        itemStyle: { borderColor: '#fff', borderWidth: 1, borderRadius: 3 }
+        itemStyle: { borderColor: cc.mapBorder, borderWidth: 1, borderRadius: 3 }
       }
     ]
   };
@@ -260,14 +264,17 @@ const eventRows = computed<EventRow[]>(() =>
   <div class="fade-in space-y-5" v-if="store.result">
     <div class="grid grid-cols-1 xl:grid-cols-2 gap-5">
       <section class="panel rounded-2xl p-5">
-        <h4 class="text-sm font-bold text-slate-700 dark:text-gray-200 mb-2">📊 城市×英雄 出场率(Top10 城 × Top5 英雄)</h4>
-        <p class="text-[11px] text-slate-400 mb-1">点击图例外的城市轴标签可全局过滤该城市</p>
+        <SectionHeading
+          small
+          title="城市×英雄 出场率"
+          note="Top10 城 × Top5 英雄 · 点击城市轴标签可全局过滤该城市"
+        />
         <ChartCard :option="regionBarOption" height="380px" @chart-click="(p) => p.componentType === 'xAxis' && setCity(String(p.value))" />
       </section>
 
       <section class="panel rounded-2xl p-5">
         <div class="flex items-center justify-between mb-2 flex-wrap gap-2">
-          <h4 class="text-sm font-bold text-slate-700 dark:text-gray-200">🎯 城市×英雄 强度热力</h4>
+          <SectionHeading small title="城市×英雄 强度热力" />
           <div class="flex gap-1 text-xs">
             <button
               :class="['px-2.5 py-1 rounded-lg transition-all', heatMode === 'top8' ? 'tab-active font-medium' : 'card text-slate-500']"
@@ -290,13 +297,17 @@ const eventRows = computed<EventRow[]>(() =>
       </section>
 
       <section class="panel rounded-2xl p-5">
-        <h4 class="text-sm font-bold text-slate-700 dark:text-gray-200 mb-2">🗺️ 城市站点地图(气泡 = 参赛卡组数)</h4>
+        <SectionHeading
+          small
+          title="城市站点地图"
+          note="气泡大小 = 参赛卡组数"
+        />
         <ChartCard v-if="cityMapOption" :option="cityMapOption" height="420px" />
         <div v-else class="h-[300px] flex items-center justify-center text-slate-400 text-sm">地图数据未加载</div>
       </section>
 
       <section class="panel rounded-2xl p-5">
-        <h4 class="text-sm font-bold text-slate-700 dark:text-gray-200 mb-2">🔥 省份热度分布</h4>
+        <SectionHeading small title="省份热度分布" />
         <ChartCard v-if="provinceMapOption" :option="provinceMapOption" height="420px" />
         <div v-else class="h-[300px] flex items-center justify-center text-slate-400 text-sm">地图数据未加载</div>
       </section>
@@ -304,7 +315,7 @@ const eventRows = computed<EventRow[]>(() =>
 
     <!-- 赛事一览 -->
     <section class="panel rounded-2xl p-5">
-      <h4 class="text-sm font-bold text-slate-700 dark:text-gray-200 mb-3">📋 赛事一览</h4>
+      <SectionHeading small title="赛事一览" />
       <div class="overflow-x-auto max-h-[360px] overflow-y-auto">
         <table class="w-full text-sm">
           <thead class="sticky-thead">

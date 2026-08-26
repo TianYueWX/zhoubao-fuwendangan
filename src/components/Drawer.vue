@@ -45,14 +45,18 @@ function onKeydown(e: KeyboardEvent): void {
       <!-- 面板 -->
       <div
         :class="[
-          'relative h-full w-full bg-white dark:bg-slate-900 shadow-2xl overflow-y-auto drawer-in',
+          'relative h-full w-full shadow-2xl overflow-y-auto drawer-in',
           wide ? 'max-w-3xl' : 'max-w-lg'
         ]"
+        :style="{ background: 'var(--color-drawer-bg)' }"
       >
         <div
-          class="sticky top-0 z-10 flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur"
+          class="sticky top-0 z-10 flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-800"
+          :style="{ background: 'var(--color-drawer-bg)' }"
         >
-          <h3 class="font-bold text-slate-800 dark:text-white truncate">{{ title }}</h3>
+          <h3 class="font-display font-bold text-slate-800 dark:text-white truncate">
+            {{ title }}
+          </h3>
           <button
             @click="close()"
             class="w-8 h-8 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 text-slate-400 hover:text-red-500 transition-colors shrink-0"

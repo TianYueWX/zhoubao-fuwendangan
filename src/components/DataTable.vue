@@ -123,7 +123,7 @@ const pagerRange = computed<number[]>(() => {
       :value="search"
       @input="(e: Event) => (search = (e.target as HTMLInputElement).value)"
       :placeholder="props.searchPlaceholder"
-      class="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg px-4 py-2 text-sm text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-slate-500"
+      class="filter-select w-full !py-2 placeholder-slate-400 dark:placeholder-slate-500"
     />
     <div class="overflow-x-auto" :style="{ maxHeight: props.maxHeight }">
       <table class="w-full text-sm">
@@ -233,7 +233,7 @@ html.dark .page-btn:hover:not(:disabled) {
   cursor: not-allowed;
 }
 .page-btn-active {
-  background: var(--color-text-primary);
-  color: var(--color-page-bg);
+  background: var(--color-brand);
+  color: var(--color-brand-ink);
 }
 </style>

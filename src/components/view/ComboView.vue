@@ -10,6 +10,7 @@ import { store, applyGlobalFilters } from '@/store/analysis';
 import DataTable from '@/components/DataTable.vue';
 import Drawer from '@/components/Drawer.vue';
 import CardThumb from '@/components/CardThumb.vue';
+import SectionHeading from '@/components/SectionHeading.vue';
 import { computeCombos } from '@/core';
 import type { ChartOptionInput } from '@/types';
 import type { ComboResult } from '@/types';
@@ -97,17 +98,11 @@ function openDetail(row: Record<string, unknown>): void {
   <div class="fade-in space-y-5">
     <section class="panel rounded-2xl p-5">
       <div class="flex items-start justify-between flex-wrap gap-4 mb-4">
-        <div>
-          <h3 class="text-lg font-bold text-slate-800 dark:text-white">🔗 Combo 羁绊挖掘</h3>
-          <p class="text-xs text-slate-400 mt-1 max-w-xl">
-            Lift = P(A∩B) / (P(A)×P(B)):&gt;1 正相关(真实配合),≈1 独立。已剔除符文卡;
-            万金油污染由「最低携带率」门槛过滤。调高 Lift 找独家配合,调低找泛用搭配。
-          </p>
-        </div>
-        <select
-          v-model="scope"
-          class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg px-3 py-1.5 text-sm text-slate-800 dark:text-white max-w-[240px]"
-        >
+        <SectionHeading
+          title="Combo 羁绊挖掘"
+          note="Lift = P(A∩B) / (P(A)×P(B)):>1 正相关(真实配合),≈1 独立。已剔除符文卡;万金油污染由「最低携带率」门槛过滤。调高 Lift 找独家配合,调低找泛用搭配。"
+        />
+        <select v-model="scope" class="mini-select max-w-[240px]">
           <option v-for="o in scopeOptions" :key="String(o.value)" :value="o.value">{{ o.label }}</option>
         </select>
       </div>
@@ -117,7 +112,7 @@ function openDetail(row: Record<string, unknown>): void {
         <label class="card p-3 block">
           <div class="flex justify-between text-xs mb-2">
             <span class="text-slate-500 dark:text-gray-400">最低 Lift</span>
-            <b class="tabular-nums text-indigo-500">{{ minLift.toFixed(2) }}</b>
+            <b class="tabular-nums text-brand">{{ minLift.toFixed(2) }}</b>
           </div>
           <input
             type="range"
@@ -125,13 +120,14 @@ function openDetail(row: Record<string, unknown>): void {
             max="2.5"
             step="0.05"
             v-model.number="minLift"
-            class="w-full accent-indigo-500"
+            class="w-full"
+            style="accent-color: var(--color-brand)"
           />
         </label>
         <label class="card p-3 block">
           <div class="flex justify-between text-xs mb-2">
             <span class="text-slate-500 dark:text-gray-400">最低携带率门槛</span>
-            <b class="tabular-nums text-indigo-500">{{ minBasePercent }}%</b>
+            <b class="tabular-nums text-brand">{{ minBasePercent }}%</b>
           </div>
           <input
             type="range"
@@ -139,7 +135,8 @@ function openDetail(row: Record<string, unknown>): void {
             max="35"
             step="1"
             v-model.number="minBasePercent"
-            class="w-full accent-indigo-500"
+            class="w-full"
+            style="accent-color: var(--color-brand)"
           />
         </label>
       </div>
@@ -186,7 +183,7 @@ function openDetail(row: Record<string, unknown>): void {
             <span class="text-slate-400">同现套数</span><b class="tabular-nums">{{ selected.count }} 套</b>
           </div>
           <div class="flex justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
-            <span class="text-slate-400">Lift</span><b class="tabular-nums text-indigo-500">{{ selected.lift }}</b>
+            <span class="text-slate-400">Lift</span><b class="tabular-nums text-brand">{{ selected.lift }}</b>
           </div>
           <div class="flex justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
             <span class="text-slate-400">带 {{ selected.nameA }} 时也带 {{ selected.nameB }}</span>

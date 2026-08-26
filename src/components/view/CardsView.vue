@@ -7,6 +7,7 @@
 import { computed, ref } from 'vue';
 import { store, applyGlobalFilters } from '@/store/analysis';
 import CardThumb from '@/components/CardThumb.vue';
+import SectionHeading from '@/components/SectionHeading.vue';
 import { countCards } from '@/core';
 import { CARD_COLOR_HEX } from '@/utils/palette';
 import type { CardCategory } from '@/types';
@@ -114,17 +115,12 @@ const rows = computed(() => {
 <template>
   <div class="fade-in space-y-5">
     <section class="panel rounded-2xl p-5">
-      <div class="flex items-center justify-between gap-3 flex-wrap mb-4">
-        <div>
-          <h3 class="text-lg font-bold text-slate-800 dark:text-white">🌟 万金油单卡</h3>
-          <p class="text-xs text-slate-400 mt-0.5">
-            携带率 = 使用该卡的卡组占比;"对照"为全环境口径差值
-          </p>
-        </div>
-        <select
-          v-model="scope"
-          class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg px-3 py-1.5 text-sm text-slate-800 dark:text-white max-w-[260px]"
-        >
+      <div class="flex items-start justify-between gap-3 flex-wrap mb-4">
+        <SectionHeading
+          title="万金油单卡"
+          note='携带率 = 使用该卡的卡组占比;"对照"为全环境口径差值'
+        />
+        <select v-model="scope" class="mini-select max-w-[260px]">
           <option v-for="o in scopeOptions" :key="String(o.value)" :value="o.value">
             {{ o.label }}
           </option>
@@ -218,7 +214,7 @@ const rows = computed(() => {
                   }}%</span>
                   <div class="h-1.5 w-24 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
                     <div
-                      class="h-full bg-indigo-400 rounded-full"
+                      class="h-full bg-brand rounded-full"
                       :style="{ width: `${Math.min(100, c.rate)}%` }"
                     ></div>
                   </div>
@@ -247,13 +243,3 @@ const rows = computed(() => {
   </div>
 </template>
 
-<style scoped>
-.mini-select {
-  background: var(--color-card-bg);
-  border: 1px solid var(--color-card-border);
-  border-radius: 0.5rem;
-  padding: 0.3rem 0.55rem;
-  font-size: 0.75rem;
-  color: var(--color-text-primary);
-}
-</style>

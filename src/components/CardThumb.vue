@@ -39,7 +39,7 @@ function onErr(): void {
     </div>
     <div
       :class="[
-        'relative overflow-hidden rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800',
+        'relative overflow-hidden rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 transition-colors group-hover:border-brand-faint',
         size === 'sm'
           ? 'w-11 h-[61px]'
           : size === 'lg'

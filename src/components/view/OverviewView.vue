@@ -12,10 +12,11 @@ import ChartCard from '@/components/ChartCard.vue';
 import StatCard from '@/components/StatCard.vue';
 import TierBadge from '@/components/TierBadge.vue';
 import DeltaBadge from '@/components/DeltaBadge.vue';
-import { quickHeroRows, legendaryRows as computeLegendaryRows, buildWeeklyReport } from '@/core';
+import SectionHeading from '@/components/SectionHeading.vue';
+import RuneSeal from '@/components/RuneSeal.vue';
+import { quickHeroRows, buildWeeklyReport } from '@/core';
 import type { DeltaItem } from '@/core';
 import { reportToMarkdown } from '@/utils/reportMarkdown';
-import LegendaryCompare from '@/components/LegendaryCompare.vue';
 import { CHART_PALETTE } from '@/utils/palette';
 import { CARD_COLOR_HEX } from '@/utils/palette';
 import { CARD_COLOR_LABELS } from '@/types';
@@ -68,7 +69,7 @@ async function copyReport(): Promise<void> {
 
 const navCls = (active: boolean): string =>
   active
-    ? 'bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900 font-semibold'
+    ? 'bg-brand text-brand-ink font-semibold'
     : 'text-slate-500 dark:text-slate-400 hover:bg-black/5 dark:hover:bg-white/5';
 
 const rankText = (it: DeltaItem<string>): string => {
@@ -170,7 +171,7 @@ const scatterOption = computed(() => {
         },
         itemStyle: {
           color: (p: { data: { tier: string | null } }) =>
-            ({ S: '#f59e0b', A: '#f43f5e', B: '#0ea5e9', C: '#94a3b8' })[
+            ({ S: '#b23a27', A: '#c59b46', B: '#3b4a5a', C: '#94a3b8' })[
               p.data.tier ?? ''
             ] ?? '#94a3b8'
         }
@@ -258,16 +259,7 @@ const pairOption = computed(() => {
   };
 });
 
-/* ── 传奇排行(横向对比)── */
-const legendaryRows = computed(() => {
-  const r = store.result;
-  if (!r) return [];
-  const decks = filteredDecks.value;
-  return computeLegendaryRows(decks, r.catalog, decks.length);
-});
-
 /* ── 下钻 ── */
-const drillHint = ref('');
 function gotoHero(hero: string): void {
   store.filterHero = hero === store.filterHero ? '' : hero;
   store.currentView = 'heroes';
@@ -306,7 +298,7 @@ function gotoHero(hero: string): void {
         <button
           v-if="report && narrative === 'report'"
           @click="copyReport"
-          class="px-3 py-1.5 rounded-lg text-xs font-medium transition-all shadow border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-black/5 dark:hover:bg-white/5"
+          class="btn-ghost px-3 py-1.5 text-xs font-medium"
         >
           {{ copied ? '✅ 已复制' : '📋 复制周报 Markdown' }}
         </button>
@@ -315,20 +307,19 @@ function gotoHero(hero: string): void {
 
     <template v-if="narrative === 'focus'">
     <!-- KPI -->
-    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+    <div class="grid grid-cols-2 lg:grid-cols-4">
       <StatCard v-for="k in kpis" :key="k.label" :label="k.label" :value="k.value" :sub="k.sub" />
     </div>
 
     <div class="grid grid-cols-1 xl:grid-cols-5 gap-5">
       <!-- Tier List -->
       <section class="panel rounded-2xl p-5 xl:col-span-3">
-        <div class="flex items-baseline justify-between mb-1 flex-wrap gap-2">
-          <h3 class="text-lg font-bold text-slate-800 dark:text-white">🏅 英雄 Tier List</h3>
-          <span class="text-[11px] text-slate-400">
-            {{ store.result?.hasWinData ? '基于真实胜场 · 样本≥15' : '未导入胜场 · 按 Top8+热度评级' }}
-          </span>
-        </div>
-        <p class="text-xs text-slate-400 mb-3">综合分 = 胜率55% + Top8率20% + 出场率25%,点击行下钻英雄拆解</p>
+        <SectionHeading
+          title="英雄 Tier List"
+          :note="`综合分 = 胜率55% + Top8率20% + 出场率25%,点击行下钻英雄拆解 · ${
+            store.result?.hasWinData ? '基于真实胜场 · 样本≥15' : '未导入胜场 · 按 Top8+热度评级'
+          }`"
+        />
         <div class="overflow-x-auto max-h-[430px] overflow-y-auto">
           <table class="w-full text-sm">
             <thead class="sticky-thead">
@@ -374,16 +365,17 @@ function gotoHero(hero: string): void {
 
       <!-- 域对分布 -->
       <section class="panel rounded-2xl p-5 xl:col-span-2">
-        <h3 class="text-lg font-bold text-slate-800 dark:text-white mb-1">🎨 传奇域对分布</h3>
-        <p class="text-xs text-slate-400 mb-3">
-          每套卡组的传奇定义双色域;共识别 {{ store.result?.colorStats?.identifiedDecks ?? 0 }} /
-          {{ filteredDecks.length }} 套
-        </p>
+        <SectionHeading
+          title="传奇域对分布"
+          :note="`每套卡组的传奇定义双色域;共识别 ${
+            store.result?.colorStats?.identifiedDecks ?? 0
+          } / ${filteredDecks.length} 套`"
+        />
         <ChartCard v-if="pairOption" :option="pairOption" height="380px" :show-toolbox="false" />
         <div v-else class="h-[380px] flex items-center justify-center text-slate-400 text-sm">
           无域对数据
         </div>
-        <!-- 六色图例 -->
+        <!-- 六符文图例 -->
         <div class="flex items-center justify-center gap-3 mt-1 flex-wrap">
           <span
             v-for="(label, c) in CARD_COLOR_LABELS"
@@ -391,7 +383,7 @@ function gotoHero(hero: string): void {
             class="inline-flex items-center gap-1 text-[10px] text-slate-500"
             v-show="c !== 'colorless'"
           >
-            <i class="w-2.5 h-2.5 rounded-full inline-block" :style="{ background: CARD_COLOR_HEX[c as CardColor] }"></i>
+            <RuneSeal :size="10" :only="c" />
             {{ label }}
           </span>
         </div>
@@ -400,13 +392,10 @@ function gotoHero(hero: string): void {
 
     <!-- 象限散点 -->
     <section class="panel rounded-2xl p-5">
-      <div class="flex items-baseline justify-between mb-1 flex-wrap gap-2">
-        <h3 class="text-lg font-bold text-slate-800 dark:text-white">🎯 环境 ladder:热度 × 强度</h3>
-        <span class="text-xs text-slate-400">{{ drillHint }}</span>
-      </div>
-      <p class="text-xs text-slate-400 mb-2">
-        右上 = 主流且强势;气泡大小 = 样本数;虚线为环境均值。颜色即 Tier。支持框选缩放。
-      </p>
+      <SectionHeading
+        title="环境阶梯:热度 × 强度"
+        note="右上 = 主流且强势;气泡大小 = 样本数;虚线为环境均值。颜色即 Tier。支持框选缩放。"
+      />
       <ChartCard
         v-if="scatterOption"
         :option="scatterOption"
@@ -423,7 +412,7 @@ function gotoHero(hero: string): void {
     <template v-else>
       <div v-if="report" class="space-y-6">
         <!-- 周报 KPI(带环比) -->
-        <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div class="grid grid-cols-2 lg:grid-cols-4">
           <StatCard
             label="本期样本"
             :value="report.currSample"
@@ -449,7 +438,7 @@ function gotoHero(hero: string): void {
         <!-- 热度升降榜 -->
         <div class="grid grid-cols-1 xl:grid-cols-2 gap-5">
           <section class="panel rounded-2xl p-5">
-            <h3 class="text-sm font-bold text-slate-800 dark:text-white mb-3">🔥 热度上升</h3>
+            <SectionHeading small title="热度上升" />
             <ul class="space-y-1">
               <li
                 v-for="it in report.popUp"
@@ -470,7 +459,7 @@ function gotoHero(hero: string): void {
             </ul>
           </section>
           <section class="panel rounded-2xl p-5">
-            <h3 class="text-sm font-bold text-slate-800 dark:text-white mb-3">🧊 热度下降</h3>
+            <SectionHeading small title="热度下降" />
             <ul class="space-y-1">
               <li
                 v-for="it in report.popDown"
@@ -494,10 +483,11 @@ function gotoHero(hero: string): void {
 
         <!-- 周际热度时间线 -->
         <section class="panel rounded-2xl p-5">
-          <div class="flex items-baseline justify-between mb-1 flex-wrap gap-2">
-            <h3 class="text-sm font-bold text-slate-800 dark:text-white">📈 周际热度时间线</h3>
-            <span class="text-[11px] text-slate-400">Top 英雄出场率 · 周际迁移</span>
-          </div>
+          <SectionHeading
+            small
+            title="周际热度时间线"
+            note="Top 英雄出场率 · 周际迁移"
+          />
           <ChartCard v-if="timelineOption" :option="timelineOption" height="320px" :show-toolbox="false" />
           <div v-else class="h-40 flex items-center justify-center text-slate-400 text-sm">
             无时间线数据
@@ -507,7 +497,7 @@ function gotoHero(hero: string): void {
         <!-- 传奇 / 域对 movers -->
         <div class="grid grid-cols-1 xl:grid-cols-2 gap-5">
           <section class="panel rounded-2xl p-5">
-            <h3 class="text-sm font-bold text-slate-800 dark:text-white mb-3">⚔️ 传奇热度变化</h3>
+            <SectionHeading small title="传奇热度变化" />
             <ul class="space-y-1">
               <li
                 v-for="it in report.legMovers"
@@ -527,7 +517,7 @@ function gotoHero(hero: string): void {
             </ul>
           </section>
           <section class="panel rounded-2xl p-5">
-            <h3 class="text-sm font-bold text-slate-800 dark:text-white mb-3">🎨 域对热度变化</h3>
+            <SectionHeading small title="域对热度变化" />
             <ul class="space-y-1">
               <li
                 v-for="it in report.domainMovers"
@@ -550,7 +540,7 @@ function gotoHero(hero: string): void {
 
         <!-- 胜率变化榜 -->
         <section class="panel rounded-2xl p-5">
-          <h3 class="text-sm font-bold text-slate-800 dark:text-white mb-3">📊 胜率变化榜</h3>
+          <SectionHeading small title="胜率变化榜" />
           <div class="overflow-x-auto">
             <table class="w-full text-sm">
               <thead class="sticky-thead">
@@ -599,7 +589,5 @@ function gotoHero(hero: string): void {
       </div>
     </template>
 
-    <!-- 最佳传奇横向对比(两种叙事下均保留) -->
-    <LegendaryCompare :rows="legendaryRows" :has-win-data="store.result?.hasWinData ?? false" />
   </div>
 </template>

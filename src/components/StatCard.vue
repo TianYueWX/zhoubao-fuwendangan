@@ -1,5 +1,5 @@
 <script setup lang="ts">
-/** StatCard.vue · 指标卡(v3:支持环比 Δ 徽章) */
+/** StatCard.vue · 报刊数据行(v3:支持环比 Δ 徽章)——扁平、无卡片感 */
 import DeltaBadge from './DeltaBadge.vue';
 
 withDefaults(
@@ -18,20 +18,22 @@ withDefaults(
 </script>
 
 <template>
-  <div class="card p-4 flex flex-col gap-1">
-    <div class="text-xs text-slate-400 dark:text-slate-500">{{ label }}</div>
+  <div class="py-4 px-5 first:pl-0 last:pr-0 flex flex-col gap-1.5 border-l border-slate-200 dark:border-slate-800 first:border-l-0">
+    <div class="text-[11px] tracking-[0.14em] text-slate-400 dark:text-slate-500">
+      {{ label }}
+    </div>
     <div class="flex items-baseline gap-2 flex-wrap">
       <div
         :class="[
-          'text-2xl font-bold tabular-nums leading-tight',
+          'text-[26px] font-bold tabular-nums leading-none',
           tone === 'good'
             ? 'text-green-600 dark:text-green-400'
             : tone === 'warn'
-              ? 'text-amber-500'
+              ? 'text-amber-500 dark:text-amber-400'
               : tone === 'bad'
                 ? 'text-red-500'
                 : tone === 'accent'
-                  ? 'text-indigo-500 dark:text-indigo-400'
+                  ? 'text-brand'
                   : 'text-slate-800 dark:text-white'
         ]"
       >

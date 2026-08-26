@@ -24,7 +24,7 @@ const options: ReadonlyArray<{ key: Theme; title: string; svg: string }> = [
 </script>
 
 <template>
-  <div class="flex items-center bg-slate-100 dark:bg-slate-800 rounded-lg p-1 gap-1">
+  <div class="flex items-center bg-card-bg border border-card-border rounded-lg p-1 gap-1">
     <button
       v-for="opt in options"
       :key="opt.key"

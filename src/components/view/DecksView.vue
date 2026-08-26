@@ -11,6 +11,7 @@ import DataTable from '@/components/DataTable.vue';
 import Drawer from '@/components/Drawer.vue';
 import CardThumb from '@/components/CardThumb.vue';
 import TierBadge from '@/components/TierBadge.vue';
+import SectionHeading from '@/components/SectionHeading.vue';
 import { quickHeroRows } from '@/core';
 import type { Deck } from '@/types';
 
@@ -187,10 +188,10 @@ async function copyTTS(): Promise<void> {
   <div class="fade-in space-y-5" v-if="store.result">
     <section class="panel rounded-2xl p-5">
       <div class="flex items-start justify-between flex-wrap gap-4 mb-4">
-        <div>
-          <h3 class="text-lg font-bold text-slate-800 dark:text-white">🃏 卡组浏览器</h3>
-          <p class="text-xs text-slate-400 mt-1">全部 {{ rows.length }} 套卡组 · 点击行查看完整构筑与卡图</p>
-        </div>
+        <SectionHeading
+          title="卡组浏览器"
+          :note="`全部 ${rows.length} 套卡组 · 点击行查看完整构筑与卡图`"
+        />
         <div class="flex items-center gap-2 flex-wrap text-sm">
           <input
             v-model="heroSearch"
@@ -270,13 +271,13 @@ async function copyTTS(): Promise<void> {
               </div>
               <div class="text-center">
                 <div class="text-[10px] text-slate-400">总张数</div>
-                <div class="text-xl font-bold text-indigo-500 tabular-nums">{{ totalCopies }}</div>
+                <div class="text-xl font-bold text-brand tabular-nums">{{ totalCopies }}</div>
               </div>
             </div>
             <button
               v-if="selectedDeck.ttsCode"
               @click="copyTTS"
-              class="px-3 py-1.5 rounded-lg text-xs bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900 hover:opacity-80 transition-opacity"
+              class="btn-brand px-3 py-1.5 text-xs"
             >
               {{ copied ? '✅ 已复制' : '📋 复制 TTS 码' }}
             </button>
@@ -292,7 +293,7 @@ async function copyTTS(): Promise<void> {
         <!-- 分组卡表 -->
         <div class="space-y-5">
           <div v-for="g in groupedCards" :key="g.key">
-            <h4 class="text-xs font-bold text-slate-500 dark:text-gray-400 uppercase tracking-wider mb-2 sticky top-[60px] bg-white dark:bg-slate-900 py-1 z-10">
+            <h4 class="text-xs font-bold text-slate-500 dark:text-gray-400 uppercase tracking-wider mb-2 sticky top-[60px] sticky-head-solid py-1 z-10">
               {{ g.label }}
               <span class="text-slate-300 dark:text-slate-600 ml-1">{{
                 g.cards.reduce((s, c) => s + c.count, 0)
@@ -316,13 +317,3 @@ async function copyTTS(): Promise<void> {
   </div>
 </template>
 
-<style scoped>
-.mini-select {
-  background: var(--color-card-bg);
-  border: 1px solid var(--color-card-border);
-  border-radius: 0.5rem;
-  padding: 0.35rem 0.6rem;
-  font-size: 0.75rem;
-  color: var(--color-text-primary);
-}
-</style>

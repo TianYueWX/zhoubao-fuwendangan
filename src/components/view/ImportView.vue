@@ -10,6 +10,7 @@ import { SLOT_META } from '@/store/analysis';
 import FileDrop from '@/components/FileDrop.vue';
 import MappingPanel from '@/components/MappingPanel.vue';
 import PresetLoader from '@/components/PresetLoader.vue';
+import SectionHeading from '@/components/SectionHeading.vue';
 
 function runAndGo(): void {
   if (runStoredAnalysis()) {
@@ -56,16 +57,14 @@ const quality = computed(() => {
     <!-- 上传区 -->
     <section class="panel rounded-2xl p-6">
       <div class="flex flex-col md:flex-row items-start md:items-center justify-between mb-5 gap-4">
-        <div>
-          <h2 class="text-xl font-bold text-slate-800 dark:text-white">📥 数据导入</h2>
-          <p class="text-sm text-slate-500 dark:text-gray-400 mt-1">
-            上传三个必需 CSV 即可分析;拖入增强 JSON 解锁真实胜率、精确城市与卡图
-          </p>
-        </div>
+        <SectionHeading
+          title="数据导入"
+          note="上传三个必需 CSV 即可分析;拖入增强 JSON 解锁真实胜率、精确城市与卡图"
+        />
         <button
           @click="runAndGo"
           :disabled="!store.isReady || store.isAnalyzing"
-          class="px-8 py-2.5 bg-neutral-900 hover:bg-neutral-700 dark:bg-neutral-100 dark:hover:bg-neutral-300 text-white dark:text-neutral-900 font-medium rounded-xl transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-lg"
+          class="btn-brand px-8 py-2.5"
         >
           {{ store.isAnalyzing ? '⏳ 分析中…' : '🚀 启动分析' }}
         </button>
@@ -85,7 +84,7 @@ const quality = computed(() => {
 
       <p class="text-xs text-slate-400 mb-2">
         可选 · 增强
-        <span class="ml-1 px-1.5 py-0.5 rounded bg-indigo-100 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-300">推荐</span>
+        <span class="ml-1 px-1.5 py-0.5 rounded bg-brand-soft text-brand">推荐</span>
       </p>
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <FileDrop
@@ -105,7 +104,7 @@ const quality = computed(() => {
 
     <!-- 数据质量 -->
     <section v-if="quality" class="panel rounded-2xl p-6">
-      <h3 class="text-sm font-bold text-slate-800 dark:text-white mb-4">🔍 数据质量报告</h3>
+      <SectionHeading small title="数据质量报告" />
       <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
         <div
           v-for="q in quality"

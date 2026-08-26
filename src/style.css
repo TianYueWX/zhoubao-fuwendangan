@@ -2,130 +2,366 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ===== CSS Variables · 主题系统(由 useTheme.ts 同步切换) ===== */
+/* ══════════════════════════════════════════════════════════════
+ * 符文档案 · 周报 — 设计系统(古典卷宗版)
+ *
+ * 主题一「宣纸·卷宗」(默认):宣纸白底 + 徽墨正文 + 朱砂朱批 + 远山黛分层 + 藤黄点缀
+ * 主题二「墨夜·古籍」(html.dark):暖墨夜底,朱砂提亮
+ * 全部颜色经 CSS 变量驱动,主题切换即时生效(ECharts 由 utils/theme.ts 读取)。
+ * ══════════════════════════════════════════════════════════════ */
+
+/* ── 宣纸·卷宗(默认) ── */
 :root {
-  --color-panel-bg: rgba(255, 255, 255, 0.88);
-  --color-panel-border: #e5e5e5;
-  --color-card-bg: #ffffff;
-  --color-card-border: #e5e5e5;
-  --color-text-primary: #171717;
-  --color-text-muted: #737373;
-  --color-text-subtle: #a3a3a3;
-  --color-axis-line: #d4d4d4;
-  --color-split-line: #eeeeee;
-  --color-tooltip-bg: rgba(255, 255, 255, 0.97);
-  --color-tooltip-border: #d4d4d4;
-  --color-dropzone-bg: #fafafa;
-  --color-dropzone-border: #d4d4d4;
-  --color-dropzone-hover-bg: #f0f0f0;
-  --color-dropzone-hover-border: #171717;
-  --color-shadow: rgba(0, 0, 0, 0.05);
-  --color-page-bg: #f5f5f5;
-  scrollbar-thumb: #d4d4d4;
+  --color-page-bg: #f4f1ea; /* 宣纸白 */
+  --color-page-glow: rgba(178, 58, 39, 0.05); /* 朱砂微光 */
+  --color-header-bg: rgba(244, 241, 234, 0.92);
+  --color-panel-bg: rgba(250, 248, 243, 0.9);
+  --color-panel-border: rgba(59, 74, 90, 0.18); /* 远山黛发丝线 */
+  --color-card-bg: #fbf9f3;
+  --color-card-border: rgba(59, 74, 90, 0.16);
+  --color-thead-bg: #f7f4ec;
+  --color-text-primary: #2c2c2c; /* 徽墨黑 */
+  --color-text-muted: #3b4a5a; /* 远山黛 */
+  --color-text-subtle: #8a8478;
+  --color-axis-line: rgba(59, 74, 90, 0.28);
+  --color-split-line: rgba(59, 74, 90, 0.12);
+  --color-hairline: rgba(59, 74, 90, 0.28);
+  --color-tooltip-bg: rgba(251, 249, 243, 0.98);
+  --color-tooltip-border: rgba(59, 74, 90, 0.3);
+  --color-dropzone-bg: #fbf9f3;
+  --color-dropzone-border: rgba(178, 58, 39, 0.35);
+  --color-dropzone-hover-bg: #f6f1e4;
+  --color-dropzone-hover-border: #b23a27;
+  --color-shadow: rgba(60, 50, 30, 0.12);
+  --color-brand: #b23a27; /* 朱砂红:核心强调 */
+  --color-brand-ink: #fff8f0;
+  --color-brand-soft: rgba(178, 58, 39, 0.09);
+  --color-brand-faint: rgba(178, 58, 39, 0.28);
+  --color-brand-glow: rgba(178, 58, 39, 0.3);
+  --color-accent: #c59b46; /* 藤黄:点缀/徽章 */
+  --color-accent-ink: #3a2e12;
+  --color-drawer-bg: #fbf9f3;
+  --color-map-area: #efede6;
+  --color-map-border: #b9c0c9;
+  --color-map-emphasis: #e4e1d8;
+  --color-map-ramp-1: #ece9e0;
+  --color-map-ramp-2: #8e9aa8;
+  --color-map-ramp-3: #3b4a5a;
+  --color-heat-ramp-1: #f4f1ea;
+  --color-heat-ramp-2: #d9c49a;
+  --color-heat-ramp-3: #c59b46;
+  --color-heat-ramp-4: #b23a27;
+  scrollbar-thumb: rgba(59, 74, 90, 0.3);
 }
 
+/* ── 墨夜·古籍 ── */
 html.dark {
-  --color-panel-bg: rgba(19, 19, 19, 0.88);
-  --color-panel-border: rgba(255, 255, 255, 0.09);
+  --color-page-bg: #171410; /* 暖墨夜 */
+  --color-page-glow: rgba(208, 85, 63, 0.06);
+  --color-header-bg: rgba(23, 20, 16, 0.9);
+  --color-panel-bg: rgba(31, 27, 22, 0.88);
+  --color-panel-border: rgba(226, 219, 204, 0.12);
   --color-card-bg: rgba(255, 255, 255, 0.04);
-  --color-card-border: rgba(255, 255, 255, 0.09);
-  --color-text-primary: #e5e5e5;
-  --color-text-muted: #a3a3a3;
-  --color-text-subtle: #737373;
-  --color-axis-line: rgba(255, 255, 255, 0.18);
-  --color-split-line: rgba(255, 255, 255, 0.08);
-  --color-tooltip-bg: rgba(10, 10, 10, 0.95);
-  --color-tooltip-border: rgba(255, 255, 255, 0.15);
-  --color-dropzone-bg: rgba(255, 255, 255, 0.03);
-  --color-dropzone-border: rgba(255, 255, 255, 0.16);
-  --color-dropzone-hover-bg: rgba(255, 255, 255, 0.05);
-  --color-dropzone-hover-border: rgba(255, 255, 255, 0.65);
-  --color-shadow: rgba(0, 0, 0, 0.35);
-  --color-page-bg: #0a0a0a;
-  scrollbar-thumb: rgba(255, 255, 255, 0.22);
+  --color-card-border: rgba(226, 219, 204, 0.12);
+  --color-thead-bg: #201c17;
+  --color-text-primary: #ede7da;
+  --color-text-muted: #a89f8f;
+  --color-text-subtle: #6f675a;
+  --color-axis-line: rgba(226, 219, 204, 0.18);
+  --color-split-line: rgba(226, 219, 204, 0.08);
+  --color-hairline: rgba(226, 219, 204, 0.16);
+  --color-tooltip-bg: rgba(31, 27, 22, 0.97);
+  --color-tooltip-border: rgba(197, 155, 70, 0.35);
+  --color-dropzone-bg: rgba(255, 255, 255, 0.02);
+  --color-dropzone-border: rgba(208, 85, 63, 0.4);
+  --color-dropzone-hover-bg: rgba(208, 85, 63, 0.06);
+  --color-dropzone-hover-border: rgba(208, 85, 63, 0.75);
+  --color-shadow: rgba(0, 0, 0, 0.4);
+  --color-brand: #d0553f; /* 朱砂红(夜版提亮) */
+  --color-brand-ink: #fff7f2;
+  --color-brand-soft: rgba(208, 85, 63, 0.12);
+  --color-brand-faint: rgba(208, 85, 63, 0.35);
+  --color-brand-glow: rgba(208, 85, 63, 0.35);
+  --color-accent: #c59b46;
+  --color-accent-ink: #241c0b;
+  --color-drawer-bg: #1c1915;
+  --color-map-area: #1f1c17;
+  --color-map-border: #3a342b;
+  --color-map-emphasis: #28231d;
+  --color-map-ramp-1: #171410;
+  --color-map-ramp-2: #4a4237;
+  --color-map-ramp-3: #c59b46;
+  --color-heat-ramp-1: #171410;
+  --color-heat-ramp-2: #3a2e1e;
+  --color-heat-ramp-3: #8a4b3a;
+  --color-heat-ramp-4: #d0553f;
+  scrollbar-thumb: rgba(226, 219, 204, 0.22);
 }
 
-/* ===== Base ===== */
+/* ════════════ Base ════════════ */
 * {
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+    "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
 }
 
 html,
 body {
   transition: background-color 0.3s, color 0.3s;
-  background: var(--color-page-bg);
+  background-color: var(--color-page-bg);
   color: var(--color-text-primary);
+  line-height: 1.7; /* 古籍留白:正文行距 1.6–1.8 */
 }
 
-/* ===== Scrollbar ===== */
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb, #d4d4d4); border-radius: 3px; }
+body {
+  background-image: radial-gradient(
+    1100px 420px at 50% -8%,
+    var(--color-page-glow),
+    transparent 65%
+  );
+  background-attachment: fixed;
+}
 
-/* ===== Panels & Cards ===== */
+/* 宣纸纤维纹理(3–4% 极低透明度,不干扰文字) */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.04;
+  background-image: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
+}
+
+/* 数据一律等宽数字,榜单/表格对齐 */
+table,
+.tabular-nums,
+.font-display {
+  font-variant-numeric: tabular-nums;
+}
+
+::selection {
+  background: var(--color-brand);
+  color: var(--color-brand-ink);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+/* ════════════ Scrollbar ════════════ */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb, rgba(128, 128, 128, 0.4));
+  border-radius: 4px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--color-brand);
+}
+
+/* ════════════ Panels & Cards(杂志式:扁平、细线、大留白) ════════════ */
 .panel {
-  background: var(--color-panel-bg);
-  backdrop-filter: blur(12px);
-  border: 1px solid var(--color-panel-border);
-  box-shadow: 0 4px 6px -1px var(--color-shadow);
-  border-radius: 1rem;
-  transition: background-color 0.3s, border-color 0.3s, box-shadow 0.3s;
+  /* 内容区块不再使用卡片容器:留白 + 卷目标题分隔 */
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  border-radius: 0;
 }
 
 .card {
   background: var(--color-card-bg);
   border: 1px solid var(--color-card-border);
   border-radius: 0.75rem;
-  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.08);
   transition: background-color 0.3s, border-color 0.3s;
 }
 
+.card-hover:hover {
+  border-color: var(--color-brand-faint);
+}
+
+/* 极简报头:与页面同底 + 轻微毛玻璃,细线分隔栏目 */
+.masthead-solid {
+  background: var(--color-header-bg);
+  backdrop-filter: blur(12px);
+  transition: background-color 0.3s;
+}
+
+/* 发丝线(笔触式渐变分割,柔和过渡) */
+.hairline {
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--color-hairline) 12%,
+    var(--color-hairline) 88%,
+    transparent
+  );
+}
+
+/* ════════════ 卷目标题:朱砂 kicker 线 ════════════ */
+.sec-kicker {
+  display: block;
+  width: 28px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--color-brand);
+}
+
+/* ════════════ 按钮 ════════════ */
+.btn-brand {
+  background: var(--color-brand);
+  color: var(--color-brand-ink);
+  font-weight: 600;
+  border-radius: 0.75rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  transition: all 0.2s;
+}
+.btn-brand:hover:not(:disabled) {
+  filter: brightness(1.09);
+  box-shadow: 0 3px 14px -3px var(--color-brand-glow);
+}
+.btn-brand:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  filter: none;
+}
+
+.btn-ghost {
+  background: transparent;
+  border: 1px solid var(--color-card-border);
+  color: var(--color-text-muted);
+  border-radius: 0.75rem;
+  transition: all 0.2s;
+}
+.btn-ghost:hover:not(:disabled) {
+  color: var(--color-brand);
+  border-color: var(--color-brand);
+  background: var(--color-brand-soft);
+}
+.btn-ghost:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ════════════ 符文金细线 ════════════ */
+.rune-rule {
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--color-brand) 18%,
+    var(--color-brand) 82%,
+    transparent
+  );
+  opacity: 0.65;
+}
+/* ════════════ 输入控件(全局) ════════════ */
+.filter-select,
+.mini-select {
+  background: var(--color-card-bg);
+  border: 1px solid var(--color-card-border);
+  border-radius: 0.5rem;
+  color: var(--color-text-primary);
+  font-size: 0.75rem;
+  padding: 0.25rem 0.5rem;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.filter-select:focus-visible,
+.mini-select:focus-visible {
+  border-color: var(--color-brand);
+  box-shadow: 0 0 0 2px var(--color-brand-soft);
+}
+.mini-select {
+  padding: 0.3rem 0.55rem;
+}
+
+/* ════════════ Tabs / Segments ════════════ */
+.tab-active {
+  background: var(--color-brand);
+  color: var(--color-brand-ink);
+}
+
+/* ════════════ Dropzone ════════════ */
 .dropzone {
-  border: 2px dashed var(--color-dropzone-border);
+  border: 1.5px dashed var(--color-dropzone-border);
   background: var(--color-dropzone-bg);
+  transition: border-color 0.2s, background-color 0.2s;
 }
 .dropzone:hover {
   border-color: var(--color-dropzone-hover-border);
   background: var(--color-dropzone-hover-bg);
 }
 .dropzone.loaded {
-  border-color: #22c55e !important;
-  background: rgba(34, 197, 94, 0.1) !important;
+  border-color: #4cc38a !important;
+  border-style: solid;
+  background: rgba(76, 195, 138, 0.08) !important;
 }
 
-/* ===== Tabs ===== */
-.tab-active {
-  background: var(--color-text-primary);
-  color: var(--color-page-bg);
-}
-
-/* ===== Tables ===== */
+/* ════════════ Tables ════════════ */
 .table-row:hover {
   background: rgba(0, 0, 0, 0.04);
 }
 html.dark .table-row:hover {
   background: rgba(255, 255, 255, 0.06);
 }
+
 .sortable {
   cursor: pointer;
   user-select: none;
 }
 .sortable:hover {
-  color: var(--color-text-primary);
+  color: var(--color-brand);
 }
 
-/* ===== Theme Switcher ===== */
-.theme-btn { transition: all 0.2s; }
+/* sticky 表头底色:覆盖视图里历史遗留的 bg-white/dark:bg-slate-900 */
+.sticky-thead th {
+  background: var(--color-thead-bg);
+}
+html.dark .sticky-thead th {
+  background: var(--color-thead-bg);
+}
+
+/* 抽屉/浮层内的 solid 表头或分组头 */
+.sticky-head-solid {
+  background: var(--color-thead-bg);
+}
+
+/* ════════════ Theme Switcher ════════════ */
+.theme-btn {
+  transition: all 0.2s;
+}
 .theme-btn.active {
-  background: var(--color-text-primary);
-  color: var(--color-page-bg);
+  background: var(--color-brand);
+  color: var(--color-brand-ink);
 }
 
-/* ===== Utility Classes ===== */
-.fade-in { animation: fadeIn 0.4s ease-out; }
+/* ════════════ Utility ════════════ */
+.fade-in {
+  animation: fadeIn 0.4s ease-out;
+}
 
 .sticky-thead th {
   position: sticky;
   top: 0;
   z-index: 10;
+}
+
+/* 尊重系统减弱动效偏好 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

@@ -1,8 +1,9 @@
 <script setup lang="ts">
 /**
- * FilterBar.vue · 全局过滤条
+ * FilterBar.vue · 全局检索条(极简报刊式)
  *  Top 阈值 / 日期范围 / 英雄 / 城市,作用于所有分析视图。
  *  改变 Top 阈值需要重跑分析(影响样本切分),其余为即时过滤。
+ *  桌面吸附于报头之下(90px);移动端不吸附。
  */
 import { computed } from 'vue';
 import { store, runStoredAnalysis, resetFilters } from '@/store/analysis';
@@ -32,15 +33,26 @@ const hasActiveFilter = computed(
   () =>
     !!(store.filterHero || store.filterCity || store.filterDateFrom || store.filterDateTo)
 );
+
+const filteredCount = computed(() => {
+  if (!store.result) return 0;
+  return store.result.allDecks.filter(
+    (d) =>
+      (!store.filterHero || d.hero === store.filterHero) &&
+      (!store.filterCity || d.city === store.filterCity) &&
+      (!store.filterDateFrom || (d.date && d.date >= store.filterDateFrom)) &&
+      (!store.filterDateTo || (d.date && d.date <= store.filterDateTo))
+  ).length;
+});
 </script>
 
 <template>
   <div
     v-if="store.result"
-    class="sticky top-0 z-40 panel rounded-none border-x-0 border-t-0 px-6 py-2.5"
+    class="masthead-solid lg:sticky lg:top-[90px] z-40 shrink-0"
   >
-    <div class="flex items-center gap-3 flex-wrap text-sm">
-      <span class="text-xs font-medium text-slate-400 uppercase tracking-wider">范围</span>
+    <div class="px-4 lg:px-6 py-2.5 flex items-center gap-3 flex-wrap text-sm">
+      <span class="text-xs font-medium text-brand tracking-[0.18em]">范围</span>
 
       <label class="flex items-center gap-1.5">
         <select
@@ -89,41 +101,16 @@ const hasActiveFilter = computed(
         />
       </label>
 
-      <button
-        v-if="hasActiveFilter"
-        @click="resetFilters"
-        class="text-xs px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-red-500 transition-colors"
-      >
+      <button v-if="hasActiveFilter" @click="resetFilters" class="btn-ghost text-xs px-2 py-1">
         ✕ 清除筛选
       </button>
 
-      <!-- 过滤后样本提示 -->
-      <span
-        v-if="hasActiveFilter && store.result"
-        class="ml-auto text-xs text-slate-400"
-      >
-        样本 {{ store.result.totalDecks }} →
-        <b class="text-slate-600 dark:text-gray-300">{{
-          store.result.allDecks.filter(
-            (d) =>
-              (!store.filterHero || d.hero === store.filterHero) &&
-              (!store.filterCity || d.city === store.filterCity) &&
-              (!store.filterDateFrom || (d.date && d.date >= store.filterDateFrom)) &&
-              (!store.filterDateTo || (d.date && d.date <= store.filterDateTo))
-          ).length
-        }}</b>
+      <span v-if="store.result" class="ml-auto text-xs text-slate-400 tabular-nums">
+        样本
+        <b class="text-slate-600 dark:text-gray-300">{{ filteredCount }}</b>
+        <template v-if="hasActiveFilter"> / {{ store.result.totalDecks }}</template>
       </span>
     </div>
+    <div class="hairline"></div>
   </div>
 </template>
-
-<style scoped>
-.filter-select {
-  background: var(--color-card-bg);
-  border: 1px solid var(--color-card-border);
-  border-radius: 0.5rem;
-  padding: 0.25rem 0.5rem;
-  font-size: 0.75rem;
-  color: var(--color-text-primary);
-}
-</style>

@@ -7,6 +7,7 @@
  */
 import { computed } from 'vue';
 import { store, runStoredAnalysis, setCityOverride, type SlotFile } from '@/store/analysis';
+import SectionHeading from '@/components/SectionHeading.vue';
 
 const knownCities = computed(() => {
   if (!store.result) return [] as string[];
@@ -33,18 +34,12 @@ const unknownEvents = computed<string[]>(() => store.result?.cityUnknown ?? []);
     class="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700"
   >
     <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
-      <div>
-        <h3 class="text-sm font-bold text-slate-800 dark:text-white">
-          🧭 赛事城市映射修正
-        </h3>
-        <p class="text-xs text-slate-500 dark:text-gray-400">
-          以下 {{ unknownEvents.length }} 个赛事未能自动识别城市,指定后点击"重新分析"生效
-        </p>
-      </div>
-      <button
-        @click="runStoredAnalysis"
-        class="px-4 py-1.5 bg-neutral-900 hover:bg-neutral-700 dark:bg-neutral-100 dark:hover:bg-neutral-300 text-white dark:text-neutral-900 text-sm font-medium rounded-lg transition-all"
-      >
+      <SectionHeading
+        small
+        title="赛事城市映射修正"
+        :note="`以下 ${unknownEvents.length} 个赛事未能自动识别城市,指定后点击「重新分析」生效`"
+      />
+      <button @click="runStoredAnalysis" class="btn-brand px-4 py-1.5 text-sm">
         🔄 应用并重新分析
       </button>
     </div>

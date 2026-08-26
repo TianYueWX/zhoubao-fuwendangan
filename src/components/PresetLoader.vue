@@ -8,6 +8,7 @@ import { onMounted, ref } from 'vue';
 import { store, loadSlotFile, runStoredAnalysis, SLOT_KINDS } from '@/store/analysis';
 import { loadPresetManifest, fetchPresetFiles, type PresetProgress } from '@/utils/preset';
 import { parseCSVText } from '@/utils/dataParser';
+import SectionHeading from '@/components/SectionHeading.vue';
 import type { PresetManifest, PresetPackageMeta } from '@/types';
 
 const manifest = ref<PresetManifest | null>(null);
@@ -46,6 +47,7 @@ async function loadPreset(pkg: PresetPackageMeta): Promise<void> {
       }
     }
     if (runStoredAnalysis()) {
+      store.sourceLabel = pkg.label;
       store.currentView = 'overview';
     } else {
       error.value = '预设数据已填充,但启动分析失败,请检查文件完整性';
@@ -61,17 +63,13 @@ async function loadPreset(pkg: PresetPackageMeta): Promise<void> {
 
 <template>
   <section class="panel rounded-2xl p-6">
-    <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
-      <div>
-        <h3 class="text-lg font-bold text-slate-800 dark:text-white">⚡ 内置预设数据包</h3>
-        <p class="text-xs text-slate-400 mt-1">
-          免上传,一键加载随站点发布的全量数据包(5 个槽位自动填充)
-        </p>
-      </div>
-      <span v-if="store.isReady" class="text-[11px] text-green-600 dark:text-green-400">
-        ✅ 基础数据已就绪
-      </span>
-    </div>
+    <SectionHeading title="内置预设数据包" note="免上传,一键加载随站点发布的全量数据包(5 个槽位自动填充)">
+      <template #actions>
+        <span v-if="store.isReady" class="text-[11px] text-green-600 dark:text-green-400">
+          ✅ 基础数据已就绪
+        </span>
+      </template>
+    </SectionHeading>
 
     <!-- file:// 环境降级提示 -->
     <div
@@ -104,7 +102,7 @@ async function loadPreset(pkg: PresetPackageMeta): Promise<void> {
           <div v-if="loadingId === pkg.id && progress" class="mt-2 flex items-center gap-2">
             <div class="flex-1 h-1.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
               <div
-                class="h-full rounded-full bg-indigo-500 transition-all duration-300"
+                class="h-full rounded-full bg-brand transition-all duration-300"
                 :style="{ width: `${Math.round(progress.ratio * 100)}%` }"
               ></div>
             </div>
@@ -119,7 +117,7 @@ async function loadPreset(pkg: PresetPackageMeta): Promise<void> {
           :class="
             isLoaded(pkg)
               ? 'bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400'
-              : 'bg-neutral-900 hover:bg-neutral-700 dark:bg-neutral-100 dark:hover:bg-neutral-300 text-white dark:text-neutral-900'
+              : 'btn-brand'
           "
           @click="loadPreset(pkg)"
         >

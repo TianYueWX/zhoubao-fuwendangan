@@ -92,9 +92,11 @@ function handleFile(e: Event): void {
       class="hidden"
       @change="handleFile"
     />
-    <div class="text-xl mb-1">{{ emoji }}</div>
-    <div class="text-xs font-medium text-slate-700 dark:text-gray-200">{{ label }}</div>
-    <div class="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">{{ hint }}</div>
+    <div class="text-xl mb-1 drop-shadow-sm">{{ emoji }}</div>
+    <div class="text-xs font-semibold tracking-wide text-slate-700 dark:text-gray-200">
+      {{ label }}
+    </div>
+    <div class="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5 font-mono">{{ hint }}</div>
     <div
       class="text-[11px] mt-1 truncate px-1"
       :class="

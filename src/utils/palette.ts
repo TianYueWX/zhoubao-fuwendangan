@@ -8,17 +8,18 @@
 
 import type { CardCategory, CardColor } from '@/types';
 
+/** 古典色系图表调色板(朱砂/远山黛/藤黄/黛绿/藕紫…) */
 export const CHART_PALETTE: readonly string[] = [
-  '#6366f1', // indigo
-  '#10b981', // emerald
-  '#f59e0b', // amber
-  '#ef4444', // red
-  '#06b6d4', // cyan
-  '#a855f7', // purple
-  '#22c55e', // green
-  '#eab308', // yellow
-  '#0ea5e9', // sky
-  '#f43f5e'  // rose
+  '#b23a27', // 朱砂
+  '#3b4a5a', // 远山黛
+  '#c59b46', // 藤黄
+  '#5b8c6e', // 黛绿
+  '#7c6a9e', // 藕紫
+  '#4e8a8c', // 青碧
+  '#a0724f', // 赭石
+  '#5f7fa6', // 黛蓝
+  '#8a8478', // 灰褐
+  '#a33e2e'  // 深朱
 ];
 
 /** 取一个循环的 series 颜色 */
@@ -52,10 +53,10 @@ export const CARD_COLOR_HEX: Readonly<Record<CardColor, string>> = Object.freeze
   colorless: '#94a3b8'
 });
 
-/** Tier 徽章配色(S/A/B/C) */
+/** Tier 徽章配色(S 朱砂 / A 藤黄 / B 黛蓝 / C 灰) */
 export const TIER_COLORS: Readonly<Record<string, { bg: string; text: string }>> = Object.freeze({
-  S: { bg: 'bg-amber-100 dark:bg-amber-500/20 border-amber-300 dark:border-amber-500/40', text: 'text-amber-700 dark:text-amber-400' },
-  A: { bg: 'bg-rose-100 dark:bg-rose-500/20 border-rose-300 dark:border-rose-500/40', text: 'text-rose-700 dark:text-rose-400' },
-  B: { bg: 'bg-sky-100 dark:bg-sky-500/20 border-sky-300 dark:border-sky-500/40', text: 'text-sky-700 dark:text-sky-400' },
-  C: { bg: 'bg-slate-100 dark:bg-slate-500/20 border-slate-300 dark:border-slate-500/40', text: 'text-slate-600 dark:text-slate-400' }
+  S: { bg: 'bg-brand-soft border-brand-faint', text: 'text-brand' },
+  A: { bg: 'bg-amber-100 dark:bg-amber-500/20 border-amber-300 dark:border-amber-500/40', text: 'text-amber-700 dark:text-amber-400' },
+  B: { bg: 'bg-slate-100 dark:bg-slate-500/20 border-slate-300 dark:border-slate-500/40', text: 'text-slate-600 dark:text-slate-300' },
+  C: { bg: 'bg-stone-100 dark:bg-stone-500/20 border-stone-300 dark:border-stone-500/40', text: 'text-stone-500 dark:text-stone-400' }
 });

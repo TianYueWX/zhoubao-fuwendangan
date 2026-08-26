@@ -16,8 +16,15 @@ export default {
         'text-primary': 'var(--color-text-primary)',
         'text-muted': 'var(--color-text-muted)',
         'text-subtle': 'var(--color-text-subtle)',
-        // v3 语义色(与 src/utils/palette.ts 的 CARD_COLOR_HEX / TIER_COLORS 对齐)
-        'brand-gold': '#e8b54a',
+        // 朱砂红(主题感知:宣纸 #B23A27 / 墨夜 #D0553F)与朱上文字色
+        brand: 'var(--color-brand)',
+        'brand-ink': 'var(--color-brand-ink)',
+        'brand-soft': 'var(--color-brand-soft)',
+        'brand-faint': 'var(--color-brand-faint)',
+        // 藤黄点缀(标签/徽章/高亮)
+        accent: 'var(--color-accent)',
+        'accent-ink': 'var(--color-accent-ink)',
+        // 六色域(与 src/utils/palette.ts 的 CARD_COLOR_HEX 对齐,语义固定)
         domain: {
           red: '#e2372b',
           green: '#3fa650',
@@ -28,9 +35,9 @@ export default {
           colorless: '#94a3b8'
         },
         tier: {
-          s: '#e8b54a',
-          a: '#e05d5d',
-          b: '#5b8def',
+          s: '#b23a27',
+          a: '#c59b46',
+          b: '#3b4a5a',
           c: '#94a3b8'
         },
         delta: {
@@ -40,7 +47,41 @@ export default {
         }
       },
       fontFamily: {
-        sans: ['system-ui', '-apple-system', '"Segoe UI"', 'Roboto', '"Helvetica Neue"', 'Arial', '"Noto Sans SC"', '"PingFang SC"', '"Microsoft YaHei"', 'sans-serif']
+        // 展示字体:中文衬线(刊印/档案感),离线回退系统衬线
+        display: [
+          '"Noto Serif SC"',
+          '"Songti SC"',
+          'STSong',
+          'SimSun',
+          'serif'
+        ],
+        // 拉丁铭文(报头英文小标)
+        latin: [
+          'Cinzel',
+          'Georgia',
+          '"Times New Roman"',
+          'serif'
+        ],
+        sans: [
+          'system-ui',
+          '-apple-system',
+          '"Segoe UI"',
+          'Roboto',
+          '"Helvetica Neue"',
+          'Arial',
+          '"Noto Sans SC"',
+          '"PingFang SC"',
+          '"Microsoft YaHei"',
+          'sans-serif'
+        ],
+        mono: [
+          'ui-monospace',
+          'SFMono-Regular',
+          'Menlo',
+          'Consolas',
+          '"Liberation Mono"',
+          'monospace'
+        ]
       },
       animation: {
         'fade-in': 'fadeIn 0.4s ease-out'
