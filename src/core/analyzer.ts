@@ -13,6 +13,7 @@
 import type {
   AnalysisOptions,
   AnalysisResult,
+  CardCatalog,
   Deck,
   DeckCacheData,
   RankRow,
@@ -106,9 +107,9 @@ export function runAnalysis(input: AnalyzeInput): AnalysisResult {
   }
   const uniqueSampleDecks = dedupeSampleDecks(topDecksBag);
 
-  // 6) 全局卡牌携带统计
-  const globalTopCards = countCards(uniqueSampleDecks);
-  const globalAllCards = countCards(normalized.decks);
+  // 6) 全局卡牌携带统计(按规范键:同名+副标题归并)
+  const globalTopCards = countCards(uniqueSampleDecks, catalog);
+  const globalAllCards = countCards(normalized.decks, catalog);
 
   // 7) 地域统计
   const { regionStats, regionHeat, provinceStats } =
@@ -155,13 +156,18 @@ export function runAnalysis(input: AnalyzeInput): AnalysisResult {
 
 /* ============================================================
  * Helper: 计数每张卡在卡组集合中的携带 deck 数(同时供外部使用)
+ * 按规范键(同名+副标题)归并:同一张卡的多印刷版本计为一张。
  * ============================================================ */
 
-export function countCards(decks: readonly Deck[]): Map<string, number> {
+export function countCards(decks: readonly Deck[], catalog: CardCatalog): Map<string, number> {
   const m = new Map<string, number>();
   for (const deck of decks) {
+    const seen = new Set<string>();
     for (const id of deck.cards.keys()) {
-      m.set(id, (m.get(id) ?? 0) + 1);
+      const key = catalog.canonicalById.get(id) ?? id;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      m.set(key, (m.get(key) ?? 0) + 1);
     }
   }
   return m;

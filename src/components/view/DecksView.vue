@@ -120,26 +120,43 @@ const groupedCards = computed(() => {
   const r = store.result;
   const d = selectedDeck.value;
   if (!r || !d) return [];
-  const byCat = new Map<string, GroupedCard[]>();
+  const byCat = new Map<string, Map<string, GroupedCard>>();
   for (const [id, count] of d.cards) {
-    let cat = r.catalog.cardCategory.get(id) ?? '其他';
+    // 同名+副标题归并:同一张卡的多印刷版本合并显示
+    const key = r.catalog.canonicalById.get(id) ?? id;
+    const repId = r.catalog.canonicalId.get(key) ?? id;
+    let cat = r.catalog.cardCategory.get(repId) ?? '其他';
     // 专属法术在目录里归为法术;此处按名称细分展示价值不大,保持法术
     const group =
       GROUP_ORDER.find((g) => g.key === cat)?.key ?? (cat === '其他' ? '其他' : cat);
-    let arr = byCat.get(group);
-    if (!arr) {
-      arr = [];
-      byCat.set(group, arr);
+    let map = byCat.get(group);
+    if (!map) {
+      map = new Map<string, GroupedCard>();
+      byCat.set(group, map);
     }
-    arr.push({ id, name: r.catalog.cardDict.get(id) ?? id, count });
+    const existing = map.get(repId);
+    if (existing) {
+      existing.count += count;
+    } else {
+      map.set(repId, {
+        id: repId,
+        name: r.catalog.cardDict.get(repId) ?? key,
+        count
+      });
+    }
   }
-  for (const arr of byCat.values()) {
-    arr.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
-  }
+  const arrs = [...byCat.entries()].map(([group, map]) => [
+    group,
+    [...map.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
+  ] as const);
   const orderKeys = [...GROUP_ORDER.map((g) => g.key), '其他'];
   return orderKeys
     .filter((k) => byCat.has(k))
-    .map((k) => ({ key: k, label: GROUP_ORDER.find((g) => g.key === k)?.label ?? k, cards: byCat.get(k)! }))
+    .map((k) => ({
+      key: k,
+      label: GROUP_ORDER.find((g) => g.key === k)?.label ?? k,
+      cards: arrs.find(([g]) => g === k)?.[1] ?? []
+    }))
     .filter((g) => g.cards.length > 0);
 });
 

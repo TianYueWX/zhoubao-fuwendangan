@@ -39,16 +39,20 @@ export function computeCombos(
   const nTop = decks.length;
   if (nTop === 0) return [];
 
-  // 1) 统计每张卡(排除符文)的出现卡组数
+  // 1) 统计每张卡(排除符文)的出现卡组数;按规范键(同名+副标题)归并多印刷版本
   const cardCount = new Map<string, number>();
   const deckFilteredIds: string[][] = [];
 
   for (const deck of decks) {
     const ids: string[] = [];
+    const seen = new Set<string>();
     for (const id of deck.cards.keys()) {
       if (catalog.cardCategory.get(id) === ('符文' as CardCategory)) continue;
-      ids.push(id);
-      cardCount.set(id, (cardCount.get(id) ?? 0) + 1);
+      const key = catalog.canonicalById.get(id) ?? id;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      ids.push(key);
+      cardCount.set(key, (cardCount.get(key) ?? 0) + 1);
     }
     deckFilteredIds.push(ids);
   }
@@ -103,8 +107,8 @@ export function computeCombos(
     results.push({
       a,
       b,
-      nameA: catalog.cardDict.get(a) ?? a,
-      nameB: catalog.cardDict.get(b) ?? b,
+      nameA: catalog.cardDict.get(catalog.canonicalId.get(a) ?? a) ?? a,
+      nameB: catalog.cardDict.get(catalog.canonicalId.get(b) ?? b) ?? b,
       count,
       countA,
       countB,

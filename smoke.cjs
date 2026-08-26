@@ -1489,6 +1489,14 @@ function normalizeCategory(raw) {
   return ALLOWED.has(s) ? s : "\u5176\u4ED6";
 }
 
+// src/utils/cardKey.ts
+function cardKey(name, subtitle) {
+  const n = (name ?? "").trim();
+  if (!n) return "";
+  const s = (subtitle ?? "").trim();
+  return s ? `${n}|${s}` : n;
+}
+
 // src/utils/dataParser.ts
 function pickColumn(keys, exact, hints) {
   if (!keys) return null;
@@ -1562,6 +1570,7 @@ function buildCardCatalog(cBase, cPrints, cacheData) {
     const meta = {
       id: rawNo,
       name,
+      subtitle: (base.sub_title_cn ?? "").trim(),
       series,
       rarity,
       energy,
@@ -1605,6 +1614,7 @@ function buildCardCatalog(cBase, cPrints, cacheData) {
           const meta = {
             id: no,
             name,
+            subtitle: (e.subTitle ?? "").trim(),
             series,
             rarity: e.rarity ?? "\u672A\u77E5",
             energy: 0,
@@ -1626,7 +1636,23 @@ function buildCardCatalog(cBase, cPrints, cacheData) {
       }
     }
   }
-  return { byId, cardDict, cardEnergy, cardRarity, cardCategory, cardColors, cardImg };
+  const canonicalById = /* @__PURE__ */ new Map();
+  const canonicalId = /* @__PURE__ */ new Map();
+  for (const [id, meta] of byId) {
+    const key = cardKey(meta.name, meta.subtitle);
+    if (!key) continue;
+    canonicalById.set(id, key);
+    const existing = canonicalId.get(key);
+    if (existing === void 0) {
+      canonicalId.set(key, id);
+      continue;
+    }
+    const curHasImg = cardImg.has(existing);
+    const newHasImg = cardImg.has(id);
+    if (!curHasImg && newHasImg) canonicalId.set(key, id);
+    else if (curHasImg === newHasImg && id < existing) canonicalId.set(key, id);
+  }
+  return { byId, cardDict, cardEnergy, cardRarity, cardCategory, cardColors, cardImg, canonicalById, canonicalId };
 }
 var ALLOWED_CACHE_CATEGORY = /* @__PURE__ */ new Set([
   "\u4F20\u5947",
@@ -1793,32 +1819,38 @@ function pickTopCount(n, threshold) {
 function aggregateUsage(topDecks, catalog, topCount) {
   const usage = /* @__PURE__ */ new Map();
   for (const deck of topDecks) {
+    const seen = /* @__PURE__ */ new Set();
     for (const [id, count] of deck.cards) {
-      let u = usage.get(id);
+      const key = catalog.canonicalById.get(id) ?? id;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      let u = usage.get(key);
       if (!u) {
         u = { deckCount: 0, totalCount: 0, energySum: 0 };
-        usage.set(id, u);
+        usage.set(key, u);
       }
       u.deckCount += 1;
       u.totalCount += count;
-      const energy = catalog.cardEnergy.get(id) ?? 0;
+      const repId = catalog.canonicalId.get(key) ?? id;
+      const energy = catalog.cardEnergy.get(repId) ?? 0;
       u.energySum += energy * count;
     }
   }
   const cards = [];
-  for (const [id, u] of usage) {
+  for (const [key, u] of usage) {
+    const repId = catalog.canonicalId.get(key) ?? key;
     const rate = topCount > 0 ? u.deckCount / topCount * 100 : 0;
     const avg = u.deckCount > 0 ? u.totalCount / u.deckCount : 0;
     const energy = u.totalCount > 0 ? u.energySum / u.totalCount : 0;
     cards.push({
-      id,
-      name: catalog.cardDict.get(id) ?? id,
-      series: id.split("-")[0] ?? "",
-      rarity: catalog.cardRarity.get(id) ?? "\u672A\u77E5",
+      id: repId,
+      name: catalog.cardDict.get(repId) ?? repId,
+      series: repId.split("-")[0] ?? "",
+      rarity: catalog.cardRarity.get(repId) ?? "\u672A\u77E5",
       rate,
       avg,
       energy,
-      colors: catalog.cardColors.get(id) ?? []
+      colors: catalog.cardColors.get(repId) ?? []
     });
   }
   cards.sort((a, b) => b.rate - a.rate || a.id.localeCompare(b.id));
@@ -1904,10 +1936,14 @@ function computeCombos(decks, catalog, options = {}) {
   const deckFilteredIds = [];
   for (const deck of decks) {
     const ids = [];
+    const seen = /* @__PURE__ */ new Set();
     for (const id of deck.cards.keys()) {
       if (catalog.cardCategory.get(id) === "\u7B26\u6587") continue;
-      ids.push(id);
-      cardCount.set(id, (cardCount.get(id) ?? 0) + 1);
+      const key = catalog.canonicalById.get(id) ?? id;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      ids.push(key);
+      cardCount.set(key, (cardCount.get(key) ?? 0) + 1);
     }
     deckFilteredIds.push(ids);
   }
@@ -1951,8 +1987,8 @@ function computeCombos(decks, catalog, options = {}) {
     results.push({
       a,
       b,
-      nameA: catalog.cardDict.get(a) ?? a,
-      nameB: catalog.cardDict.get(b) ?? b,
+      nameA: catalog.cardDict.get(catalog.canonicalId.get(a) ?? a) ?? a,
+      nameB: catalog.cardDict.get(catalog.canonicalId.get(b) ?? b) ?? b,
       count,
       countA,
       countB,
@@ -2273,8 +2309,8 @@ function runAnalysis(input) {
     topDecksBag.push(...heroStat.topDecks);
   }
   const uniqueSampleDecks = dedupeSampleDecks(topDecksBag);
-  const globalTopCards = countCards(uniqueSampleDecks);
-  const globalAllCards = countCards(normalized.decks);
+  const globalTopCards = countCards(uniqueSampleDecks, catalog);
+  const globalAllCards = countCards(normalized.decks, catalog);
   const { regionStats, regionHeat, provinceStats } = computeRegionStats(normalized.decks);
   const combos = computeCombos(uniqueSampleDecks, catalog, {
     minBase: opts.comboMinBase,
@@ -2308,11 +2344,15 @@ function runAnalysis(input) {
     colorStats
   };
 }
-function countCards(decks) {
+function countCards(decks, catalog) {
   const m = /* @__PURE__ */ new Map();
   for (const deck of decks) {
+    const seen = /* @__PURE__ */ new Set();
     for (const id of deck.cards.keys()) {
-      m.set(id, (m.get(id) ?? 0) + 1);
+      const key = catalog.canonicalById.get(id) ?? id;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      m.set(key, (m.get(key) ?? 0) + 1);
     }
   }
   return m;
@@ -2441,11 +2481,22 @@ function legendaryRows(decks, catalog, grandTotal, opts = {}) {
       }
     }
     if (!leg) continue;
-    let agg = byLeg.get(leg);
+    const key = catalog.canonicalById.get(leg) ?? leg;
+    let agg = byLeg.get(key);
     if (!agg) {
-      agg = { colors, total: 0, top8: 0, winsSum: 0, roundsSum: 0, winDecks: 0, heroes: /* @__PURE__ */ new Map() };
-      byLeg.set(leg, agg);
+      agg = {
+        colors,
+        variants: /* @__PURE__ */ new Set(),
+        total: 0,
+        top8: 0,
+        winsSum: 0,
+        roundsSum: 0,
+        winDecks: 0,
+        heroes: /* @__PURE__ */ new Map()
+      };
+      byLeg.set(key, agg);
     }
+    agg.variants.add(leg);
     agg.total += 1;
     if (d.rank >= 1 && d.rank <= 8) agg.top8 += 1;
     if (d.wins !== null && d.eventRounds !== null && d.eventRounds > 0) {
@@ -2458,14 +2509,24 @@ function legendaryRows(decks, catalog, grandTotal, opts = {}) {
   }
   const rows = [];
   const prior2 = shrink ? envPriorWinRate(decks) : null;
-  for (const [cardNo, a] of byLeg) {
-    const meta = catalog.byId.get(cardNo);
+  for (const [key, a] of byLeg) {
+    let repId = "";
+    let imgUrl = null;
+    for (const vid of a.variants) {
+      if (!repId) repId = vid;
+      if (catalog.cardImg.has(vid) && imgUrl === null) {
+        imgUrl = catalog.cardImg.get(vid) ?? null;
+        repId = vid;
+      }
+    }
+    const meta = catalog.byId.get(repId);
     const topHero = [...a.heroes.entries()].sort((x, y) => y[1] - x[1])[0];
     const hasWin = a.winDecks > 0 && a.roundsSum > 0;
     const raw = hasWin ? a.winsSum / a.roundsSum * 100 : null;
     rows.push({
-      cardNo,
-      name: meta?.name ?? cardNo,
+      cardNo: repId || key,
+      name: meta?.name ?? key,
+      variants: a.variants.size,
       colors: a.colors,
       total: a.total,
       top8: a.top8,
@@ -2478,7 +2539,7 @@ function legendaryRows(decks, catalog, grandTotal, opts = {}) {
       avgWins: a.winDecks > 0 ? a.winsSum / a.winDecks : null,
       topHero: topHero?.[0] ?? "\u2014",
       topHeroRate: topHero && a.total > 0 ? topHero[1] / a.total * 100 : 0,
-      imgUrl: catalog.cardImg.get(cardNo) ?? null,
+      imgUrl,
       isBanned: meta?.isBanned ?? false
     });
   }
@@ -2805,6 +2866,21 @@ var shadow = legs.find((r) => r.cardNo === "VEN-191");
 var shadowRank = byWinAdj.findIndex((r) => r.cardNo === "VEN-191") + 1;
 console.log(`\u5F71\u6D41\u4E4B\u4E3B(VEN-191):\u539F\u59CB#1 \u2192 \u4FEE\u6B63\u540E\u7B2C ${shadowRank} \u540D(\u4FEE\u6B63 ${shadow?.winRateAdj?.toFixed(1)}% / \u539F\u59CB ${shadow?.winRate?.toFixed(1)}%)`);
 console.log("\u82F1\u96C4\u699C(Tier)\u662F\u5426\u540C\u6B65\u6536\u7F29:", result.heroes ? "(\u5206\u6790\u7BA1\u7EBF\u4ECD\u4E3A\u539F\u59CB\u53E3\u5F84,\u89C6\u56FE\u5C42 quickStats \u5DF2\u6536\u7F29)" : "");
+console.log("\n== \u540C\u540D\u5F52\u5E76(\u89C4\u8303\u952E)==");
+var mergedTotal = legs.reduce((s, r) => s + r.total, 0);
+var multiVariant = legs.filter((r) => r.variants > 1);
+console.log(`\u4F20\u5947\u79CD\u7C7B(\u5F52\u5E76\u540E):${legs.length} | \u8986\u76D6:${mergedTotal}/${result.totalDecks} | \u591A\u7248\u672C\u884C:${multiVariant.length}`);
+var kx = legs.find((r) => r.name === "\u865A\u7A7A\u4E4B\u5973");
+console.log(`\u865A\u7A7A\u4E4B\u5973: cardNo=${kx?.cardNo} variants=${kx?.variants} n=${kx?.total} win=${kx?.winRate?.toFixed(1)}% (\u671F\u671B variants=2, n=269)`);
+if (!kx || kx.variants !== 2 || kx.total !== 269) {
+  console.error("\u2717 \u865A\u7A7A\u4E4B\u5973 \u5F52\u5E76\u5931\u8D25(\u671F\u671B variants=2, n=269)");
+  process.exitCode = 1;
+} else {
+  console.log("\u2713 \u865A\u7A7A\u4E4B\u5973 \u5F52\u5E76\u6B63\u786E(OGN-247 + OGN-299 \u2192 1 \u884C)");
+}
+console.log(`globalAllCards \u952E\u6570(\u89C4\u8303\u952E):${result.globalAllCards.size} | \u76EE\u5F55\u5361\u53F7\u6570:${result.catalog.byId.size}`);
+var runes = result.catalog.byId.size - result.globalAllCards.size;
+console.log(`\u5F52\u5E76/\u975E\u5168\u91CF\u5DEE\u8DDD(\u542B\u672A\u51FA\u573A\u5361\u4E0E\u7B26\u6587):${runes} | ${runes > 0 ? "\u2713 \u952E\u6570\u6536\u655B" : "(\u9700\u4EBA\u5DE5\u786E\u8BA4)"}`);
 console.log("\n== \u5468\u73AF\u6BD4\u5F15\u64CE ==");
 var byWeek = /* @__PURE__ */ new Map();
 for (const d of result.allDecks) {

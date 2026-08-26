@@ -85,6 +85,8 @@ export interface CardMeta {
   id: string;
   /** 中文名 */
   name: string;
+  /** 副标题(sub_title_cn),无则为 '' */
+  subtitle: string;
   /** 系列(OGN / VEN / ...) */
   series: string;
   /** 稀有度 */
@@ -126,6 +128,10 @@ export interface CardCatalog {
   cardColors: ReadonlyMap<string, readonly CardColor[]>;
   /** 编号 → 卡图 CDN URL(来自 prints 或 decks_cache,可能不全) */
   cardImg: ReadonlyMap<string, string>;
+  /** 编号 → 规范键(同名+副标题;多印刷版本同键) */
+  canonicalById: ReadonlyMap<string, string>;
+  /** 规范键 → 代表编号(优先有卡图;用于归并后的展示/查元数据) */
+  canonicalId: ReadonlyMap<string, string>;
 }
 
 /* ──────────────────────────────────────────────────────────────

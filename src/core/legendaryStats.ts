@@ -16,8 +16,10 @@ export type LegendaryMetric = 'winRate' | 'popularity' | 'top8Rate';
 
 /** 单个传奇卡的聚合结果 */
 export interface LegendaryRow {
-  /** 卡牌编号,如 'VEN·197' */
+  /** 代表卡牌编号(优先有卡图的印刷版本),如 'OGN-247' */
   cardNo: string;
+  /** 归并的卡号变体数(同名+副标题;稀有度/印刷版本不同导致多卡号) */
+  variants: number;
   /** 中文名 */
   name: string;
   /** 双色域(排除 colorless,已排序) */
@@ -52,6 +54,8 @@ export interface LegendaryRow {
 
 interface LegendaryAgg {
   colors: CardColor[];
+  /** 观察到的卡号变体(同名+副标题 归并) */
+  variants: Set<string>;
   total: number;
   top8: number;
   winsSum: number;
@@ -69,6 +73,8 @@ export interface LegendaryOptions {
 
 /**
  * 全量聚合:每套卡组 → 传奇卡(取第一张 '传奇' 类型卡,与 colorStats 口径一致)。
+ * 按规范键(同名+副标题)归并:同一张卡的多稀有度卡号(如 虚空之女 OGN-247/OGN-299)
+ * 合并为一行,cardNo 为代表卡号(优先有卡图),variants 为合并的卡号数。
  * 胜率 = Σwins / Σrounds(加权口径,同 heroStats);收缩开启时输出 winRateAdj。
  */
 export function legendaryRows(
@@ -96,11 +102,22 @@ export function legendaryRows(
     }
     if (!leg) continue;
 
-    let agg = byLeg.get(leg);
+    const key = catalog.canonicalById.get(leg) ?? leg;
+    let agg = byLeg.get(key);
     if (!agg) {
-      agg = { colors, total: 0, top8: 0, winsSum: 0, roundsSum: 0, winDecks: 0, heroes: new Map() };
-      byLeg.set(leg, agg);
+      agg = {
+        colors,
+        variants: new Set(),
+        total: 0,
+        top8: 0,
+        winsSum: 0,
+        roundsSum: 0,
+        winDecks: 0,
+        heroes: new Map()
+      };
+      byLeg.set(key, agg);
     }
+    agg.variants.add(leg);
     agg.total += 1;
     if (d.rank >= 1 && d.rank <= 8) agg.top8 += 1;
     if (d.wins !== null && d.eventRounds !== null && d.eventRounds > 0) {
@@ -115,14 +132,25 @@ export function legendaryRows(
   const rows: LegendaryRow[] = [];
   // 环境先验 = 全量卡组 Σwins/Σrounds(收缩用)
   const prior = shrink ? envPriorWinRate(decks) : null;
-  for (const [cardNo, a] of byLeg) {
-    const meta = catalog.byId.get(cardNo);
+  for (const [key, a] of byLeg) {
+    // 代表卡号:优先有卡图,其次字典序(确定性)
+    let repId = '';
+    let imgUrl: string | null = null;
+    for (const vid of a.variants) {
+      if (!repId) repId = vid;
+      if (catalog.cardImg.has(vid) && imgUrl === null) {
+        imgUrl = catalog.cardImg.get(vid) ?? null;
+        repId = vid;
+      }
+    }
+    const meta = catalog.byId.get(repId);
     const topHero = [...a.heroes.entries()].sort((x, y) => y[1] - x[1])[0];
     const hasWin = a.winDecks > 0 && a.roundsSum > 0;
     const raw = hasWin ? (a.winsSum / a.roundsSum) * 100 : null;
     rows.push({
-      cardNo,
-      name: meta?.name ?? cardNo,
+      cardNo: repId || key,
+      name: meta?.name ?? key,
+      variants: a.variants.size,
       colors: a.colors,
       total: a.total,
       top8: a.top8,
@@ -135,7 +163,7 @@ export function legendaryRows(
       avgWins: a.winDecks > 0 ? a.winsSum / a.winDecks : null,
       topHero: topHero?.[0] ?? '—',
       topHeroRate: topHero && a.total > 0 ? (topHero[1] / a.total) * 100 : 0,
-      imgUrl: catalog.cardImg.get(cardNo) ?? null,
+      imgUrl,
       isBanned: meta?.isBanned ?? false
     });
   }

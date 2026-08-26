@@ -37,7 +37,7 @@ interface UsageAgg {
   energySum: number;
 }
 
-/** Top 样本 → 卡牌携带率聚合(两个入口共用) */
+/** Top 样本 → 卡牌携带率聚合(两个入口共用;按规范键归并多印刷版本) */
 function aggregateUsage(
   topDecks: readonly Deck[],
   catalog: CardCatalog,
@@ -45,33 +45,39 @@ function aggregateUsage(
 ): CardUsage[] {
   const usage = new Map<string, UsageAgg>();
   for (const deck of topDecks) {
+    const seen = new Set<string>();
     for (const [id, count] of deck.cards) {
-      let u = usage.get(id);
+      const key = catalog.canonicalById.get(id) ?? id;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      let u = usage.get(key);
       if (!u) {
         u = { deckCount: 0, totalCount: 0, energySum: 0 };
-        usage.set(id, u);
+        usage.set(key, u);
       }
       u.deckCount += 1;
       u.totalCount += count;
-      const energy = catalog.cardEnergy.get(id) ?? 0;
+      const repId = catalog.canonicalId.get(key) ?? id;
+      const energy = catalog.cardEnergy.get(repId) ?? 0;
       u.energySum += energy * count;
     }
   }
 
   const cards: CardUsage[] = [];
-  for (const [id, u] of usage) {
+  for (const [key, u] of usage) {
+    const repId = catalog.canonicalId.get(key) ?? key;
     const rate = topCount > 0 ? (u.deckCount / topCount) * 100 : 0;
     const avg = u.deckCount > 0 ? u.totalCount / u.deckCount : 0;
     const energy = u.totalCount > 0 ? u.energySum / u.totalCount : 0;
     cards.push({
-      id,
-      name: catalog.cardDict.get(id) ?? id,
-      series: id.split('-')[0] ?? '',
-      rarity: catalog.cardRarity.get(id) ?? '未知',
+      id: repId,
+      name: catalog.cardDict.get(repId) ?? repId,
+      series: repId.split('-')[0] ?? '',
+      rarity: catalog.cardRarity.get(repId) ?? '未知',
       rate,
       avg,
       energy,
-      colors: catalog.cardColors.get(id) ?? []
+      colors: catalog.cardColors.get(repId) ?? []
     });
   }
   cards.sort((a, b) => b.rate - a.rate || a.id.localeCompare(b.id));

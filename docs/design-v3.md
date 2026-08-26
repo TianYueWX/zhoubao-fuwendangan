@@ -13,6 +13,7 @@
 | R3 | **delta 周环比引擎**(delta.ts:buildDeltas/deltasFromRows/movers/HHI);**总览双叙事切换**(本周聚焦/趋势周报:周报模式 = 包内周次分组真实环比,含 KPI Δ、热度升降榜、胜率变化榜);**移动端**(<lg 隐藏侧边栏,头部横向导航条,主区窄边距) | 真实数据周环比 ✓(卡莎 -3.5pp、菲奥娜 +2.3pp、HHI 578→632);构建通过 |
 | R4 | **周报引擎化**(core/report.ts:buildWeeklyReport 纯函数,含周际时间线/传奇 movers/域对 movers);**MetaTimeline 线图**(Top6 英雄周际出场率);**复制周报 Markdown**(utils/reportMarkdown.ts,创作者一键发布);总览周报模式补齐 | 周报 6/6 Markdown 断言 ✓(标题/上升榜/胜率榜/传奇/域对/免责);时间线叙事 ✓(易 10.1→12.9 走强、卡莎 10.6→7.5 退潮、域对 blue+red -2.9pp 自洽);构建通过 |
 | R5 | **英雄拆解 v3 化**:指标卡周环比 Δ(胜率/Top8 率,StatCard 支持 deltaSuffix)、周际趋势线图(出场率/收缩胜率/Top8 率);**全视图设计规格审计**(单卡 Δpp 对照列 ✓、地域双模式 ✓、Combo Lift 滑块 ✓、卡组抽屉+TTS ✓、PNG 导出 = ChartCard toolbox saveAsImage ✓) | 构建通过;视图内容层全部符合 §3 规格 |
+| R6 | **卡牌规范键归并(领域修正)**:所有卡级聚合按 同名+副标题 归并多稀有度卡号——`cardKey.ts` + CardCatalog 增加 `canonicalById/canonicalId`(代表编号优先有卡图);countCards / heroStats 核心卡 / combo / legendaryStats / 万金油 / 卡组抽屉全部归并;传奇对比显示"×N 版本" | 真实数据:传奇种类 93→48、虚空之女 OGN-247+OGN-299→n=269(出场率 #2)、域对一致性仍 15/15、覆盖 100%、构建通过 |
 | ⏳ 待依赖放开 | 多包 Pinia store + IndexedDB(见 §3.5 契约);视图视觉层全面换肤(设计 tokens 已就绪,低风险) | — |
 
 > ⚠️ 环境限制:R2 尝试安装 pinia/dexie 被沙箱只读拦截(ERR_PNPM_EROFS)。store 暂用 v2 响应式单例(API 面按 Pinia 习惯组织),依赖放开后可平滑迁移。
@@ -56,6 +57,7 @@ v2 是 7 个平级视图的功能清单;v3 让每个视图回答一个具体问�
 | D4 | `decks_data_highlight.json`(932 条,名次 1–82)README 未提及 | 默认忽略;预留为"高光局"数据源,不占导入槽位 |
 | D5 | 卡组平均 32.3 张(14–52),CSV `hero` 字段="英雄名 传奇名" | 卡组抽屉按 `cardCategoryName` 类型分组展示;hero 解析用 deckList 而非 CSV 字段 |
 | D6 | 971 张卡,10 张禁卡;6 域色(红绿橙紫蓝黄);15 地区;费用 0–12 | 配色系统以 6 域色为基底;禁卡角标为全局组件能力 |
+| D7 | **同名多卡号是常态**:同一张卡因稀有度/印刷版本不同有多个卡号(cards_base 20 组同名多号;传奇 48 行中 44 行含多版本),如 虚空之女 = OGN-247 + OGN-299 | **所有卡级聚合按「同名+副标题(如有)」规范键归并**(`utils/cardKey.ts` + catalog 的 `canonicalById/canonicalId` 索引),传奇种类 93 → 48,虚空之女合并为 n=269 升至出场率 #2 |
 
 ---
 

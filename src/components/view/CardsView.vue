@@ -51,7 +51,7 @@ const typeOptions = ['单位', '英雄单位', '传奇', '法术', '装备'] as 
 const rows = computed(() => {
   const r = store.result;
   if (!r || decks.value.length === 0) return [];
-  const counts = countCards(decks.value);
+  const counts = countCards(decks.value, r.catalog);
   const n = decks.value.length;
 
   const list: Array<{
@@ -68,8 +68,10 @@ const rows = computed(() => {
     diff: number;
   }> = [];
 
-  for (const [id, deckCount] of counts) {
-    const meta = r.catalog.byId.get(id);
+  for (const [key, deckCount] of counts) {
+    // 规范键 → 代表编号(同名+副标题归并,优先有卡图)
+    const repId = r.catalog.canonicalId.get(key) ?? key;
+    const meta = r.catalog.byId.get(repId);
     if (!meta) continue;
     if (filterType.value && meta.category !== filterType.value) continue;
     if (filterColor.value && !meta.colors.includes(filterColor.value as never)) continue;
@@ -80,13 +82,17 @@ const rows = computed(() => {
       if (e >= 7 ? meta.energy < 7 : Math.floor(meta.energy) !== e) continue;
     }
 
-    const g = globalCounts.value.get(id) ?? 0;
+    const g = globalCounts.value.get(key) ?? 0;
     const gRate = r.totalDecks > 0 ? (g / r.totalDecks) * 100 : 0;
     const rate = (deckCount / n) * 100;
     let copies = 0;
-    for (const d of decks.value) copies += d.cards.get(id) ?? 0;
+    for (const d of decks.value) {
+      for (const [cid, ccount] of d.cards) {
+        if ((r.catalog.canonicalById.get(cid) ?? cid) === key) copies += ccount;
+      }
+    }
     list.push({
-      id,
+      id: repId,
       name: meta.name,
       category: meta.category,
       colors: meta.colors,

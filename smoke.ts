@@ -116,6 +116,23 @@ const shadowRank = byWinAdj.findIndex((r) => r.cardNo === 'VEN-191') + 1;
 console.log(`影流之主(VEN-191):原始#1 → 修正后第 ${shadowRank} 名(修正 ${shadow?.winRateAdj?.toFixed(1)}% / 原始 ${shadow?.winRate?.toFixed(1)}%)`);
 console.log('英雄榜(Tier)是否同步收缩:', result.heroes ? '(分析管线仍为原始口径,视图层 quickStats 已收缩)' : '');
 
+/* ── 同名+副标题 归并验证(多稀有度卡号)── */
+console.log('\n== 同名归并(规范键)==');
+const mergedTotal = legs.reduce((s, r) => s + r.total, 0);
+const multiVariant = legs.filter((r) => r.variants > 1);
+console.log(`传奇种类(归并后):${legs.length} | 覆盖:${mergedTotal}/${result.totalDecks} | 多版本行:${multiVariant.length}`);
+const kx = legs.find((r) => r.name === '虚空之女');
+console.log(`虚空之女: cardNo=${kx?.cardNo} variants=${kx?.variants} n=${kx?.total} win=${kx?.winRate?.toFixed(1)}% (期望 variants=2, n=269)`);
+if (!kx || kx.variants !== 2 || kx.total !== 269) {
+  console.error('✗ 虚空之女 归并失败(期望 variants=2, n=269)');
+  process.exitCode = 1;
+} else {
+  console.log('✓ 虚空之女 归并正确(OGN-247 + OGN-299 → 1 行)');
+}
+console.log(`globalAllCards 键数(规范键):${result.globalAllCards.size} | 目录卡号数:${result.catalog.byId.size}`);
+const runes = result.catalog.byId.size - result.globalAllCards.size;
+console.log(`归并/非全量差距(含未出场卡与符文):${runes} | ${runes > 0 ? '✓ 键数收敛' : '(需人工确认)'}`);
+
 /* ── 周环比引擎验证(包内按周分组,后两周对比)── */
 console.log('\n== 周环比引擎 ==');
 const byWeek = new Map<string, Deck[]>();

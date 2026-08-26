@@ -36,6 +36,7 @@ import {
 } from './isoWeek';
 import { extractCityFromProvince, resolveCity, UNKNOWN_CITY } from './cityRegex';
 import { parseTTSCode, normalizeCategory } from './parseTTS';
+import { cardKey } from './cardKey';
 
 /* ============================================================
  * 1. PapaParse 包装
@@ -191,6 +192,7 @@ export function buildCardCatalog(
     const meta: CardMeta = {
       id: rawNo,
       name,
+      subtitle: (base.sub_title_cn ?? '').trim(),
       series,
       rarity,
       energy,
@@ -243,6 +245,7 @@ export function buildCardCatalog(
           const meta: CardMeta = {
             id: no,
             name,
+            subtitle: (e.subTitle ?? '').trim(),
             series,
             rarity: e.rarity ?? '未知',
             energy: 0,
@@ -265,7 +268,25 @@ export function buildCardCatalog(
     }
   }
 
-  return { byId, cardDict, cardEnergy, cardRarity, cardCategory, cardColors, cardImg };
+  // 3) 规范键索引:同名+副标题 → 多卡号归并;代表编号优先有卡图
+  const canonicalById = new Map<string, string>();
+  const canonicalId = new Map<string, string>();
+  for (const [id, meta] of byId) {
+    const key = cardKey(meta.name, meta.subtitle);
+    if (!key) continue;
+    canonicalById.set(id, key);
+    const existing = canonicalId.get(key);
+    if (existing === undefined) {
+      canonicalId.set(key, id);
+      continue;
+    }
+    const curHasImg = cardImg.has(existing);
+    const newHasImg = cardImg.has(id);
+    if (!curHasImg && newHasImg) canonicalId.set(key, id);
+    else if (curHasImg === newHasImg && id < existing) canonicalId.set(key, id);
+  }
+
+  return { byId, cardDict, cardEnergy, cardRarity, cardCategory, cardColors, cardImg, canonicalById, canonicalId };
 }
 
 /** cache 中出现的规范类型名 */

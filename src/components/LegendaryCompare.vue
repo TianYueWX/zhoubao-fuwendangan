@@ -190,7 +190,12 @@ function onImgErr(cardNo: string): void {
             <h4 class="font-bold text-sm text-slate-800 dark:text-white leading-tight line-clamp-2">
               {{ r.name }}
             </h4>
-            <span class="text-[10px] text-slate-400 tabular-nums">{{ r.cardNo }}</span>
+            <span class="text-[10px] text-slate-400 tabular-nums">
+              {{ r.cardNo
+              }}<template v-if="r.variants > 1"
+                > · ×{{ r.variants }} 版本</template
+              >
+            </span>
             <!-- 双色域 -->
             <div class="flex items-center gap-1 flex-wrap">
               <span
