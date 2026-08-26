@@ -31,36 +31,22 @@ function onKeydown(e: KeyboardEvent): void {
 
 <template>
   <Teleport to="body">
-    <div
-      v-if="open"
-      class="fixed inset-0 z-[90] flex justify-end"
-      @keydown.esc="onKeydown"
-    >
+    <div v-if="open" class="fixed inset-0 z-[90] flex justify-end" @keydown.esc="onKeydown">
       <!-- 遮罩 -->
-      <div
-        class="absolute inset-0 bg-ink/35 backdrop-blur-sm"
-        @click="close()"
-      ></div>
+      <div class="absolute inset-0 bg-ink/35 backdrop-blur-sm" @click="close()"></div>
 
       <!-- 面板 -->
-      <div
-        :class="[
-          'relative h-full w-full shadow-2xl overflow-y-auto drawer-in',
-          wide ? 'max-w-3xl' : 'max-w-lg'
-        ]"
-        :style="{ background: 'var(--color-drawer-bg)' }"
-      >
-        <div
-          class="sticky top-0 z-10 flex items-center justify-between px-5 py-4 border-b border-panel-border"
-          :style="{ background: 'var(--color-drawer-bg)' }"
-        >
+      <div :class="[
+        'relative h-full w-full shadow-2xl overflow-y-auto drawer-in',
+        wide ? 'max-w-5xl' : 'max-w-lg'
+      ]" :style="{ background: 'var(--color-drawer-bg)' }">
+        <div class="sticky top-0 z-10 flex items-center justify-between px-5 py-4 border-b border-panel-border"
+          :style="{ background: 'var(--color-drawer-bg)' }">
           <h3 class="font-display font-bold text-ink truncate">
             {{ title }}
           </h3>
-          <button
-            @click="close()"
-            class="w-8 h-8 rounded-lg hover:bg-ink/5 text-ink-faint hover:text-brand transition-colors shrink-0"
-          >
+          <button @click="close()"
+            class="w-8 h-8 rounded-lg hover:bg-ink/5 text-ink-faint hover:text-brand transition-colors shrink-0">
             ✕
           </button>
         </div>
@@ -76,11 +62,13 @@ function onKeydown(e: KeyboardEvent): void {
 .drawer-in {
   animation: drawerIn 0.25s ease-out;
 }
+
 @keyframes drawerIn {
   from {
     transform: translateX(40px);
     opacity: 0;
   }
+
   to {
     transform: translateX(0);
     opacity: 1;

@@ -34,11 +34,20 @@ export {
   legendaryRows,
   sortLegendaryRows,
   sortLeadCandidates,
-  leadCompositeScore,
-  metricValue
+  metricValue,
+  MIN_LEGEND_SAMPLE
 } from './legendaryStats';
 export type { LegendaryRow, LegendaryMetric } from './legendaryStats';
-export { shrinkWinRate, envPriorWinRate, shrinkBatch, SHRINK_STRENGTH } from './stats';
+export {
+  shrinkWinRate,
+  envPriorWinRate,
+  shrinkBatch,
+  adaptiveShrinkStrength,
+  wilsonLowerBound,
+  wilsonLowerBoundPct,
+  convertScore,
+  SHRINK_STRENGTH
+} from './stats';
 export { buildDeltas, deltasFromRows, movers, hhi } from './delta';
 export type { DeltaItem, DeltaOptions, MoversOptions, DeltaRowLike } from './delta';
 export { buildWeeklyReport, aggregateBy } from './report';

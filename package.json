@@ -10,6 +10,7 @@
     "build:fast": "vite build",
     "preview": "vite preview",
     "type-check": "vue-tsc --noEmit -p tsconfig.json && vue-tsc --noEmit -p tsconfig.node.json",
+    "smoke": "node --experimental-strip-types --import ./scripts/register-hooks.mjs smoke.ts",
     "wrap:china-map": "node scripts/wrap-china-map.mjs"
   },
   "dependencies": {

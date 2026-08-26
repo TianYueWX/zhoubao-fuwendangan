@@ -1,8 +1,10 @@
 <script setup lang="ts">
 /**
- * FileDrop.vue · 槽位上传(6 类文件)
- *  - CSV:PapaParse 解析;JSON:text() + Worker 解析(cache 约 40MB)
+ * FileDrop.vue · 槽位上传(deck CSV / rank JSON / shop JSON)
+ *  - 可一次选择多个文件,按文件名关键词自动识别槽位、对号入座
+ *  - CSV:PapaParse 解析;JSON:text() + Worker 解析(rank/shop 大 JSON)
  *  - 按文件名关键词自动归类槽位,失败回退到当前槽位
+ *  - cards_base / card_prints 已内置预加载,拖入时静默跳过
  *  - 多文件串行读取(避免大文件并发读取导致浏览器内存压力)
  *  - NotReadableError 等浏览器级读取失败 → 可操作的中文提示 + 一键重试
  */
@@ -13,13 +15,12 @@ import {
 } from '@/utils/dataParser';
 import { parseInWorker } from '@/utils/workerParse';
 import { store, loadSlotFile, SLOT_KINDS } from '@/store/analysis';
-import type { RawRow, RankRow, ShopRow, DeckCacheData } from '@/types';
+import type { RawRow, RankRow, ShopRow } from '@/types';
 
 interface Props {
-  /** 槽位序号:0 deck / 1 base / 2 prints / 3 rank / 4 shop / 5 cache */
+  /** 槽位序号:0 deck / 1 rank / 2 shop */
   slotIndex: number;
   label: string;
-  emoji: string;
   hint?: string;
 }
 
@@ -30,7 +31,6 @@ const error = ref('');
 /** 最近一次读取失败的文件,供「重试」 */
 const lastFailed = ref<File | null>(null);
 
-const isJsonSlot = computed(() => props.slotIndex >= 3);
 const slot = computed(() => store.slots[props.slotIndex]);
 const isLoaded = computed(() => !!slot.value?.rows);
 
@@ -50,25 +50,24 @@ function friendlyReadError(err: unknown, fileName: string): string {
 
 async function processOne(file: File): Promise<void> {
   const auto = detectSlotFromFilename(file.name);
+  // 卡表/印刷已内置预加载(随站点发布),拖入/选中时静默跳过
+  if (auto === 'base' || auto === 'prints') {
+    // eslint-disable-next-line no-console
+    console.info(`[FileDrop] ${file.name} 已内置预加载,无需上传`);
+    return;
+  }
   const target =
     auto === null ? props.slotIndex : Math.max(0, SLOT_KINDS.indexOf(auto));
 
-  if (target >= 3 || file.name.toLowerCase().endsWith('.json')) {
+  if (target >= 1 || file.name.toLowerCase().endsWith('.json')) {
     // JSON 槽位(v3:大文件走 Web Worker 解析,主线程不卡顿)
     try {
       const text = await file.text();
-      const data = (await parseInWorker(text, 'json')) as
-        | RawRow[]
-        | RankRow[]
-        | ShopRow[]
-        | DeckCacheData
-        | null;
+      const data = (await parseInWorker(text, 'json')) as RawRow[] | RankRow[] | ShopRow[] | null;
       if (Array.isArray(data)) {
         loadSlotFile(target, data as RawRow[], file.name, auto !== null);
-      } else if (data && typeof data === 'object') {
-        loadSlotFile(target, data as DeckCacheData, file.name, auto !== null);
       } else {
-        throw new Error(`${file.name}:无法识别的 JSON 结构`);
+        throw new Error(`${file.name}:无法识别的 JSON 结构(应为数组)`);
       }
     } catch (err: unknown) {
       throw new Error(friendlyReadError(err, file.name));
@@ -135,12 +134,11 @@ function retry(): void {
   >
     <input
       type="file"
-      :accept="isJsonSlot ? '.json' : '.csv'"
+      :accept="'.csv,.json'"
       multiple
       class="hidden"
       @change="handleFile"
     />
-    <div class="text-xl mb-1 drop-shadow-sm">{{ emoji }}</div>
     <div class="text-xs font-semibold tracking-wide text-ink-muted">
       {{ label }}
     </div>
@@ -155,10 +153,10 @@ function retry(): void {
             : 'text-ink-faint'
       "
     >
-      <template v-if="parsing">⏳ 解析中…</template>
+      <template v-if="parsing">解析中…</template>
       <template v-else-if="error">{{ error }}</template>
       <template v-else-if="isLoaded">
-        ✅ {{ slot?.fileName }} ({{
+        {{ slot?.fileName }} ({{
           Array.isArray(slot?.rows) ? `${slot.rows.length} 行` : '已加载'
         }})
       </template>
@@ -170,7 +168,7 @@ function retry(): void {
       class="btn-ghost mt-2 px-3 py-1 text-xs"
       @click.prevent="retry()"
     >
-      ↻ 重试 {{ lastFailed.name }}
+      重试 {{ lastFailed.name }}
     </button>
   </label>
 </template>

@@ -13,7 +13,7 @@ const props = withDefaults(
     name: string;
     catalog: CardCatalog;
     count?: number | null;
-    size?: 'sm' | 'md' | 'lg';
+    size?: 'xs' | 'sm' | 'md' | 'lg';
     showName?: boolean;
   }>(),
   { count: null, size: 'md', showName: true }
@@ -40,11 +40,13 @@ function onErr(): void {
     <div
       :class="[
         'relative overflow-hidden rounded-md border border-card-border bg-card-bg transition-colors group-hover:border-brand-faint',
-        size === 'sm'
-          ? 'w-11 h-[61px]'
-          : size === 'lg'
-            ? 'w-28 h-[156px]'
-            : 'w-[74px] h-[103px]'
+        size === 'xs'
+          ? 'w-9 h-[50px]'
+          : size === 'sm'
+            ? 'w-11 h-[61px]'
+            : size === 'lg'
+              ? 'w-28 h-[156px]'
+              : 'w-[74px] h-[103px]'
       ]"
     >
       <!-- 降级色块 -->

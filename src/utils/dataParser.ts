@@ -17,8 +17,8 @@ import type {
   CardColor,
   CardMeta,
   CardCategory,
+  CardZoneType,
   Deck,
-  DeckCacheData,
   EventMeta,
   RankRow,
   RawCardBaseRow,
@@ -35,7 +35,7 @@ import {
   rollingLabelToBucket
 } from './isoWeek';
 import { extractCityFromProvince, resolveCity, UNKNOWN_CITY } from './cityRegex';
-import { parseTTSCode, normalizeCategory } from './parseTTS';
+import { parseTTSCode, parseTTSWithZones, normalizeCategory } from './parseTTS';
 import { cardKey } from './cardKey';
 
 /* ============================================================
@@ -78,7 +78,7 @@ export function parseCSVFile<R extends RawRow>(
 
 /**
  * JSON 文件版:文本读取 + JSON.parse。
- * decks_cache.json 约 40MB,parse 耗时 ~1s,由调用方负责展示 busy 态。
+ * rank_data / shop_data 较大,parse 耗时,由调用方负责展示 busy 态。
  */
 export function parseJSONFile<T>(
   file: File,
@@ -128,8 +128,7 @@ export function pickColumn(
 
 export function buildCardCatalog(
   cBase: readonly RawCardBaseRow[],
-  cPrints: readonly RawCardPrintRow[],
-  cacheData?: DeckCacheData | null
+  cPrints: readonly RawCardPrintRow[]
 ): CardCatalog {
   const baseById = new Map<string, RawCardBaseRow>();
   for (const b of cBase) {
@@ -239,56 +238,7 @@ export function buildCardCatalog(
     }
   }
 
-  // 2) decks_cache 补充卡图(编号归一化:· → - ,去 /变体 后缀)
-  if (cacheData) {
-    for (const entries of Object.values(cacheData)) {
-      if (!Array.isArray(entries)) continue;
-      for (const e of entries) {
-        if (!e || typeof e.cardNo !== 'string') continue;
-        const no = normalizeCardNo(e.cardNo);
-        if (!no) continue;
-        if (!cardImg.has(no) && typeof e.frontImage === 'string' && e.frontImage.startsWith('http')) {
-          cardImg.set(no, e.frontImage);
-        }
-        // cache 里出现而 catalog 缺失的编号(如特殊印刷),补一条最小元数据
-        if (!byId.has(no) && no.includes('-')) {
-          const name = e.cardName ?? no;
-          const series = no.split('-')[0] ?? '';
-          const colors = (e.cardColorList ?? []).filter(
-            (c: unknown): c is CardColor =>
-              typeof c === 'string' && VALID_COLORS.has(c as CardColor)
-          );
-          const catRaw = e.cardCategoryName ?? '';
-          const category = ALLOWED_CACHE_CATEGORY.has(catRaw)
-            ? (catRaw as CardCategory)
-            : '其他';
-          const meta: CardMeta = {
-            id: no,
-            name,
-            subtitle: (e.subTitle ?? '').trim(),
-            series,
-            rarity: e.rarity ?? '未知',
-            energy: 0,
-            category,
-            rawCategory: catRaw,
-            colors,
-            region: '',
-            power: 0,
-            championTag: e.hero ?? '',
-            isBanned: false
-          };
-          byId.set(no, meta);
-          cardDict.set(no, name);
-          cardEnergy.set(no, 0);
-          cardRarity.set(no, meta.rarity);
-          cardCategory.set(no, category);
-          cardColors.set(no, colors);
-        }
-      }
-    }
-  }
-
-  // 3) 规范键索引:同名+副标题 → 多卡号归并;代表编号优先有卡图
+  // 2) 规范键索引:同名+副标题 → 多卡号归并;代表编号优先有卡图
   const canonicalById = new Map<string, string>();
   const canonicalId = new Map<string, string>();
   for (const [id, meta] of byId) {
@@ -307,22 +257,6 @@ export function buildCardCatalog(
   }
 
   return { byId, cardDict, cardEnergy, cardRarity, cardCategory, cardColors, cardImg, canonicalById, canonicalId };
-}
-
-/** cache 中出现的规范类型名 */
-const ALLOWED_CACHE_CATEGORY: ReadonlySet<string> = new Set([
-  '传奇', '英雄单位', '单位', '法术', '装备', '符文', '战场'
-]);
-
-/**
- * 卡牌编号归一化:'SFD·140/221' → 'SFD-140','VEN·113a' → 'VEN-113a'。
- */
-export function normalizeCardNo(no: string): string {
-  return no
-    .replace(/·/g, '-')
-    .replace(/\/.*$/, '')
-    .replace(/\*$/, '')
-    .trim();
 }
 
 /* ============================================================
@@ -438,19 +372,108 @@ function cell(row: RawDeckRow, col: string | null, fallback = ''): string {
   return String(v).trim();
 }
 
+/* ── decks_data.json deckList 解析(每卡:cardNo / cardCount / deckCardCreateType / isMainHero) ── */
+
+/** 卡号规范化:decks_data 用 'VEN·197'(中点),目录用 'VEN-197' */
+function normalizeDeckCardNo(raw: unknown): string {
+  return String(raw ?? '')
+    .replace(/[·．]/g, '-')
+    .replace(/\s+/g, '')
+    .replace(/\*$/, '')
+    .trim();
+}
+
+interface DeckListCard {
+  cardNo?: unknown;
+  cardCount?: unknown;
+  deckCardCreateType?: unknown;
+  isMainHero?: unknown;
+  hero?: unknown;
+  cardName?: unknown;
+}
+
+/** deckList → 卡表(编号 → 张数) */
+function parseDeckList(list: readonly DeckListCard[]): Map<string, number> {
+  const cards = new Map<string, number>();
+  for (const item of list) {
+    const no = normalizeDeckCardNo(item.cardNo);
+    if (!no) continue;
+    const count = parseInt(String(item.cardCount ?? '1'), 10) || 1;
+    cards.set(no, (cards.get(no) ?? 0) + count);
+  }
+  return cards;
+}
+
+/** deckList → 每卡区域(deckCardCreateType → CARD_TYPE_MAP:1传奇 2主牌堆 3战场 4符文 5备牌) */
+function parseDeckZones(list: readonly DeckListCard[]): Map<string, CardZoneType> {
+  const zones = new Map<string, CardZoneType>();
+  for (const item of list) {
+    const no = normalizeDeckCardNo(item.cardNo);
+    if (!no) continue;
+    const t = parseInt(String(item.deckCardCreateType ?? ''), 10);
+    if (t === 1) zones.set(no, 'legend');
+    else if (t === 2) zones.set(no, 'main');
+    else if (t === 3) zones.set(no, 'battlefield');
+    else if (t === 4) zones.set(no, 'rune');
+    else if (t === 5) zones.set(no, 'side');
+  }
+  return zones;
+}
+
+/** deckList → 选定英雄卡号(isMainHero === true 的那张),无则 null */
+function parseMainHeroCardNo(list: readonly DeckListCard[]): string | null {
+  for (const item of list) {
+    if (String(item.isMainHero ?? '').toLowerCase() === 'true') {
+      return normalizeDeckCardNo(item.cardNo);
+    }
+  }
+  return null;
+}
+
+/** 行内是否有 decks_data.json 的 deckList 数组 */
+function deckListOf(row: RawDeckRow): readonly DeckListCard[] | null {
+  const list = (row as { deckList?: unknown }).deckList;
+  return Array.isArray(list) && list.length > 0 ? (list as DeckListCard[]) : null;
+}
+
+/** 从 deckList 重构英雄全名 = 选定英雄短名(hero)+ 传奇卡名(cardName),如「凯南 狂暴之心」 */
+function heroFromDeckList(list: readonly DeckListCard[]): string {
+  const main =
+    list.find((c) => String(c.isMainHero ?? '').toLowerCase() === 'true') ??
+    list.find((c) => String(c.hero ?? '').trim() !== '');
+  const heroShort = main ? String(main.hero ?? '').trim() : '';
+  if (!heroShort) return '';
+  const legend = list.find((c) => String(c.deckCardCreateType ?? '') === '1');
+  const legendName = legend ? String(legend.cardName ?? '').trim() : '';
+  if (legendName && !heroShort.includes(legendName)) {
+    return `${heroShort} ${legendName}`;
+  }
+  return heroShort;
+}
+
 export function normalizeDeck(
   row: RawDeckRow,
   cols: DeckColumnMapping,
   weekPre: WeekPrecompute,
   cityOverrides: ReadonlyMap<string, string>,
+  catalog: CardCatalog,
   shopIndex?: ReadonlyMap<string, ShopRow>
 ): Deck {
   const activityName = cell(row, cols.eventCol);
   const playerName = cell(row, cols.playerCol);
   const dateStr = cell(row, cols.dateCol).slice(0, 10);
   const provinceRaw = cell(row, cols.provinceCol);
-  const heroRaw = cell(row, cols.heroCol, '未知') || '未知';
   const ttsCode = cell(row, cols.ttsCol);
+
+  // 卡表来源:decks_data.json deckList 优先;TTS_code 兜底(顺序固定 → 区域标注)
+  const deckList = deckListOf(row);
+
+  // 英雄名:行级 hero 列优先;deckList 无 hero 列时从卡组重构(选定英雄短名 + 传奇卡名)
+  let hero = cell(row, cols.heroCol, '未知') || '未知';
+  if (hero === '未知' && deckList) {
+    const h = heroFromDeckList(deckList);
+    if (h) hero = h;
+  }
 
   // 名次:NaN → Number.MAX_SAFE_INTEGER,统一丢到队尾
   const rankRaw = cols.rankCol ? row[cols.rankCol] : undefined;
@@ -476,18 +499,39 @@ export function normalizeDeck(
     (dateStr && weekPre.dateToBucket.get(dateStr)) ||
     UNKNOWN_WEEK;
 
+  // 卡表 + 区域:deckList 带 deckCardCreateType/isMainHero;TTS 按固定顺序切分
+  let cards: Map<string, number>;
+  let cardTokens: readonly string[] | null = null;
+  let cardZones: Map<string, CardZoneType> | null = null;
+  let mainHeroCardNo: string | null = null;
+  if (deckList) {
+    cards = parseDeckList(deckList);
+    const z = parseDeckZones(deckList);
+    cardZones = z.size > 0 ? z : null;
+    mainHeroCardNo = parseMainHeroCardNo(deckList);
+  } else {
+    const parsed = parseTTSWithZones(ttsCode, hero, catalog);
+    cards = parsed.cards;
+    cardTokens = parsed.cardTokens;
+    cardZones = parsed.zones.size > 0 ? parsed.zones : null;
+    mainHeroCardNo = parsed.mainHeroCardNo;
+  }
+
   return {
     raw: row,
     playerName,
     activityName,
     date: dateStr,
     rank,
-    hero: heroRaw,
+    hero,
     province,
     city,
     week,
     ttsCode,
-    cards: parseTTSCode(ttsCode),
+    cards,
+    cardTokens,
+    cardZones,
+    mainHeroCardNo,
     wins: null,
     eventRounds: null,
     winRate: null,
@@ -517,7 +561,9 @@ export function normalizeDecks(
     rollingGapDays?: number;
     /** shop_data 索引(赛事名 → ShopRow),用于精确城市/门店 */
     shopIndex?: ReadonlyMap<string, ShopRow>;
-  } = {}
+    /** 卡牌目录(TTS 顺序区域标注需要,必传) */
+    catalog: CardCatalog;
+  }
 ): NormalizedDecksResult {
   const cityOverrides = opts.cityOverrides ?? new Map<string, string>();
   const weekMode = opts.weekMode ?? 'iso';
@@ -531,7 +577,7 @@ export function normalizeDecks(
   const unknownEvents = new Set<string>();
 
   for (const r of rows) {
-    const deck = normalizeDeck(r, columns, weekPre, cityOverrides, shopIndex);
+    const deck = normalizeDeck(r, columns, weekPre, cityOverrides, opts.catalog, shopIndex);
     decks.push(deck);
     if (deck.city === UNKNOWN_CITY && deck.activityName) {
       unknownEvents.add(deck.activityName);
@@ -566,7 +612,7 @@ export function dedupeSampleDecks(decks: readonly Deck[]): Deck[] {
  * 9. 文件名槽位识别(给 FileDrop.vue 用)
  * ============================================================ */
 
-export type SlotKind = 'deck' | 'base' | 'prints' | 'rank' | 'shop' | 'cache';
+export type SlotKind = 'deck' | 'base' | 'prints' | 'rank' | 'shop';
 
 /**
  * 赛事名匹配 key:去掉全部空白,统一全角/半角括号差异。
@@ -577,12 +623,11 @@ export function normalizeEventKey(name: string): string {
 }
 
 /**
- * 文件名 → 槽位。注意顺序:decks_cache 同时含 'deck' 与 'cache',
- * 必须先判 cache/rank/shop 再判 deck。
+ * 文件名 → 槽位。注意顺序:decks_data 同时含 'deck' 关键词,
+ * 必须先判 rank/shop/base/prints 再判 deck。
  */
 export function detectSlotFromFilename(name: string): SlotKind | null {
   const low = (name || '').toLowerCase();
-  if (low.includes('cache')) return 'cache';
   if (low.includes('rank') || low.includes('win')) return 'rank';
   if (low.includes('shop')) return 'shop';
   if (low.includes('base')) return 'base';

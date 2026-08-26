@@ -1,46 +1,29 @@
 <script setup lang="ts">
 /**
- * ComboView.vue · Combo 羁绊
- *  - Lift / 基础携带率双阈值实时调节
- *  - 结果表(分页 + 搜索)
- *  - 行点击 → 抽屉查看卡对详情
+ * HeroComboTab.vue · Combo 羁绊(并入传奇构筑页,按选中英雄的 Top 样本计算)
+ *  - Lift / 携带率双阈值滑块实时调节
+ *  - 卡对表(分页 + 搜索)+ 行点击 → 抽屉详情
+ * 数据范围:该英雄的 Top 样本(与核心卡口径一致,已剔除符文/传奇)
  */
 import { computed, ref } from 'vue';
-import { store, applyGlobalFilters } from '@/store/analysis';
+import { store } from '@/store/analysis';
 import DataTable from '@/components/DataTable.vue';
 import Drawer from '@/components/Drawer.vue';
 import CardThumb from '@/components/CardThumb.vue';
 import SectionHeading from '@/components/SectionHeading.vue';
 import { computeCombos } from '@/core';
-import type { ChartOptionInput } from '@/types';
 import type { ComboResult } from '@/types';
 
-type Scope = 'allTop' | string;
-const scope = ref<Scope>('allTop');
-
-const scopeOptions = computed(() => {
-  if (!store.result) return [];
-  const opts: Array<{ value: Scope; label: string }> = [
-    { value: 'allTop', label: '全部高排名样本' }
-  ];
-  const heroes = Array.from(store.result.heroes.entries()).sort(
-    (a, b) => b[1].total - a[1].total
-  );
-  for (const [name, stat] of heroes) {
-    opts.push({ value: name, label: `${name} (Top ${stat.topCount})` });
-  }
-  return opts;
-});
+const props = defineProps<{ hero: string }>();
 
 const decks = computed(() => {
   const r = store.result;
   if (!r) return [];
-  if (scope.value === 'allTop') return applyGlobalFilters(r.uniqueSampleDecks);
-  const stat = r.heroes.get(scope.value);
+  const stat = r.heroes.get(props.hero);
   return stat ? stat.topDecks : [];
 });
 
-/* 阈值滑块 → 实时重算(debounce 由 computed 天然节流;数据量可控) */
+/* 阈值滑块 → 实时重算 */
 const minLift = ref(store.comboMinLift);
 const minBasePercent = ref(Math.round(store.comboMinBase * 100));
 
@@ -95,72 +78,70 @@ function openDetail(row: Record<string, unknown>): void {
 </script>
 
 <template>
-  <div class="fade-in space-y-5">
-    <section>
-      <div class="flex items-start justify-between flex-wrap gap-4 mb-4">
-        <SectionHeading
-          eyebrow="连协考 · Synergies"
-          title="Combo 羁绊挖掘"
-          note="Lift = P(A∩B) / (P(A)×P(B)):>1 正相关(真实配合),≈1 独立。已剔除符文卡;万金油污染由「最低携带率」门槛过滤。调高 Lift 找独家配合,调低找泛用搭配。"
+  <section>
+    <SectionHeading
+      eyebrow="连协考 · Synergies"
+      title="Combo 羁绊"
+      :note="`按 ${hero} 高排名卡组挖掘 · Lift = P(A∩B)/(P(A)×P(B)):>1 正相关,≈1 独立 · 已剔除符文/传奇`"
+    />
+
+    <!-- 参数滑块 -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+      <label class="card p-3 block">
+        <div class="flex justify-between text-xs mb-2">
+          <span class="text-ink-muted">最低 Lift</span>
+          <b class="tabular-nums text-brand">{{ minLift.toFixed(2) }}</b>
+        </div>
+        <input
+          type="range"
+          min="1"
+          max="2.5"
+          step="0.05"
+          v-model.number="minLift"
+          class="w-full"
+          style="accent-color: var(--color-brand)"
         />
-        <select v-model="scope" class="mini-select max-w-[240px] mt-1">
-          <option v-for="o in scopeOptions" :key="String(o.value)" :value="o.value">{{ o.label }}</option>
-        </select>
-      </div>
+      </label>
+      <label class="card p-3 block">
+        <div class="flex justify-between text-xs mb-2">
+          <span class="text-ink-muted">最低携带率门槛</span>
+          <b class="tabular-nums text-brand">{{ minBasePercent }}%</b>
+        </div>
+        <input
+          type="range"
+          min="5"
+          max="35"
+          step="1"
+          v-model.number="minBasePercent"
+          class="w-full"
+          style="accent-color: var(--color-brand)"
+        />
+      </label>
+    </div>
 
-      <!-- 参数滑块 -->
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-        <label class="card p-3 block">
-          <div class="flex justify-between text-xs mb-2">
-            <span class="text-ink-muted">最低 Lift</span>
-            <b class="tabular-nums text-brand">{{ minLift.toFixed(2) }}</b>
-          </div>
-          <input
-            type="range"
-            min="1"
-            max="2.5"
-            step="0.05"
-            v-model.number="minLift"
-            class="w-full"
-            style="accent-color: var(--color-brand)"
-          />
-        </label>
-        <label class="card p-3 block">
-          <div class="flex justify-between text-xs mb-2">
-            <span class="text-ink-muted">最低携带率门槛</span>
-            <b class="tabular-nums text-brand">{{ minBasePercent }}%</b>
-          </div>
-          <input
-            type="range"
-            min="5"
-            max="35"
-            step="1"
-            v-model.number="minBasePercent"
-            class="w-full"
-            style="accent-color: var(--color-brand)"
-          />
-        </label>
-      </div>
+    <p class="text-xs text-ink-faint mb-3">
+      数量 {{ decks.length }} 套 · 命中 <b>{{ rows.length }}</b> 组卡对 · 点击行查看详情
+    </p>
 
-      <p class="text-xs text-ink-faint mb-3">
-        样本 {{ decks.length }} 套 · 命中 <b>{{ rows.length }}</b> 组卡对 · 点击行查看详情
-      </p>
-
-      <DataTable
-        :rows="rows"
-        :columns="columns"
-        :page-size="15"
-        search-placeholder="搜索卡名…"
-        max-height="520px"
-        @row-click="openDetail"
-      >
-        <template #cell-lift="{ row }">
-          <span class="font-bold tabular-nums" :class="(row as ComboRow).lift >= 1.5 ? 'text-delta-up' : ''">
-            {{ (row as ComboRow).lift }}
-          </span>
-        </template>
-      </DataTable>
-    </section>
+    <DataTable
+      :rows="rows"
+      :columns="columns"
+      :page-size="15"
+      search-placeholder="搜索卡名…"
+      max-height="380px"
+      @row-click="openDetail"
+    >
+      <template #cell-lift="{ row }">
+        <span class="font-bold tabular-nums" :class="(row as ComboRow).lift >= 1.5 ? 'text-delta-up' : ''">
+          {{ (row as ComboRow).lift }}
+        </span>
+      </template>
+      <template #empty>
+        <div class="py-8 text-center text-ink-faint text-sm">
+          {{ decks.length === 0 ? '该英雄暂无高排名卡组' : '无满足阈值的卡对(调低 Lift 或门槛试试)' }}
+        </div>
+      </template>
+    </DataTable>
 
     <!-- 详情抽屉 -->
     <Drawer v-model:open="drawerOpen" :title="selected ? `卡对详情` : ''">
@@ -203,5 +184,5 @@ function openDetail(row: Record<string, unknown>): void {
         </div>
       </template>
     </Drawer>
-  </div>
+  </section>
 </template>

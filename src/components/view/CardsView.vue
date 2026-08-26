@@ -4,36 +4,43 @@
  *  - 范围切换 + 类型/颜色/费用/稀有度筛选
  *  - 携带率 Top 表(缩略图、禁卡标记、全局对照列)
  */
-import { computed, ref } from 'vue';
-import { store, applyGlobalFilters } from '@/store/analysis';
+import { computed, ref, watch } from 'vue';
+import { store } from '@/store/analysis';
 import CardThumb from '@/components/CardThumb.vue';
 import SectionHeading from '@/components/SectionHeading.vue';
 import { countCards } from '@/core';
 import { CARD_COLOR_HEX } from '@/utils/palette';
 import type { CardCategory } from '@/types';
 
-type Scope = 'allTop' | 'allDecks' | string;
-const scope = ref<Scope>('allTop');
+const scope = ref<string>('');
 
+/**
+ * 单卡页只看单个英雄的 Top 样本,不提供「全部高排名卡组」等全量范围:
+ * 全量遍历(数千套卡组)会让携带率统计明显变慢,且对单卡分析意义有限。
+ */
 const scopeOptions = computed(() => {
   if (!store.result) return [];
-  const opts: Array<{ value: Scope; label: string }> = [
-    { value: 'allTop', label: '全部高排名样本' },
-    { value: 'allDecks', label: '全部参赛卡组 · 不限名次' }
-  ];
-  const heroes = Array.from(store.result.heroes.entries())
-    .sort((a, b) => b[1].total - a[1].total);
-  for (const [name, stat] of heroes) {
-    opts.push({ value: name, label: `${name} (Top ${stat.topCount})` });
-  }
-  return opts;
+  const heroes = Array.from(store.result.heroes.entries()).sort((a, b) => b[1].total - a[1].total);
+  return heroes.map(([name, stat]) => ({
+    value: name,
+    label: `${name} (Top ${stat.topCount})`
+  }));
 });
+
+// 默认选中出场最高的英雄;范围失效时自动回落到第一个
+watch(
+  scopeOptions,
+  (opts) => {
+    if (opts.length > 0 && !opts.some((o) => o.value === scope.value)) {
+      scope.value = opts[0]!.value;
+    }
+  },
+  { immediate: true }
+);
 
 const decks = computed(() => {
   const r = store.result;
   if (!r) return [];
-  if (scope.value === 'allTop') return applyGlobalFilters(r.uniqueSampleDecks);
-  if (scope.value === 'allDecks') return applyGlobalFilters(r.allDecks);
   const stat = r.heroes.get(scope.value);
   return stat ? stat.topDecks : [];
 });
@@ -54,6 +61,15 @@ const rows = computed(() => {
   if (!r || decks.value.length === 0) return [];
   const counts = countCards(decks.value, r.catalog);
   const n = decks.value.length;
+
+  // 单次遍历聚合:规范键 → 总张数(替代 O(卡种×卡组×卡张) 的三重循环,大数据量下提速数百倍)
+  const copiesByKey = new Map<string, number>();
+  for (const d of decks.value) {
+    for (const [cid, ccount] of d.cards) {
+      const key = r.catalog.canonicalById.get(cid) ?? cid;
+      copiesByKey.set(key, (copiesByKey.get(key) ?? 0) + ccount);
+    }
+  }
 
   const list: Array<{
     id: string;
@@ -88,12 +104,7 @@ const rows = computed(() => {
     const g = globalCounts.value.get(key) ?? 0;
     const gRate = r.totalDecks > 0 ? (g / r.totalDecks) * 100 : 0;
     const rate = (deckCount / n) * 100;
-    let copies = 0;
-    for (const d of decks.value) {
-      for (const [cid, ccount] of d.cards) {
-        if ((r.catalog.canonicalById.get(cid) ?? cid) === key) copies += ccount;
-      }
-    }
+    const copies = copiesByKey.get(key) ?? 0;
     list.push({
       id: repId,
       name: meta.name,

@@ -34,6 +34,14 @@ export const DEFAULT_ARCHETYPE_OPTIONS: Readonly<ArchetypeOptions> = Object.free
 
 const LABELS = ['A', 'B', 'C', 'D', 'E', 'F'];
 
+/** 结构性卡(符文/传奇)不进流派聚类:与核心卡 Top20 口径一致
+ * (只统计 maindeck / chosen champion / battlefield)。
+ * 符文每套按规则自动携带、传奇每套恰好 1 张,会虚高 Jaccard 相似度并污染流派核心卡。 */
+function isStructural(id: string, catalog: CardCatalog): boolean {
+  const cat = catalog.cardCategory.get(id);
+  return cat === '符文' || cat === '传奇';
+}
+
 export function buildArchetypes(
   heroStat: HeroStats,
   catalog: CardCatalog,
@@ -47,8 +55,15 @@ export function buildArchetypes(
   const n = decks.length;
   const minClusterSize = Math.max(3, Math.ceil(n * 0.08));
 
-  // 1) 每套卡组的卡牌集合
-  const sets: ReadonlySet<string>[] = decks.map((d) => new Set(d.cards.keys()));
+  // 1) 每套卡组的卡牌集合(剔除符文/传奇结构卡)
+  const sets: ReadonlySet<string>[] = decks.map((d) => {
+    const s = new Set<string>();
+    for (const id of d.cards.keys()) {
+      if (isStructural(id, catalog)) continue;
+      s.add(id);
+    }
+    return s;
+  });
 
   // 2) Pairwise Jaccard
   const sim: number[][] = [];
@@ -122,6 +137,7 @@ export function buildArchetypes(
     for (const mi of memberIdx) {
       const deck = decks[mi]!;
       for (const [id, count] of deck.cards) {
+        if (isStructural(id, catalog)) continue;
         usage.set(id, (usage.get(id) ?? 0) + count);
       }
       if (deck.rank !== Number.MAX_SAFE_INTEGER && deck.rank >= 1) {

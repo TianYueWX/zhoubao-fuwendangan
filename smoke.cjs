@@ -1512,7 +1512,7 @@ function pickColumn(keys, exact, hints) {
   }
   return null;
 }
-function buildCardCatalog(cBase, cPrints, cacheData) {
+function buildCardCatalog(cBase, cPrints) {
   const baseById = /* @__PURE__ */ new Map();
   for (const b of cBase) {
     const id = b.id;
@@ -1609,49 +1609,6 @@ function buildCardCatalog(cBase, cPrints, cacheData) {
       imgIsSC.set(c.rawNo, true);
     }
   }
-  if (cacheData) {
-    for (const entries of Object.values(cacheData)) {
-      if (!Array.isArray(entries)) continue;
-      for (const e of entries) {
-        if (!e || typeof e.cardNo !== "string") continue;
-        const no = normalizeCardNo(e.cardNo);
-        if (!no) continue;
-        if (!cardImg.has(no) && typeof e.frontImage === "string" && e.frontImage.startsWith("http")) {
-          cardImg.set(no, e.frontImage);
-        }
-        if (!byId.has(no) && no.includes("-")) {
-          const name = e.cardName ?? no;
-          const series = no.split("-")[0] ?? "";
-          const colors = (e.cardColorList ?? []).filter(
-            (c) => typeof c === "string" && VALID_COLORS.has(c)
-          );
-          const catRaw = e.cardCategoryName ?? "";
-          const category = ALLOWED_CACHE_CATEGORY.has(catRaw) ? catRaw : "\u5176\u4ED6";
-          const meta = {
-            id: no,
-            name,
-            subtitle: (e.subTitle ?? "").trim(),
-            series,
-            rarity: e.rarity ?? "\u672A\u77E5",
-            energy: 0,
-            category,
-            rawCategory: catRaw,
-            colors,
-            region: "",
-            power: 0,
-            championTag: e.hero ?? "",
-            isBanned: false
-          };
-          byId.set(no, meta);
-          cardDict.set(no, name);
-          cardEnergy.set(no, 0);
-          cardRarity.set(no, meta.rarity);
-          cardCategory.set(no, category);
-          cardColors.set(no, colors);
-        }
-      }
-    }
-  }
   const canonicalById = /* @__PURE__ */ new Map();
   const canonicalId = /* @__PURE__ */ new Map();
   for (const [id, meta] of byId) {
@@ -1669,18 +1626,6 @@ function buildCardCatalog(cBase, cPrints, cacheData) {
     else if (curHasImg === newHasImg && id < existing) canonicalId.set(key, id);
   }
   return { byId, cardDict, cardEnergy, cardRarity, cardCategory, cardColors, cardImg, canonicalById, canonicalId };
-}
-var ALLOWED_CACHE_CATEGORY = /* @__PURE__ */ new Set([
-  "\u4F20\u5947",
-  "\u82F1\u96C4\u5355\u4F4D",
-  "\u5355\u4F4D",
-  "\u6CD5\u672F",
-  "\u88C5\u5907",
-  "\u7B26\u6587",
-  "\u6218\u573A"
-]);
-function normalizeCardNo(no) {
-  return no.replace(/·/g, "-").replace(/\/.*$/, "").replace(/\*$/, "").trim();
 }
 function detectDeckColumns(rows) {
   if (rows.length === 0) {
@@ -2311,11 +2256,7 @@ function runAnalysis(input) {
   });
   const winMatchedDecks = attachWinData(normalized.decks, input.rankRows);
   const hasWinData = winMatchedDecks > 0;
-  const catalog = buildCardCatalog(input.baseRows, input.printRows, input.cacheData);
-  let imageCount = 0;
-  for (const [id] of catalog.cardImg) {
-    if (catalog.byId.has(id)) imageCount++;
-  }
+  const catalog = buildCardCatalog(input.baseRows, input.printRows);
   const heroes2 = computeHeroStats(normalized.decks, catalog, normalized.weeks, {
     topThreshold: opts.topThreshold
   });
@@ -2356,7 +2297,6 @@ function runAnalysis(input) {
     hasWinData,
     winMatchedDecks,
     shopMatchedEvents: events.filter((e) => e.shopName).length,
-    imageCount,
     colorStats
   };
 }
@@ -2816,8 +2756,7 @@ var result = runAnalysis({
   baseRows: csv("cards_base_rows.csv"),
   printRows: csv("card_prints_rows.csv"),
   rankRows: JSON.parse((0, import_node_fs.readFileSync)((0, import_node_path.resolve)(PKG, "\u57CE\u5E02\u8D5B\u7B2C\u56DB\u8D5B\u5B63\u7B2C\u4E09\u5468_rank_data.json"), "utf8")),
-  shopRows: JSON.parse((0, import_node_fs.readFileSync)((0, import_node_path.resolve)(PKG, "\u57CE\u5E02\u8D5B\u7B2C\u56DB\u8D5B\u5B63\u7B2C\u4E09\u5468_shop_data.json"), "utf8")),
-  cacheData: JSON.parse((0, import_node_fs.readFileSync)((0, import_node_path.resolve)(PKG, "\u57CE\u5E02\u8D5B\u7B2C\u56DB\u8D5B\u5B63\u7B2C\u4E09\u5468_decks_cache.json"), "utf8"))
+  shopRows: JSON.parse((0, import_node_fs.readFileSync)((0, import_node_path.resolve)(PKG, "\u57CE\u5E02\u8D5B\u7B2C\u56DB\u8D5B\u5B63\u7B2C\u4E09\u5468_shop_data.json"), "utf8"))
 });
 var ms = Date.now() - t0;
 console.log("== \u5206\u6790\u8017\u65F6", ms, "ms ==");
@@ -2825,7 +2764,6 @@ console.log("totalDecks:", result.totalDecks);
 console.log("sampleSize(Top15%):", result.sampleSize);
 console.log("hasWinData:", result.hasWinData, "| winMatched:", result.winMatchedDecks);
 console.log("events:", result.events.length, "| shopMatched:", result.shopMatchedEvents);
-console.log("images:", result.imageCount);
 var heroes = Array.from(result.heroes.entries()).sort((a, b) => b[1].total - a[1].total);
 console.log("\n== Tier \u6392\u884C(\u524D10)==");
 for (const [name, s] of heroes.slice(0, 10)) {

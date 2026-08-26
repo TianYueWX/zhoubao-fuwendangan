@@ -52,15 +52,12 @@ export function computeRegionStats(decks: readonly Deck[]): RegionStatsResult {
     }
     let cell = heatHeroMap.get(hero);
     if (!cell) {
-      cell = { n: 0, top8: 0, winsSum: null, roundsSum: null };
+      cell = { n: 0, top8: 0, top4: 0 };
       heatHeroMap.set(hero, cell);
     }
     cell.n += 1;
     if (deck.rank >= 1 && deck.rank <= 8) cell.top8 += 1;
-    if (deck.wins !== null && deck.eventRounds !== null && deck.eventRounds > 0) {
-      cell.winsSum = (cell.winsSum ?? 0) + deck.wins;
-      cell.roundsSum = (cell.roundsSum ?? 0) + deck.eventRounds;
-    }
+    if (deck.rank >= 1 && deck.rank <= 4) cell.top4 += 1;
 
     // Province
     if (deck.province) {

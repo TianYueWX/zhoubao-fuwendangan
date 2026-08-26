@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import Papa from 'papaparse';
-import { runAnalysis, legendaryRows, sortLegendaryRows, sortLeadCandidates, leadCompositeScore, shrinkWinRate, envPriorWinRate, quickHeroRows, deltasFromRows, movers, hhi, buildWeeklyReport } from '@/core';
+import { runAnalysis, legendaryRows, sortLegendaryRows, sortLeadCandidates, convertScore, wilsonLowerBound, quickHeroRows, deltasFromRows, movers, hhi, buildWeeklyReport, MIN_LEGEND_SAMPLE } from '@/core';
 import { reportToMarkdown } from '@/utils/reportMarkdown';
 import type { Deck } from '@/types';
 
@@ -19,8 +19,7 @@ const result = runAnalysis({
   baseRows: csv('cards_base_rows.csv'),
   printRows: csv('card_prints_rows.csv'),
   rankRows: JSON.parse(readFileSync(resolve(PKG, '城市赛第四赛季第三周_rank_data.json'), 'utf8')),
-  shopRows: JSON.parse(readFileSync(resolve(PKG, '城市赛第四赛季第三周_shop_data.json'), 'utf8')),
-  cacheData: JSON.parse(readFileSync(resolve(PKG, '城市赛第四赛季第三周_decks_cache.json'), 'utf8'))
+  shopRows: JSON.parse(readFileSync(resolve(PKG, '城市赛第四赛季第三周_shop_data.json'), 'utf8'))
 });
 const ms = Date.now() - t0;
 
@@ -29,13 +28,12 @@ console.log('totalDecks:', result.totalDecks);
 console.log('sampleSize(Top15%):', result.sampleSize);
 console.log('hasWinData:', result.hasWinData, '| winMatched:', result.winMatchedDecks);
 console.log('events:', result.events.length, '| shopMatched:', result.shopMatchedEvents);
-console.log('images:', result.imageCount);
 
 const heroes = Array.from(result.heroes.entries()).sort((a, b) => b[1].total - a[1].total);
 console.log('\n== Tier 排行(前10)==');
 for (const [name, s] of heroes.slice(0, 10)) {
   console.log(
-    `${s.tier ?? '-'} | ${name} | n=${s.total} pop=${s.popularity.toFixed(1)}% win=${s.winRate?.toFixed(1)}% top8=${s.top8Rate.toFixed(1)}% score=${s.tierScore}`
+    `${s.tier ?? '-'} | ${name} | n=${s.total} pop=${s.popularity.toFixed(1)}% top8=${s.top8Rate.toFixed(1)}% top4=${s.top4Rate.toFixed(1)}% 冠=${s.champions} 亚=${s.runnersUp} score=${s.tierScore}`
   );
 }
 
@@ -46,7 +44,7 @@ console.log('identifiedDecks:', cs?.identifiedDecks);
 
 const d0 = result.uniqueSampleDecks[0];
 if (d0) {
-  console.log('\n== 样本卡组 ==');
+  console.log('\n== 卡组示例 ==');
   console.log(d0.playerName, '|', d0.hero, '| rank', d0.rank, '| wins', d0.wins, '/', d0.eventRounds, '| city', d0.city, '| shop', d0.shopName, '| gid', d0.cardGroupId);
   const imgs = [...d0.cards.keys()].filter((id) => result.catalog.cardImg.has(id)).length;
   console.log('卡表', d0.cards.size, '种 · 有图', imgs, '种');
@@ -60,19 +58,19 @@ console.log('combos:', result.combos.length, '| top1:', JSON.stringify(result.co
 /* ── 传奇排行引擎验证 ── */
 const legs = legendaryRows(result.allDecks, result.catalog, result.totalDecks);
 const covered = legs.reduce((s, r) => s + r.total, 0);
-console.log('\n== 传奇排行(新引擎)==');
+console.log('\n== 传奇排行(名次转化口径)==');
 console.log('传奇种类:', legs.length, '| 识别卡组:', covered, '/', result.totalDecks, '| 覆盖:', (covered / result.totalDecks * 100).toFixed(1) + '%');
 console.log('-- 按出场率 Top5 --');
 sortLegendaryRows(legs, 'popularity')
   .slice(0, 5)
   .forEach((r, i) =>
-    console.log(`#${i + 1} ${r.name}(${r.cardNo}) n=${r.total} pop=${r.popularity.toFixed(1)}% win=${r.winRate?.toFixed(1)}% top8=${r.top8Rate.toFixed(1)}% hero=${r.topHero}(${r.topHeroRate.toFixed(0)}%) 域=${r.colors.join('+')}`)
+    console.log(`#${i + 1} ${r.name}(${r.cardNo}) n=${r.total} pop=${r.popularity.toFixed(1)}% conv=${r.convert.toFixed(1)} top8=${r.top8Rate.toFixed(1)}% top4=${r.top4Rate.toFixed(1)}% hero=${r.topHero}(${r.topHeroRate.toFixed(0)}%) 域=${r.colors.join('+')}`)
   );
-console.log('-- 按真实胜率 Top5 --');
-sortLegendaryRows(legs, 'winRate')
+console.log('-- 按转化综合分 Top5 --');
+sortLegendaryRows(legs, 'convert')
   .slice(0, 5)
   .forEach((r, i) =>
-    console.log(`#${i + 1} ${r.name}(${r.cardNo}) n=${r.total} win=${r.winRate?.toFixed(1)}% top8=${r.top8Rate.toFixed(1)}% pop=${r.popularity.toFixed(1)}% hero=${r.topHero}`)
+    console.log(`#${i + 1} ${r.name}(${r.cardNo}) n=${r.total} conv=${r.convert.toFixed(1)} top8=${r.top8Rate.toFixed(1)}% top4=${r.top4Rate.toFixed(1)}% 冠=${r.champions} 亚=${r.runnersUp} pop=${r.popularity.toFixed(1)}%`)
   );
 // 与 colorStats 域对口径一致性:同一范围(Top 样本)下,传奇按颜色域归并后的 decks 数应等于域对 decks 数
 const legsSample = legendaryRows(result.uniqueSampleDecks, result.catalog, result.sampleSize);
@@ -88,33 +86,87 @@ for (const [key, n] of legByColors) {
   if (csPairs.get(key) === n) pairOk += 1;
   else pairMiss += 1;
 }
-console.log(`域对口径一致性(Top 样本 ${result.sampleSize} 套,${legByColors.size} 个域对): ${pairOk} 一致 / ${pairMiss} 不一致`);
+console.log(`域对口径一致性(Top 卡组 ${result.sampleSize} 套,${legByColors.size} 个域对): ${pairOk} 一致 / ${pairMiss} 不一致`);
 console.log('平均每套卡组传奇数:', (covered / result.totalDecks).toFixed(4));
 
-/* ── 贝叶斯收缩验证 ── */
-console.log('\n== 贝叶斯收缩 ==');
-const prior = envPriorWinRate(result.allDecks);
-console.log('环境先验胜率:', prior != null ? (prior * 100).toFixed(2) + '%' : 'null');
-// 纯函数断言
-const u1 = shrinkWinRate(9, 9, 0.5); // 100% → 73.68%
-const u2 = shrinkWinRate(100, 200, 0.5); // 50% 大样本 → ≈50.48%
-console.log(`shrinkWinRate(9/9, prior=0.5) = ${u1.toFixed(2)}% (期望 73.68%) | (100/200) = ${u2.toFixed(2)}% (期望 50.00%)`);
-if (Math.abs(u1 - 73.68) > 0.1 || Math.abs(u2 - 50.0) > 0.1) {
-  console.error('✗ 收缩公式校验失败');
+/* ── 转化综合分验证 ── */
+console.log('\n== 转化综合分 ==');
+const c1 = convertScore(50, 25, 5, 4); // 50*0.35+25*0.35+5*0.2+4*0.1 = 27.65
+console.log(`convertScore(50,25,5,4) = ${c1.toFixed(2)} (期望 27.65)`);
+if (Math.abs(c1 - 27.65) > 0.01) {
+  console.error('✗ 转化综合分公式校验失败');
   process.exitCode = 1;
 } else {
-  console.log('✓ 收缩公式校验通过');
+  console.log('✓ 转化综合分公式校验通过');
 }
-// 修正后胜率排行:小样本(影流之主 n=9)应被环境均值拉低
-const byWinAdj = sortLegendaryRows(legs, 'winRate');
-console.log('-- 按修正胜率 Top5 --');
-byWinAdj.slice(0, 5).forEach((r, i) =>
-  console.log(`#${i + 1} ${r.name}(${r.cardNo}) n=${r.total} 修正=${r.winRateAdj?.toFixed(1)}% 原始=${r.winRate?.toFixed(1)}% rounds=${r.rounds}`)
+// 转化口径不依赖 rank_data:冠军率/亚军率由名次直接转化
+const champOk = legs.every((r) => r.total <= 0 || r.championRate >= 0 && r.championRate <= 100);
+console.log(`冠军率范围(0-100): ${champOk ? '✓' : '✗'} | 冠军总次数: ${legs.reduce((s, r) => s + r.champions, 0)} | 亚军总次数: ${legs.reduce((s, r) => s + r.runnersUp, 0)}`);
+if (!champOk) process.exitCode = 1;
+// 默认 minSample=MIN_LEGEND_SAMPLE(10):低于门槛的传奇不应进任何榜单
+const defaultConvertTop = sortLegendaryRows(legs, 'convert');
+const smallRows = legs.filter((r) => r.total < MIN_LEGEND_SAMPLE && r.total > 0);
+const smallExcluded = smallRows.every((r) => !defaultConvertTop.some((t) => t.cardNo === r.cardNo));
+console.log(`默认榜单 minSample=${MIN_LEGEND_SAMPLE}:低于门槛的传奇 ${smallRows.length} 个${smallExcluded ? ' ✓ 全部排除' : ' ✗ 仍有进榜'}`);
+if (!smallExcluded) {
+  console.error('✗ 默认最小数量门槛未生效');
+  process.exitCode = 1;
+}
+
+/* ── 威尔逊区间验证(热度榜)── */
+console.log('\n== 威尔逊区间(热度榜)==');
+const w1 = wilsonLowerBound(50, 100); // p=50% n=100 → ≈0.4038
+const w2 = wilsonLowerBound(5, 100); // p=5% n=100 → ≈0.0215
+const w3 = wilsonLowerBound(100, 200); // p=50% n=200 → 应高于 w1(同占比、样本更大)
+console.log(
+  `wilson(50/100)=${(w1 * 100).toFixed(2)}% | wilson(5/100)=${(w2 * 100).toFixed(2)}% | wilson(100/200)=${(w3 * 100).toFixed(2)}%`
 );
-const shadow = legs.find((r) => r.cardNo === 'VEN-191');
-const shadowRank = byWinAdj.findIndex((r) => r.cardNo === 'VEN-191') + 1;
-console.log(`影流之主(VEN-191):原始#1 → 修正后第 ${shadowRank} 名(修正 ${shadow?.winRateAdj?.toFixed(1)}% / 原始 ${shadow?.winRate?.toFixed(1)}%)`);
-console.log('英雄榜(Tier)是否同步收缩:', result.heroes ? '(分析管线仍为原始口径,视图层 quickStats 已收缩)' : '');
+if (!(w3 > w1 && w1 > w2)) {
+  console.error('✗ 威尔逊性质校验失败(同占比样本更大应更高;低样本应被拉低)');
+  process.exitCode = 1;
+} else {
+  console.log('✓ 威尔逊性质校验通过');
+}
+console.log('-- 按威尔逊热度 Top5 --');
+sortLegendaryRows(legs, 'wilson')
+  .slice(0, 5)
+  .forEach((r, i) =>
+    console.log(`#${i + 1} ${r.name} n=${r.total} wilson=${r.wilson?.toFixed(2)}% pop=${r.popularity.toFixed(1)}%`)
+  );
+// 英雄热度同样换威尔逊:quickHeroRows 默认按威尔逊降序
+const heroRows = quickHeroRows(result.allDecks, result.totalDecks);
+console.log('-- 英雄热度 Top3(威尔逊排序)--');
+heroRows.slice(0, 3).forEach((r) =>
+  console.log(`${r.hero} n=${r.total} wilson=${r.wilson?.toFixed(2)}% pop=${r.popularity.toFixed(1)}%`)
+);
+
+/* ── 综合表现榜(metaScore)验证 ── */
+console.log('\n== 综合表现榜(metaScore = 转化综合分 × log10(数量+10) × 名次权重)==');
+const metaTop = sortLegendaryRows(legs, 'metaScore').slice(0, 5);
+metaTop.forEach((r, i) =>
+  console.log(
+    `#${i + 1} ${r.name} n=${r.total} meta=${r.metaScore?.toFixed(1)} conv=${r.convert.toFixed(1)} avgRank=${r.avgRank?.toFixed(1)} Rw=${r.rankWeight?.toFixed(2)} pop=${r.popularity.toFixed(1)}%`
+  )
+);
+const withRank = legs.filter((r) => r.rankWeight != null);
+const rwOk = withRank.every((r) => r.rankWeight! >= 0.5 - 1e-9 && r.rankWeight! <= 1.5 + 1e-9);
+const bestRank = withRank.reduce((a, b) =>
+  (a.avgRank ?? Infinity) < (b.avgRank ?? Infinity) ? a : b
+);
+const rwMin = Math.min(...withRank.map((r) => r.rankWeight!));
+const rwMax = Math.max(...withRank.map((r) => r.rankWeight!));
+console.log(
+  `名次权重范围 [${rwMin.toFixed(3)}, ${rwMax.toFixed(3)}] 界内 ${rwOk ? '✓' : '✗'} | 最优均名次 ${bestRank.name} avgRank=${bestRank.avgRank?.toFixed(1)} Rw=${bestRank.rankWeight?.toFixed(3)}`
+);
+if (!rwOk || bestRank.rankWeight! < 1) {
+  console.error('✗ 名次权重异常(应在 [0.5,1.5],最优名次 ≥ 1)');
+  process.exitCode = 1;
+}
+const metaSorted = metaTop.every(
+  (r, i) => i === 0 || (metaTop[i - 1]!.metaScore ?? 0) >= (r.metaScore ?? 0)
+);
+console.log(`metaScore 排序单调性: ${metaSorted ? '✓' : '✗'}`);
+if (!metaSorted) process.exitCode = 1;
 
 /* ── 同名+副标题 归并验证(多稀有度卡号)── */
 console.log('\n== 同名归并(规范键)==');
@@ -122,7 +174,7 @@ const mergedTotal = legs.reduce((s, r) => s + r.total, 0);
 const multiVariant = legs.filter((r) => r.variants > 1);
 console.log(`传奇种类(归并后):${legs.length} | 覆盖:${mergedTotal}/${result.totalDecks} | 多版本行:${multiVariant.length}`);
 const kx = legs.find((r) => r.name === '虚空之女');
-console.log(`虚空之女: cardNo=${kx?.cardNo} variants=${kx?.variants} n=${kx?.total} win=${kx?.winRate?.toFixed(1)}% (期望 variants=2, n=269)`);
+console.log(`虚空之女: cardNo=${kx?.cardNo} variants=${kx?.variants} n=${kx?.total} conv=${kx?.convert.toFixed(1)} (期望 variants=2, n=269)`);
 if (!kx || kx.variants !== 2 || kx.total !== 269) {
   console.error('✗ 虚空之女 归并失败(期望 variants=2, n=269)');
   process.exitCode = 1;
@@ -162,19 +214,19 @@ if (runeLeak > 0) process.exitCode = 1;
   if (mismatch > 0) process.exitCode = 1;
 }
 
-/* ── 冠军转化 + 头条综合分验证 ── */
-console.log('\n== 头条候选(转化综合分 = Top8×60% + 冠军×40%)==');
-const minSample = Math.max(5, Math.floor(result.totalDecks * 0.02));
+/* ── 头条候选(转化综合分)验证 ── */
+console.log('\n== 头条候选(转化综合分 = Top8率35% + Top4率35% + 冠军率20% + 亚军率10%)==');
+const minSample = Math.max(10, Math.floor(result.totalDecks * 0.02));
 const leadTop = sortLeadCandidates(legs, minSample).slice(0, 3);
 leadTop.forEach((r, i) =>
   console.log(
-    `#${i + 1} ${r.name}(${r.cardNo}) n=${r.total} top8=${r.top8Rate.toFixed(1)}% 冠军=${r.champions}次(${r.championRate.toFixed(1)}%) score=${leadCompositeScore(r).toFixed(2)}`
+    `#${i + 1} ${r.name}(${r.cardNo}) n=${r.total} conv=${r.convert.toFixed(2)} top8=${r.top8Rate.toFixed(1)}% top4=${r.top4Rate.toFixed(1)}% 冠=${r.champions}次(${r.championRate.toFixed(1)}%) 亚=${r.runnersUp}次(${r.runnerUpRate.toFixed(1)}%)`
   )
 );
 const scoreOk = leadTop.every(
-  (r, i) => i === 0 || leadCompositeScore(leadTop[i - 1]!) >= leadCompositeScore(r)
+  (r, i) => i === 0 || leadTop[i - 1]!.convert >= r.convert
 );
-console.log(`综合分单调性: ${scoreOk ? '✓' : '✗'} | 最小样本门槛: ${minSample}`);
+console.log(`转化综合分单调性: ${scoreOk ? '✓' : '✗'} | 最小数量门槛: ${minSample}`);
 if (!scoreOk || leadTop.length === 0) process.exitCode = 1;
 
 /* ── 周环比引擎验证(包内按周分组,后两周对比)── */
@@ -192,15 +244,15 @@ const [prevL, currL] = weekLabels.slice(-2);
 const prevDecks = byWeek.get(prevL)!;
 const currDecks = byWeek.get(currL)!;
 
-const prevHeroes = quickHeroRows(prevDecks, prevDecks.length, result.hasWinData);
-const currHeroes = quickHeroRows(currDecks, currDecks.length, result.hasWinData);
+const prevHeroes = quickHeroRows(prevDecks, prevDecks.length);
+const currHeroes = quickHeroRows(currDecks, currDecks.length);
 const popItems = deltasFromRows(
   prevHeroes.map((r) => ({ key: r.hero, value: r.popularity, sample: r.total })),
   currHeroes.map((r) => ({ key: r.hero, value: r.popularity, sample: r.total }))
 );
-const winItems = deltasFromRows(
-  prevHeroes.map((r) => ({ key: r.hero, value: r.winRate ?? r.top8Rate, sample: r.total })),
-  currHeroes.map((r) => ({ key: r.hero, value: r.winRate ?? r.top8Rate, sample: r.total }))
+const convertItems = deltasFromRows(
+  prevHeroes.map((r) => ({ key: r.hero, value: r.convert, sample: r.total })),
+  currHeroes.map((r) => ({ key: r.hero, value: r.convert, sample: r.total }))
 );
 console.log(`对比期间:${prevL}(${prevDecks.length} 套) → ${currL}(${currDecks.length} 套)`);
 console.log('-- 热度上升 Top4 --');
@@ -211,24 +263,22 @@ console.log('-- 热度下降 Top4 --');
 movers(popItems, { direction: 'down', topN: 4 }).forEach((it) =>
   console.log(`▼ ${it.key}: ${it.prev?.toFixed(1)}% → ${it.curr?.toFixed(1)}% (Δ${it.delta?.toFixed(1)}pp, 名次 ${it.prevRank}→${it.currRank})`)
 );
-console.log('-- 胜率变化 Top3 --');
-movers(winItems, { topN: 3 }).forEach((it) =>
-  console.log(`${it.delta! > 0 ? '▲' : '▼'} ${it.key}: 胜率 ${it.prev?.toFixed(1)}% → ${it.curr?.toFixed(1)}% (Δ${it.delta?.toFixed(1)}pp)`)
+console.log('-- 转化变化 Top3 --');
+movers(convertItems, { topN: 3 }).forEach((it) =>
+  console.log(`${it.delta! > 0 ? '▲' : '▼'} ${it.key}: 转化 ${it.prev?.toFixed(1)} → ${it.curr?.toFixed(1)} (Δ${it.delta?.toFixed(1)})`)
 );
-const envPrev = envPriorWinRate(prevDecks);
-const envCurr = envPriorWinRate(currDecks);
 const hhiPrev = hhi(prevHeroes.map((r) => ({ rate: r.popularity })));
 const hhiCurr = hhi(currHeroes.map((r) => ({ rate: r.popularity })));
-console.log(`环境胜率:${envPrev != null ? (envPrev * 100).toFixed(1) : '—'}% → ${envCurr != null ? (envCurr * 100).toFixed(1) : '—'}% | HHI:${hhiPrev.toFixed(0)} → ${hhiCurr.toFixed(0)}`);
+console.log(`HHI:${hhiPrev.toFixed(0)} → ${hhiCurr.toFixed(0)}`);
 
 /* ── 周报引擎 + Markdown 验证 ── */
 console.log('\n== 周报引擎(buildWeeklyReport)==');
-const rep = buildWeeklyReport(result.allDecks, result.hasWinData, result.catalog);
+const rep = buildWeeklyReport(result.allDecks, result.catalog);
 if (!rep) {
   console.error('✗ 周报引擎返回 null(周次不足)');
   process.exitCode = 1;
 } else {
-  console.log(`期间:${rep.prevLabel} → ${rep.currLabel} | 样本 ${rep.prevSample}→${rep.currSample} | 环境胜率 ${rep.envDelta != null ? rep.envDelta.toFixed(1) + 'pp' : '—'} | HHI ${rep.hhiCurr.toFixed(0)}`);
+  console.log(`期间:${rep.prevLabel} → ${rep.currLabel} | 数量 ${rep.prevSample}→${rep.currSample} | HHI ${rep.hhiCurr.toFixed(0)}`);
   console.log('时间线周次:', rep.weeks.map((w) => w.label).join(' | '));
   console.log('Top 时间线英雄:', rep.heroTimeline.slice(0, 3).map((h) => `${h.hero}[${h.pickRates.map((v) => (v == null ? '—' : v.toFixed(1))).join(',')}]`).join(' '));
   console.log('传奇 movers Top3:', rep.legMovers.slice(0, 3).map((it) => `${it.key}${it.delta! > 0 ? '+' : ''}${it.delta?.toFixed(1)}pp`).join(' | '));
@@ -240,10 +290,11 @@ if (!rep) {
   console.log(mdLines.slice(0, 14).join('\n'));
   const checks: [string, boolean][] = [
     [`标题含当期周次 ${rep.currLabel}`, md.includes(`# 符文战场 Meta 报告 · ${rep.currLabel}`)],
-    ['含热度上升榜', md.includes('## 🔥 热度上升')],
-    ['含胜率变化榜', md.includes('## 📊 胜率变化')],
-    ['含传奇热度', md.includes('## ⚔️ 传奇热度')],
-    ['含域对热度', md.includes('## 🎨 域对热度')],
+    ['含热度上升榜', md.includes('## 热度上升')],
+    ['含转化变化榜', md.includes('## 转化变化')],
+    ['含传奇热度', md.includes('## 传奇热度')],
+    ['含域对热度', md.includes('## 域对热度')],
+    ['不含任何胜率字样', !md.includes('胜率')],
     ['含免责声明', md.includes('Riot Games 与本工具无关')]
   ];
   let ok = true;

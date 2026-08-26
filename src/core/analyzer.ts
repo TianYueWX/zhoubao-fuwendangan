@@ -15,7 +15,6 @@ import type {
   AnalysisResult,
   CardCatalog,
   Deck,
-  DeckCacheData,
   RankRow,
   RawCardBaseRow,
   RawCardPrintRow,
@@ -49,7 +48,6 @@ export interface AnalyzeInput {
   /** 增强数据源(可选) */
   rankRows?: readonly RankRow[];
   shopRows?: readonly ShopRow[];
-  cacheData?: DeckCacheData;
 }
 
 /* ============================================================
@@ -74,31 +72,27 @@ export function runAnalysis(input: AnalyzeInput): AnalysisResult {
   // 0) 增强数据源索引
   const joinShopIndex = buildShopIndex(input.shopRows);
 
-  // 1) 数据归一化(列名识别 + 城市(shop 优先) + 周次聚类 + TTS_code 解析)
+  // 1) 卡牌目录 cross-ref(card_base × card_prints)
+  const catalog = buildCardCatalog(input.baseRows, input.printRows);
+
+  // 2) 数据归一化(列名识别 + 城市(shop 优先) + 周次聚类 + TTS_code 解析 + 区域标注)
   const normalized = normalizeDecks(input.deckRows, {
+    catalog,
     cityOverrides: input.cityOverrides ?? new Map<string, string>(),
     weekMode: opts.weekMode,
     rollingGapDays: opts.rollingGapDays,
     shopIndex: joinShopIndex
   });
 
-  // 2) 真实胜场关联(rank_data)
+  // 3) 真实胜场关联(rank_data)
   const winMatchedDecks = attachWinData(normalized.decks, input.rankRows);
   const hasWinData = winMatchedDecks > 0;
 
-  // 3) 卡牌目录 cross-ref(含 cache 卡图补充)
-  const catalog = buildCardCatalog(input.baseRows, input.printRows, input.cacheData);
-
-  let imageCount = 0;
-  for (const [id] of catalog.cardImg) {
-    if (catalog.byId.has(id)) imageCount++;
-  }
-
-  // 4) 英雄统计(含真实胜率)+ Tier 分级
+  // 4) 英雄统计 + Tier 分级(名次转化口径:Top8/Top4/冠军/亚军,不依赖胜率)
   const heroes = computeHeroStats(normalized.decks, catalog, normalized.weeks, {
     topThreshold: opts.topThreshold
   });
-  computeTiers(heroes, { hasWinData });
+  computeTiers(heroes);
 
   // 5) 收集所有英雄的 Top 卡组并去重
   const topDecksBag: Deck[] = [];
@@ -149,7 +143,6 @@ export function runAnalysis(input: AnalyzeInput): AnalysisResult {
     hasWinData,
     winMatchedDecks,
     shopMatchedEvents: events.filter((e) => e.shopName).length,
-    imageCount,
     colorStats
   };
 }

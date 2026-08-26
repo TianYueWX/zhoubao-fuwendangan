@@ -3,10 +3,10 @@
  * OverviewView.vue · Meta 总览 ——「头版」
  *
  * 本期聚焦(玩家叙事):
- *   - 头条(Lead Story):本期最佳传奇,按转化综合分(Top8 率×60% + 冠军率×40%)
- *     选取,大号衬线标题 + 导语 + 卡图照片,点击下钻传奇对比
- *   - 报眼:KPI 数据行(样本 / 赛事 / 英雄 / 环境胜率)
- *   - 多栏版面:英雄 Tier List │ 传奇域对分布(栏间竖细线)
+ *   - 传奇综合表现榜(metaScore = 转化综合分 × log₁₀(数量+10) × 名次权重),
+ *     卡片点击下钻传奇构筑页
+ *   - 报眼:KPI 数据行(数量 / 赛事 / 英雄 / Top4 转化)
+ *   - 多栏版面:英雄 Tier List │ 传奇对分布(栏间竖细线)
  *   - 全宽:环境阶梯散点(热度 × 强度)
  * 趋势对比(创作者叙事):环比 Δ、升降榜、周际时间线、一键复制 Markdown
  * 数据范围由全局「周次」筛选决定(默认最新一周),文案统一用「本期」。
@@ -18,16 +18,12 @@ import StatCard from '@/components/StatCard.vue';
 import TierBadge from '@/components/TierBadge.vue';
 import DeltaBadge from '@/components/DeltaBadge.vue';
 import SectionHeading from '@/components/SectionHeading.vue';
-import RuneSeal from '@/components/RuneSeal.vue';
 import CardThumb from '@/components/CardThumb.vue';
-import { quickHeroRows, buildWeeklyReport, legendaryRows, sortLeadCandidates } from '@/core';
+import { quickHeroRows, buildWeeklyReport, legendaryRows, sortLegendaryRows, MIN_LEGEND_SAMPLE } from '@/core';
 import type { DeltaItem } from '@/core';
 import type { LegendaryRow } from '@/core/legendaryStats';
 import { reportToMarkdown } from '@/utils/reportMarkdown';
 import { CHART_PALETTE } from '@/utils/palette';
-import { CARD_COLOR_HEX } from '@/utils/palette';
-import { CARD_COLOR_LABELS } from '@/types';
-import type { CardColor } from '@/types';
 
 /* ── 双叙事切换:本期聚焦 / 趋势对比 ── */
 const narrative = ref<'focus' | 'report'>('focus');
@@ -39,50 +35,51 @@ const filteredDecks = computed(() =>
 
 const heroRows = computed(() => {
   if (!store.result) return [];
-  return quickHeroRows(filteredDecks.value, store.result.totalDecks, store.result.hasWinData);
+  return quickHeroRows(filteredDecks.value, store.result.totalDecks);
 });
 
-const tierOrder = { S: 0, A: 1, B: 2, C: 3 } as const;
+const tierOrder = { S: 0, A: 1, B: 2, C: 3, null: 4 } as const;
 
+/** 英雄 Tier List:全量展示(样本数量不限),按 Tier → 综合分 → 数量排序 */
 const tierRows = computed(() => {
-  const withTier = heroRows.value.filter((r) => r.tier);
-  return withTier.sort(
+  const rows = heroRows.value.slice();
+  return rows.sort(
     (a, b) =>
-      tierOrder[a.tier as keyof typeof tierOrder] -
-        tierOrder[b.tier as keyof typeof tierOrder] ||
-      b.tierScore! - a.tierScore!
+      tierOrder[(a.tier ?? 'null') as keyof typeof tierOrder] -
+      tierOrder[(b.tier ?? 'null') as keyof typeof tierOrder] ||
+      (b.tierScore ?? -1) - (a.tierScore ?? -1) ||
+      b.total - a.total
   );
 });
 
-/* ── 头条:本期最佳传奇(转化综合分 = Top8 率×60% + 冠军率×40%,不看胜率) ── */
-const leadStory = computed<LegendaryRow | null>(() => {
+/* ── 传奇综合表现榜(metaScore = 转化综合分 × log10(数量+10) × 名次权重) ──
+ * 转化只代表「强」;乘上对数热度(又主流)与名次权重(又稳定)才是 T0 定义。
+ * 名次权重 R_weight:平均名次越好越高(0.5~1.5,按全榜百分位归一化)。
+ */
+const metaMinSample = computed(() => {
+  const n = filteredDecks.value.length;
+  return Math.max(MIN_LEGEND_SAMPLE, Math.floor(n * 0.02));
+});
+const metaTop = computed<LegendaryRow[]>(() => {
   const r = store.result;
-  if (!r || filteredDecks.value.length === 0) return null;
-  const minSample = Math.max(5, Math.floor(filteredDecks.value.length * 0.02));
-  const rows = sortLeadCandidates(
+  if (!r || filteredDecks.value.length === 0) return [];
+  return sortLegendaryRows(
     legendaryRows(filteredDecks.value, r.catalog, r.totalDecks),
-    minSample
-  );
-  return rows[0] ?? null;
+    'metaScore',
+    metaMinSample.value
+  ).slice(0, 10);
 });
+const avgRankText = (r: LegendaryRow): string => (r.avgRank != null ? r.avgRank.toFixed(1) : '—');
 
-const leadHeadline = computed(() => {
-  const l = leadStory.value;
-  if (!l) return '';
-  return `${l.name} 领跑本期传奇强度榜`;
-});
+/** 传奇展示名:hero + legend name(如「易 无极剑圣」);无英雄数据时退回传奇卡名 */
+function heroLegendName(r: LegendaryRow): string {
+  return r.topHero && r.topHero !== '—' ? r.topHero : r.name;
+}
 
-const leadStandfirst = computed(() => {
-  const l = leadStory.value;
-  if (!l) return '';
-  let s = `本期共收录 ${filteredDecks.value.length} 套卡组、${new Set(filteredDecks.value.map((d) => d.activityName)).size} 场赛事。${l.name} 出现在其中 ${l.total} 套(出场率 ${l.popularity.toFixed(1)}%),打进 Top8 ${l.top8} 次(Top8 转化 ${l.top8Rate.toFixed(1)}%)、夺冠 ${l.champions} 次(冠军转化 ${l.championRate.toFixed(1)}%)`;
-  if (l.topHero && l.topHero !== '—') {
-    s += `,最常与 ${l.topHero} 搭档(${l.topHeroRate.toFixed(0)}%)`;
-  }
-  return s + '。点击头条或右侧卡片,查看该传奇的全部构筑对比。';
-});
-
-function gotoLegendary(): void {
+/** 下钻传奇/英雄融合页:以传奇最常见的搭档英雄为焦点,进入「构筑」页签 */
+function gotoLegendary(row?: LegendaryRow): void {
+  const l = row;
+  if (l && l.topHero && l.topHero !== '—') store.focusHero = l.topHero;
   store.currentView = 'legendary';
 }
 
@@ -90,7 +87,7 @@ function gotoLegendary(): void {
 const report = computed(() => {
   const r = store.result;
   if (!r) return null;
-  return buildWeeklyReport(r.allDecks, r.hasWinData, r.catalog);
+  return buildWeeklyReport(r.allDecks, r.catalog);
 });
 
 /** 周际热度线图(MetaTimeline) */
@@ -139,40 +136,33 @@ const kpis = computed(() => {
   const r = store.result;
   const decks = filteredDecks.value;
   const events = new Set(decks.map((d) => d.activityName)).size;
-  let winsSum = 0;
-  let roundsSum = 0;
-  for (const d of decks) {
-    if (d.wins !== null && d.eventRounds !== null && d.eventRounds > 0) {
-      winsSum += d.wins;
-      roundsSum += d.eventRounds;
-    }
-  }
   return [
-    { label: '卡组样本', value: decks.length, sub: `全量 ${r?.totalDecks ?? 0}` },
+    { label: '卡组数量', value: decks.length, sub: `全量 ${r?.totalDecks ?? 0}` },
     { label: '赛事数', value: events, sub: r?.events.length ? `数据包 ${r.events.length} 场` : '' },
     { label: '英雄数', value: heroRows.value.length, sub: '' },
     {
-      label: '环境平均胜率',
-      value:
-        roundsSum > 0 ? `${((winsSum / roundsSum) * 100).toFixed(1)}%` : '—',
-      sub: roundsSum > 0 ? `${Math.round(roundsSum / Math.max(events, 1))} 轮/赛事均值` : '导入 rank_data 后可用'
+      label: 'Top4 转化',
+      value: heroRows.value.length > 0
+        ? `${(heroRows.value.reduce((s, x) => s + x.top4, 0) / Math.max(1, heroRows.value.reduce((s, x) => s + x.total, 0)) * 100).toFixed(1)}%`
+        : '—',
+      sub: '全环境 Top4 卡组占比'
     }
   ];
 });
 
-/* ── 散点:出场率 × 胜率 ── */
+/* ── 散点:出场率 × 转化综合分 ── */
 const scatterOption = computed(() => {
   const rows = heroRows.value.filter((r) => r.popularity >= 0.5);
   if (rows.length === 0) return null;
-  const hasWin = rows.some((r) => r.winRate !== null);
 
   const points = rows.map((r) => ({
-    value: [Number(r.popularity.toFixed(2)), Number((r.winRate ?? r.top8Rate).toFixed(2))] as [number, number],
+    value: [Number(r.popularity.toFixed(2)), Number(r.convert.toFixed(2))] as [number, number],
     name: r.hero,
     tier: r.tier,
     total: r.total,
     top8Rate: Number(r.top8Rate.toFixed(1)),
-    realWin: r.winRate !== null
+    top4Rate: Number(r.top4Rate.toFixed(1)),
+    convert: Number(r.convert.toFixed(1))
   }));
 
   const meanX = points.reduce((s, p) => s + (p.value[0] ?? 0), 0) / points.length;
@@ -190,8 +180,8 @@ const scatterOption = computed(() => {
     },
     yAxis: {
       type: 'value',
-      name: hasWin ? '真实胜率 %' : 'Top8 率 %(未导入胜场)',
-      axisLabel: { formatter: '{value}%' }
+      name: '转化综合分',
+      axisLabel: { formatter: '{value}' }
     },
     series: [
       {
@@ -208,7 +198,7 @@ const scatterOption = computed(() => {
         itemStyle: {
           color: (p: { data: { tier: string | null } }) =>
             ({ S: '#b23a27', A: '#c59b46', B: '#3b4a5a', C: '#94a3b8' })[
-              p.data.tier ?? ''
+            p.data.tier ?? ''
             ] ?? '#94a3b8'
         }
       },
@@ -229,47 +219,55 @@ const scatterOption = computed(() => {
     ],
     tooltip: {
       confine: true,
-      formatter: (p: { data: { name: string; total: number; value: number[]; top8Rate: number; realWin: boolean; tier: string | null } }) =>
+      formatter: (p: { data: { name: string; total: number; value: number[]; top8Rate: number; top4Rate: number; convert: number; tier: string | null } }) =>
         `<b>${p.data.name}</b>${p.data.tier ? ` · Tier ${p.data.tier}` : ''}<br/>` +
-        `样本:${p.data.total}<br/>` +
+        `数量:${p.data.total}<br/>` +
         `出场率:${p.data.value[0]}%<br/>` +
-        (p.data.realWin
-          ? `真实胜率:${p.data.value[1]}%<br/>`
-          : `Top8 率:${p.data.top8Rate}%<br/>(未导入胜场数据)`) +
+        `转化综合分:${p.data.convert}<br/>` +
+        `Top8 率:${p.data.top8Rate}% · Top4 率:${p.data.top4Rate}%<br/>` +
         `<span style="color:#94a3b8">点击查看英雄拆解</span>`
     }
   };
 });
 
-/* ── 域对环图 ── */
-function pairColor(colors: readonly CardColor[]): string {
-  const first = colors[0];
-  if (colors.length === 0 || !first) return '#94a3b8';
-  if (colors.length === 1) return CARD_COLOR_HEX[first] ?? '#94a3b8';
-  const second = colors[1] ?? first;
-  return mixHex(CARD_COLOR_HEX[first] ?? '#94a3b8', CARD_COLOR_HEX[second] ?? '#94a3b8');
-}
-
-function hexToRgb(h: string): [number, number, number] {
-  const v = h.replace('#', '');
-  return [
-    parseInt(v.slice(0, 2), 16) || 0,
-    parseInt(v.slice(2, 4), 16) || 0,
-    parseInt(v.slice(4, 6), 16) || 0
-  ];
-}
-
-function mixHex(a: string, b: string): string {
-  const ra = hexToRgb(a);
-  const rb = hexToRgb(b);
-  const mix = ra.map((v, i) => Math.round((v + (rb[i] ?? v)) / 2));
-  return `#${mix.map((v) => v.toString(16).padStart(2, '0')).join('')}`;
-}
-
-const pairOption = computed(() => {
-  const cs = store.result?.colorStats;
-  if (!cs || cs.pairs.length === 0) return null;
-  const top = cs.pairs.slice(0, 12);
+/* ── 传奇对分布饼图(ECharts 纯色实心饼;尾部累计 20% 合并为 others;外侧标签) ── */
+const LEGEND_OTHERS_TAIL = 0.2;
+const legDistOption = computed(() => {
+  const r = store.result;
+  if (!r || filteredDecks.value.length === 0) return null;
+  const rows = legendaryRows(filteredDecks.value, r.catalog, r.totalDecks);
+  if (rows.length === 0) return null;
+  // 尾部长尾截断:从最小传奇向前累计,合计达到总数 20% 的部分归 others(饼图保留头部 80%)
+  const tailTarget = filteredDecks.value.length * LEGEND_OTHERS_TAIL;
+  let tailSum = 0;
+  let tailCount = 0;
+  for (let i = rows.length - 1; i >= 0; i--) {
+    tailSum += rows[i]!.total;
+    tailCount += 1;
+    if (tailSum >= tailTarget) break;
+  }
+  let keep = rows.slice(0, rows.length - tailCount);
+  let others = tailSum;
+  if (keep.length === 0 && rows.length > 0) {
+    // 保护:极端数据下至少保留一个头部传奇,others 不吃掉全部
+    keep = [rows[0]!];
+    others = tailSum - rows[0]!.total;
+  }
+  const data: Array<{
+    name: string;
+    value: number;
+    decks: number;
+    itemStyle: { color: string };
+  }> = keep.map((x, i) => ({
+    // 展示名统一为 hero + legend name(如「易 无极剑圣」)
+    name: heroLegendName(x),
+    value: x.total,
+    decks: x.total,
+    itemStyle: { color: CHART_PALETTE[i % CHART_PALETTE.length] ?? '#6366f1' }
+  }));
+  if (others > 0) {
+    data.push({ name: 'others', value: others, decks: others, itemStyle: { color: '#94a3b8' } });
+  }
   return {
     tooltip: {
       confine: true,
@@ -280,114 +278,108 @@ const pairOption = computed(() => {
     series: [
       {
         type: 'pie',
-        radius: ['52%', '78%'],
+        radius: '62%',
         center: ['50%', '52%'],
-        itemStyle: { borderRadius: 6, borderColor: 'transparent', borderWidth: 2 },
-        label: { show: true, position: 'outside', fontSize: 11, color: '#94a3b8' },
-        data: top.map((p) => ({
-          name: p.label,
-          value: p.decks,
-          decks: p.decks,
-          itemStyle: { color: pairColor(p.colors), type: 'linear' }
-        }))
+        itemStyle: { borderRadius: 5, borderColor: '#f4f1ea', borderWidth: 2 },
+        label: {
+          show: true,
+          position: 'outside',
+          fontSize: 11,
+          color: '#3b4a5a',
+          formatter: (p: { name: string; percent: number }) => `${p.name} ${p.percent}%`
+        },
+        labelLine: { length: 12, length2: 8, lineStyle: { color: '#b9b3a8' } },
+        data
       }
     ]
   };
 });
 
-/* ── 下钻 ── */
+/** 饼图点击 → 下钻传奇构筑页(others 不响应) */
+function onLegPieClick(p: { name?: string }): void {
+  if (!p.name || p.name === 'others') return;
+  const r = store.result;
+  if (!r) return;
+  const row = legendaryRows(filteredDecks.value, r.catalog, r.totalDecks).find(
+    (x) => (x.topHero && x.topHero !== '—' ? x.topHero : x.name) === p.name
+  );
+  if (row) gotoLegendary(row);
+}
+
+/* ── 下钻:英雄/传奇融合页(构筑视角,统一走传奇栏目) ── */
 function gotoHero(hero: string): void {
   store.focusHero = hero;
-  store.currentView = 'heroes';
+  store.currentView = 'legendary';
 }
 </script>
-
 <template>
   <div class="fade-in space-y-10">
     <!-- 双叙事切换 -->
     <div class="flex items-center justify-between gap-3 flex-wrap">
       <div class="inline-flex items-center gap-1 text-sm" role="tablist" aria-label="叙事切换">
-        <button
-          role="tab"
-          :aria-selected="narrative === 'focus'"
-          class="px-3 py-1.5 rounded-lg transition-colors"
+        <button role="tab" :aria-selected="narrative === 'focus'" class="px-3 py-1.5 rounded-lg transition-colors"
           :class="narrative === 'focus' ? 'bg-brand text-brand-ink font-semibold' : 'text-ink-muted hover:bg-brand-soft'"
-          @click="narrative = 'focus'"
-        >
+          @click="narrative = 'focus'">
           本期聚焦
         </button>
-        <button
-          role="tab"
-          :aria-selected="narrative === 'report'"
-          class="px-3 py-1.5 rounded-lg transition-colors"
+        <button role="tab" :aria-selected="narrative === 'report'" class="px-3 py-1.5 rounded-lg transition-colors"
           :class="narrative === 'report' ? 'bg-brand text-brand-ink font-semibold' : 'text-ink-muted hover:bg-brand-soft'"
-          @click="narrative = 'report'"
-        >
+          @click="narrative = 'report'">
           趋势对比
         </button>
       </div>
       <div class="flex items-center gap-3 flex-wrap">
-        <span
-          v-if="report && narrative === 'report'"
-          class="text-[11px] text-ink-faint tabular-nums"
-        >
+        <span v-if="report && narrative === 'report'" class="text-[11px] text-ink-faint tabular-nums">
           对比 {{ report.prevLabel }} → {{ report.currLabel }}(数据包内按周分组 · 始终跨全量数据计算,不受周次筛选影响)
         </span>
-        <button
-          v-if="report && narrative === 'report'"
-          @click="copyReport"
-          class="btn-ghost px-3 py-1.5 text-xs font-medium"
-        >
-          {{ copied ? "✅ 已复制" : "📋 复制趋势报告 Markdown" }}
+        <button v-if="report && narrative === 'report'" @click="copyReport"
+          class="btn-ghost px-3 py-1.5 text-xs font-medium">
+          {{ copied ? "已复制" : "复制趋势报告 Markdown" }}
         </button>
       </div>
     </div>
 
     <!-- ══════════ 头版(本期聚焦) ══════════ -->
     <template v-if="narrative === 'focus'">
-      <!-- 头条 + 报眼 -->
+      <!-- 传奇综合表现榜 + 报眼 -->
       <section class="grid grid-cols-1 xl:grid-cols-3 gap-8">
-        <!-- 头条 Lead Story -->
-        <article
-          v-if="leadStory"
-          class="xl:col-span-2 cursor-pointer group min-w-0"
-          @click="gotoLegendary"
-        >
-          <p class="eyebrow mb-2">本期头条 · Lead Story</p>
-          <h2 class="headline-xl text-[30px] md:text-[40px] text-ink group-hover:text-brand transition-colors">
-            {{ leadHeadline }}
-          </h2>
-          <p class="standfirst mt-4 max-w-[62ch]">{{ leadStandfirst }}</p>
-          <div class="mt-5 flex items-end gap-5 flex-wrap">
-            <CardThumb
-              :id="leadStory.cardNo"
-              :name="leadStory.name"
-              :catalog="store.result!.catalog"
-              size="lg"
-              :show-name="false"
-            />
-            <div class="text-xs text-ink-faint leading-relaxed pb-1">
-              <p class="flex items-center gap-2 mb-1">
-                <RuneSeal v-for="c in leadStory.colors" :key="c" :size="10" :only="c" />
-                <span class="font-display text-sm font-bold text-ink-muted">{{ leadStory.name }}</span>
-                <span class="font-mono">{{ leadStory.cardNo }}</span>
-                <span v-if="leadStory.variants > 1">×{{ leadStory.variants }} 版本</span>
-              </p>
-              <p class="tabular-nums">
-                样本 {{ leadStory.total }} · Top8 转化 {{ leadStory.top8Rate.toFixed(1) }}%
-                · 夺冠 {{ leadStory.champions }} 次({{ leadStory.championRate.toFixed(1) }}%)
-              </p>
-              <p class="text-brand mt-1">→ 前往「传奇」栏目对比全部构筑</p>
-            </div>
+        <!-- 传奇综合表现榜(metaScore = 转化综合分 × log₁₀(数量+10) × 名次权重) -->
+        <div class="xl:col-span-2 min-w-0">
+          <SectionHeading eyebrow="第二版 · 综合表现" title="传奇综合表现榜"
+            :note="`综合分 = 转化综合分 × log₁₀(数量+10) × 名次权重 —— 又强、又主流、又稳定才是 T0 · 数量≥${metaMinSample}`" />
+          <div v-if="metaTop.length > 0" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-3">
+            <button v-for="(r, i) in metaTop" :key="r.cardNo"
+              class="group rounded-xl border border-panel-border bg-panel-bg p-3 text-left transition-colors hover:border-brand-faint"
+              @click="gotoLegendary(r)">
+              <div class="flex items-center gap-2.5">
+                <span
+                  class="shrink-0 w-6 h-6 rounded-md flex items-center justify-center font-display font-bold text-xs tabular-nums"
+                  :class="i === 0 ? 'bg-brand-soft text-brand' : 'bg-[rgba(59,74,90,0.1)] text-ink-faint'">
+                  {{ i + 1 }}
+                </span>
+                <CardThumb :id="r.cardNo" :name="r.name" :catalog="store.result!.catalog" size="sm"
+                  :show-name="false" />
+                <div class="min-w-0">
+                  <p class="font-display text-sm font-bold text-ink truncate">{{ heroLegendName(r) }}</p>
+                  <p class="text-[10px] text-ink-faint tabular-nums">
+                    数量 {{ r.total }} · 均名次 {{ avgRankText(r) }}
+                  </p>
+                </div>
+              </div>
+              <div class="mt-2 flex items-end justify-between gap-2">
+                <span class="font-display font-bold text-lg text-brand tabular-nums leading-none">
+                  {{ r.metaScore?.toFixed(0) }}
+                </span>
+                <span class="text-[10px] text-ink-faint tabular-nums">
+                  转化 {{ r.convert.toFixed(1) }}
+                </span>
+              </div>
+            </button>
           </div>
-        </article>
-        <article v-else class="xl:col-span-2">
-          <p class="eyebrow mb-2">本期头条 · Lead Story</p>
-          <h2 class="headline-xl text-[30px] md:text-[38px] text-ink-faint">等待数据上架</h2>
-          <p class="standfirst mt-4 max-w-[52ch]">
-            前往「数据」栏目上传三个必需文件,或一键加载内置预设包,头条将自动生成。
-          </p>
-        </article>
+          <div v-else class="py-12 text-center text-ink-faint text-sm">
+            暂无足够数据生成综合表现榜(数量≥{{ metaMinSample }})
+          </div>
+        </div>
 
         <!-- 报眼:KPI 数据行 -->
         <aside class="xl:border-l xl:border-panel-border xl:pl-8">
@@ -406,52 +398,51 @@ function gotoHero(hero: string): void {
 
       <div class="hairline"></div>
 
-      <!-- 多栏:Tier List │ 域对分布 -->
+      <!-- 多栏:Tier List │ 传奇对分布 -->
       <section class="grid grid-cols-1 xl:grid-cols-5 gap-8 xl:divide-x xl:divide-panel-border">
         <div class="xl:col-span-3 xl:pr-8 min-w-0">
-          <SectionHeading
-            eyebrow="第二版 · 强弱榜"
-            title="英雄 Tier List"
-            :note="`综合分 = 胜率55% + Top8率20% + 出场率25%,点击行下钻英雄拆解 · ${
-              store.result?.hasWinData ? '基于真实胜场 · 样本≥15' : '未导入胜场 · 按 Top8+热度评级'
-            }`"
-          />
+          <SectionHeading eyebrow="第二版 · 强弱榜" title="传奇 Tier List"
+            :note="`综合分 = Top8率35% + Top4率35% + 冠军率20% + 亚军率10% · 全量展示不限数量 · 点击行下钻英雄拆解`" />
           <div class="overflow-x-auto max-h-[430px] overflow-y-auto">
             <table class="w-full text-sm">
               <thead class="sticky-thead">
                 <tr class="text-ink-faint border-b border-panel-border text-xs">
                   <th class="py-2 px-2 text-left">Tier</th>
                   <th class="py-2 px-2 text-left">英雄</th>
-                  <th class="py-2 px-2 text-right">样本</th>
+                  <th class="py-2 px-2 text-right">数量</th>
                   <th class="py-2 px-2 text-right">出场率</th>
-                  <th class="py-2 px-2 text-right">
-                    {{ store.result?.hasWinData ? '真实胜率' : 'Top8 率' }}
-                  </th>
+                  <th class="py-2 px-2 text-right">Top8 率</th>
+                  <th class="py-2 px-2 text-right">Top4 率</th>
+                  <th class="py-2 px-2 text-right">冠军</th>
+                  <th class="py-2 px-2 text-right">亚军</th>
                   <th class="py-2 px-2 text-right">评分</th>
                 </tr>
               </thead>
               <tbody>
-                <tr
-                  v-for="r in tierRows"
-                  :key="r.hero"
-                  class="table-row border-b border-[rgba(59,74,90,0.08)] cursor-pointer"
-                  @click="gotoHero(r.hero)"
-                >
-                  <td class="py-1.5 px-2"><TierBadge :tier="r.tier" size="sm" /></td>
+                <tr v-for="r in tierRows" :key="r.hero"
+                  class="table-row border-b border-[rgba(59,74,90,0.08)] cursor-pointer" @click="gotoHero(r.hero)">
+                  <td class="py-1.5 px-2">
+                    <TierBadge :tier="r.tier" size="sm" />
+                  </td>
                   <td class="py-1.5 px-2 font-medium text-ink-muted">{{ r.hero }}</td>
                   <td class="py-1.5 px-2 text-right tabular-nums">{{ r.total }}</td>
                   <td class="py-1.5 px-2 text-right tabular-nums">{{ r.popularity.toFixed(1) }}%</td>
-                  <td
-                    class="py-1.5 px-2 text-right tabular-nums font-semibold"
-                    :class="(r.winRate ?? 0) >= 50 ? 'text-delta-up' : 'text-ink-muted'"
-                  >
-                    {{ (r.winRate ?? r.top8Rate).toFixed(1) }}%
+                  <td class="py-1.5 px-2 text-right tabular-nums text-ink-muted">{{ r.top8Rate.toFixed(1) }}%</td>
+                  <td class="py-1.5 px-2 text-right tabular-nums font-semibold"
+                    :class="r.top4Rate >= 20 ? 'text-delta-up' : 'text-ink-muted'">
+                    {{ r.top4Rate.toFixed(1) }}%
                   </td>
-                  <td class="py-1.5 px-2 text-right tabular-nums text-ink-faint">{{ r.tierScore }}</td>
+                  <td class="py-1.5 px-2 text-right tabular-nums" :title="`冠军率 ${r.championRate.toFixed(1)}%`">
+                    {{ r.champions }}
+                  </td>
+                  <td class="py-1.5 px-2 text-right tabular-nums" :title="`亚军率 ${r.runnerUpRate.toFixed(1)}%`">
+                    {{ r.runnersUp }}
+                  </td>
+                  <td class="py-1.5 px-2 text-right tabular-nums text-ink-faint">{{ r.tierScore ?? '—' }}</td>
                 </tr>
                 <tr v-if="tierRows.length === 0">
-                  <td colspan="6" class="py-8 text-center text-ink-faint text-sm">
-                    暂无足够样本评级(需要 ≥15 卡组且 ≥4 个英雄)
+                  <td colspan="9" class="py-8 text-center text-ink-faint text-sm">
+                    暂无英雄数据
                   </td>
                 </tr>
               </tbody>
@@ -460,27 +451,17 @@ function gotoHero(hero: string): void {
         </div>
 
         <div class="xl:col-span-2 xl:pl-8 min-w-0">
-          <SectionHeading
-            title="传奇域对分布"
-            :note="`每套卡组的传奇定义双色域;共识别 ${
-              store.result?.colorStats?.identifiedDecks ?? 0
-            } / ${filteredDecks.length} 套`"
+          <SectionHeading title="传奇对分布"
+            :note="`按传奇卡聚合(不考虑颜色);尾部长尾合计 20% 合并为 others · 扇区为传奇卡图 · 全量 ${filteredDecks.length} 套`" />
+          <ChartCard
+            v-if="legDistOption"
+            :option="legDistOption"
+            height="380px"
+            :show-toolbox="false"
+            @chart-click="onLegPieClick"
           />
-          <ChartCard v-if="pairOption" :option="pairOption" height="380px" :show-toolbox="false" />
           <div v-else class="h-[380px] flex items-center justify-center text-ink-faint text-sm">
-            无域对数据
-          </div>
-          <!-- 六符文图例 -->
-          <div class="flex items-center justify-center gap-3 mt-1 flex-wrap">
-            <span
-              v-for="(label, c) in CARD_COLOR_LABELS"
-              :key="c"
-              class="inline-flex items-center gap-1 text-[10px] text-ink-muted"
-              v-show="c !== 'colorless'"
-            >
-              <RuneSeal :size="10" :only="c" />
-              {{ label }}
-            </span>
+            无传奇数据
           </div>
         </div>
       </section>
@@ -489,19 +470,12 @@ function gotoHero(hero: string): void {
 
       <!-- 全宽:环境阶梯散点 -->
       <section>
-        <SectionHeading
-          eyebrow="第三版 · 环境阶梯"
-          title="环境阶梯:热度 × 强度"
-          note="右上 = 主流且强势;气泡大小 = 样本数;虚线为环境均值。颜色即 Tier。支持框选缩放。"
-        />
-        <ChartCard
-          v-if="scatterOption"
-          :option="scatterOption"
-          height="440px"
-          @chart-click="(p) => p.name && gotoHero(String(p.name))"
-        />
+        <SectionHeading eyebrow="第三版 · 环境阶梯" title="环境阶梯:热度 × 强度"
+          note="右上 = 主流且强势;气泡大小 = 数量;虚线为环境均值。颜色即 Tier。支持框选缩放。" />
+        <ChartCard v-if="scatterOption" :option="scatterOption" height="440px"
+          @chart-click="(p) => p.name && gotoHero(String(p.name))" />
         <div v-else class="h-[300px] flex items-center justify-center text-ink-faint text-sm">
-          当前过滤条件下无样本
+          当前过滤条件下无数据
         </div>
       </section>
     </template>
@@ -513,26 +487,11 @@ function gotoHero(hero: string): void {
         <section>
           <SectionHeading eyebrow="头版数据 · Week over Week" title="本期概览" />
           <div class="grid grid-cols-2 lg:grid-cols-4 divide-x divide-panel-border">
-            <StatCard
-              label="本期样本"
-              :value="report.currSample"
-              :sub="`上期 ${report.prevSample} 套`"
-              :delta="report.sampleDelta"
-            />
+            <StatCard label="本期数量" :value="report.currSample" :sub="`上期 ${report.prevSample} 套`"
+              :delta="report.sampleDelta" />
             <StatCard label="本期赛事" :value="report.currEvents" :sub="`上期 ${report.prevEvents} 场`" />
-            <StatCard
-              label="环境胜率"
-              :value="report.envCurr != null ? report.envCurr.toFixed(1) + '%' : '—'"
-              :sub="`上期 ${report.envPrev != null ? (report.envPrev * 100).toFixed(1) + '%' : '—'}`"
-              :delta="report.envDelta"
-              :tone="report.envDelta != null && report.envDelta > 0 ? 'good' : 'default'"
-            />
-            <StatCard
-              label="Meta 集中度 (HHI)"
-              :value="report.hhiCurr.toFixed(0)"
-              :sub="`上期 ${report.hhiPrev.toFixed(0)} · 越高越单一`"
-              :delta="report.hhiCurr - report.hhiPrev"
-            />
+            <StatCard label="Meta 集中度 (HHI)" :value="report.hhiCurr.toFixed(0)"
+              :sub="`上期 ${report.hhiPrev.toFixed(0)} · 越高越单一`" :delta="report.hhiCurr - report.hhiPrev" />
           </div>
         </section>
 
@@ -543,11 +502,8 @@ function gotoHero(hero: string): void {
           <div class="xl:pr-8 min-w-0">
             <SectionHeading small eyebrow="▲ 升" title="热度上升" />
             <ul class="space-y-1">
-              <li
-                v-for="it in report.popUp"
-                :key="it.key"
-                class="flex items-center justify-between gap-2 py-1.5 border-b border-[rgba(59,74,90,0.08)] last:border-0"
-              >
+              <li v-for="it in report.popUp" :key="it.key"
+                class="flex items-center justify-between gap-2 py-1.5 border-b border-[rgba(59,74,90,0.08)] last:border-0">
                 <div class="min-w-0">
                   <div class="text-sm font-medium text-ink-muted truncate">
                     {{ it.key }}
@@ -564,11 +520,8 @@ function gotoHero(hero: string): void {
           <div class="xl:pl-8 min-w-0">
             <SectionHeading small eyebrow="▼ 降" title="热度下降" />
             <ul class="space-y-1">
-              <li
-                v-for="it in report.popDown"
-                :key="it.key"
-                class="flex items-center justify-between gap-2 py-1.5 border-b border-[rgba(59,74,90,0.08)] last:border-0"
-              >
+              <li v-for="it in report.popDown" :key="it.key"
+                class="flex items-center justify-between gap-2 py-1.5 border-b border-[rgba(59,74,90,0.08)] last:border-0">
                 <div class="min-w-0">
                   <div class="text-sm font-medium text-ink-muted truncate">
                     {{ it.key }}
@@ -588,11 +541,7 @@ function gotoHero(hero: string): void {
 
         <!-- 周际热度时间线 -->
         <section>
-          <SectionHeading
-            small
-            title="周际热度时间线"
-            note="Top 英雄出场率 · 周际迁移"
-          />
+          <SectionHeading small title="周际热度时间线" note="Top 英雄出场率 · 周际迁移" />
           <ChartCard v-if="timelineOption" :option="timelineOption" height="320px" :show-toolbox="false" />
           <div v-else class="h-40 flex items-center justify-center text-ink-faint text-sm">
             无时间线数据
@@ -606,11 +555,8 @@ function gotoHero(hero: string): void {
           <div class="xl:pr-8 min-w-0">
             <SectionHeading small title="传奇热度变化" />
             <ul class="space-y-1">
-              <li
-                v-for="it in report.legMovers"
-                :key="it.key"
-                class="flex items-center justify-between gap-2 py-1.5 border-b border-[rgba(59,74,90,0.08)] last:border-0"
-              >
+              <li v-for="it in report.legMovers" :key="it.key"
+                class="flex items-center justify-between gap-2 py-1.5 border-b border-[rgba(59,74,90,0.08)] last:border-0">
                 <div class="min-w-0">
                   <div class="text-sm font-medium text-ink-muted truncate">
                     {{ it.key }}
@@ -626,11 +572,8 @@ function gotoHero(hero: string): void {
           <div class="xl:pl-8 min-w-0">
             <SectionHeading small title="域对热度变化" />
             <ul class="space-y-1">
-              <li
-                v-for="it in report.domainMovers"
-                :key="it.key"
-                class="flex items-center justify-between gap-2 py-1.5 border-b border-[rgba(59,74,90,0.08)] last:border-0"
-              >
+              <li v-for="it in report.domainMovers" :key="it.key"
+                class="flex items-center justify-between gap-2 py-1.5 border-b border-[rgba(59,74,90,0.08)] last:border-0">
                 <div class="min-w-0">
                   <div class="text-sm font-medium text-ink-muted truncate">
                     {{ it.key }}
@@ -647,30 +590,27 @@ function gotoHero(hero: string): void {
 
         <div class="hairline"></div>
 
-        <!-- 胜率变化榜 -->
+        <!-- 转化变化榜 -->
         <section>
-          <SectionHeading small title="胜率变化榜" />
+          <SectionHeading small title="转化变化榜" />
           <div class="overflow-x-auto">
             <table class="w-full text-sm">
               <thead class="sticky-thead">
                 <tr class="text-ink-faint border-b border-panel-border text-xs">
                   <th class="py-2 px-2 text-left">英雄</th>
-                  <th class="py-2 px-2 text-right">上期胜率</th>
-                  <th class="py-2 px-2 text-right">本期胜率</th>
-                  <th class="py-2 px-2 text-right">Δpp</th>
+                  <th class="py-2 px-2 text-right">上期转化</th>
+                  <th class="py-2 px-2 text-right">本期转化</th>
+                  <th class="py-2 px-2 text-right">Δ</th>
                   <th class="py-2 px-2 text-right">名次变动</th>
-                  <th class="py-2 px-2 text-right">本期样本</th>
+                  <th class="py-2 px-2 text-right">本期数量</th>
                 </tr>
               </thead>
               <tbody>
-                <tr
-                  v-for="it in report.winMovers"
-                  :key="it.key"
-                  class="border-b border-[rgba(59,74,90,0.08)] last:border-0"
-                >
+                <tr v-for="it in report.convertMovers" :key="it.key"
+                  class="border-b border-[rgba(59,74,90,0.08)] last:border-0">
                   <td class="py-1.5 px-2 font-medium text-ink-muted">{{ it.key }}</td>
-                  <td class="py-1.5 px-2 text-right tabular-nums">{{ it.prev?.toFixed(1) }}%</td>
-                  <td class="py-1.5 px-2 text-right tabular-nums">{{ it.curr?.toFixed(1) }}%</td>
+                  <td class="py-1.5 px-2 text-right tabular-nums">{{ it.prev?.toFixed(1) }}</td>
+                  <td class="py-1.5 px-2 text-right tabular-nums">{{ it.curr?.toFixed(1) }}</td>
                   <td class="py-1.5 px-2 text-right">
                     <DeltaBadge :delta="it.delta" />
                   </td>
@@ -687,13 +627,10 @@ function gotoHero(hero: string): void {
         </section>
 
         <p class="text-[11px] text-ink-faint">
-          口径:周际对比基于数据包内周次分组,始终使用全量数据(不受「范围·周次」筛选影响);胜率为贝叶斯收缩修正值;热度=出场率。
+          口径:周际对比基于数据包内周次分组,始终使用全量数据(不受「范围·周次」筛选影响);转化综合分 = Top8率35% + Top4率35% + 冠军率20% + 亚军率10%;热度=威尔逊下界(95% 置信)。
         </p>
       </div>
-      <div
-        v-else
-        class="py-16 text-center text-sm text-ink-faint"
-      >
+      <div v-else class="py-16 text-center text-sm text-ink-faint">
         需 ≥2 个周次分组才能生成趋势对比
       </div>
     </template>

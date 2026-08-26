@@ -13,20 +13,18 @@ import CardThumb from '@/components/CardThumb.vue';
 import TierBadge from '@/components/TierBadge.vue';
 import SectionHeading from '@/components/SectionHeading.vue';
 import { quickHeroRows } from '@/core';
-import type { Deck } from '@/types';
+import { zoneAtTokenIndex } from '@/utils/parseTTS';
+import { normalizeEventKey } from '@/utils/dataParser';
+import type { CardCatalog, Deck } from '@/types';
 
 /* ── 过滤 ── */
 const rankLimit = ref<0 | 8 | 16 | 32>(0);
 const heroSearch = ref('');
-const sortMode = ref<'rank' | 'wins' | 'winRate'>('rank');
+const sortMode = ref<'rank' | 'wins'>('rank');
 
 const tierByHero = computed(() => {
   if (!store.result) return new Map<string, ReturnType<typeof quickHeroRows>[number]>();
-  const rows = quickHeroRows(
-    store.result.allDecks,
-    store.result.totalDecks,
-    store.result.hasWinData
-  );
+  const rows = quickHeroRows(store.result.allDecks, store.result.totalDecks);
   return new Map(rows.map((r) => [r.hero, r]));
 });
 
@@ -52,7 +50,6 @@ interface DeckRow extends Record<string, unknown> {
   date: string;
   city: string;
   wins: number | null;
-  winRate: number | null;
 }
 
 const rows = computed<DeckRow[]>(() => {
@@ -64,13 +61,10 @@ const rows = computed<DeckRow[]>(() => {
     event: d.activityName.replace(/^【[^】]*】\s*/, ''),
     date: d.date || '—',
     city: d.city === '未知' ? '—' : d.city,
-    wins: d.wins,
-    winRate: d.winRate !== null ? Math.round(d.winRate * 10) / 10 : null
+    wins: d.wins
   }));
   if (sortMode.value === 'wins') {
     arr.sort((a, b) => (b.wins ?? -1) - (a.wins ?? -1));
-  } else if (sortMode.value === 'winRate') {
-    arr.sort((a, b) => (b.winRate ?? -1) - (a.winRate ?? -1));
   }
   return arr;
 });
@@ -81,8 +75,7 @@ const columns = [
   { key: 'hero', label: '英雄', type: 'text' as const, sortable: true },
   { key: 'city', label: '城市', type: 'text' as const, sortable: true },
   { key: 'event', label: '赛事', type: 'text' as const, sortable: true },
-  { key: 'wins', label: store.result?.hasWinData ? '胜场' : '', type: 'number' as const, sortable: false, align: 'right' as const },
-  { key: 'winRate', label: '胜率', type: 'number' as const, sortable: true, align: 'right' as const }
+  { key: 'wins', label: store.result?.hasWinData ? '胜场' : '', type: 'number' as const, sortable: false, align: 'right' as const }
 ];
 
 const visibleColumns = computed(() =>
@@ -106,34 +99,63 @@ interface GroupedCard {
   name: string;
   count: number;
 }
-const GROUP_ORDER: ReadonlyArray<{ key: string; label: string }> = [
-  { key: '传奇', label: '传奇' },
-  { key: '英雄单位', label: '英雄单位' },
-  { key: '单位', label: '单位' },
-  { key: '专属法术', label: '专属法术' },
-  { key: '法术', label: '法术' },
-  { key: '装备', label: '装备' },
-  { key: '战场', label: '战场' },
-  { key: '符文', label: '符文' }
+/** 区域分组(按 deckCardCreateType 优先,类别推断兜底) */
+const ZONE_GROUPS: ReadonlyArray<{
+  key: string;
+  label: string;
+  oneRow: boolean;
+  rotate?: boolean;
+}> = [
+  { key: 'legend', label: '传奇', oneRow: true },
+  { key: 'hero', label: '选定', oneRow: true },
+  { key: 'rune', label: '符文', oneRow: true },
+  { key: 'battlefield', label: '战场', oneRow: true, rotate: true },
+  { key: 'main', label: '主牌堆', oneRow: false },
+  { key: 'side', label: '备牌', oneRow: false }
 ];
 
-const groupedCards = computed(() => {
+/** 卡 → 区域:选定英雄(isMainHero 卡号)→ deck 级 cardZones(deckCardCreateType,CARD_TYPE_MAP)
+ * → 类别推断兜底(传奇/符文/战场/主牌堆) */
+function deckZoneOf(id: string, d: Deck, catalog: CardCatalog): string {
+  // 1) 选定英雄:decks_data.json isMainHero=true 的卡
+  if (d.mainHeroCardNo && d.mainHeroCardNo === id) return 'hero';
+  // 2) deck 级区域字段(deckCardCreateType:1=legend 2=main 3=rune 4=battlefield 5=side)
+  const z = d.cardZones?.get(id);
+  if (z) return z;
+  // 3) 类别推断兜底(含 championTag 匹配选定英雄)
+  const meta = catalog.byId.get(id);
+  if (meta) {
+    const tag = meta.championTag;
+    if (meta.category === '英雄单位' && tag && d.hero && d.hero.includes(tag)) return 'hero';
+  }
+  const cat = catalog.cardCategory.get(id);
+  if (cat === '传奇') return 'legend';
+  if (cat === '符文') return 'rune';
+  if (cat === '战场') return 'battlefield';
+  return 'main';
+}
+
+interface DeckZoneGroup {
+  key: string;
+  label: string;
+  oneRow: boolean;
+  rotate: boolean;
+  cards: GroupedCard[];
+}
+
+const groupedCards = computed<DeckZoneGroup[]>(() => {
   const r = store.result;
   const d = selectedDeck.value;
   if (!r || !d) return [];
-  const byCat = new Map<string, Map<string, GroupedCard>>();
-  for (const [id, count] of d.cards) {
-    // 同名+副标题归并:同一张卡的多印刷版本合并显示
-    const key = r.catalog.canonicalById.get(id) ?? id;
-    const repId = r.catalog.canonicalId.get(key) ?? id;
-    let cat = r.catalog.cardCategory.get(repId) ?? '其他';
-    // 专属法术在目录里归为法术;此处按名称细分展示价值不大,保持法术
-    const group =
-      GROUP_ORDER.find((g) => g.key === cat)?.key ?? (cat === '其他' ? '其他' : cat);
-    let map = byCat.get(group);
+  const byZone = new Map<string, Map<string, GroupedCard>>();
+  const add = (zone: string, rawNo: string, count: number): void => {
+    // 同名+副标题归并:同一张卡的多印刷版本合并显示;符文按名字去重后合计数量
+    const key = r.catalog.canonicalById.get(rawNo) ?? rawNo;
+    const repId = r.catalog.canonicalId.get(key) ?? rawNo;
+    let map = byZone.get(zone);
     if (!map) {
       map = new Map<string, GroupedCard>();
-      byCat.set(group, map);
+      byZone.set(zone, map);
     }
     const existing = map.get(repId);
     if (existing) {
@@ -145,21 +167,44 @@ const groupedCards = computed(() => {
         count
       });
     }
+  };
+  if (d.cardTokens && d.cardTokens.length > 0) {
+    // TTS 顺序固定:按 token 位置切分区域(同一卡号跨区域时按张拆分,精确)
+    d.cardTokens.forEach((no, idx) => {
+      add(idx === 1 ? 'hero' : zoneAtTokenIndex(idx), no, 1);
+    });
+  } else {
+    // 无 token 序列(如 deckList 数据):按 deck 级区域 Map 分组
+    for (const [id, count] of d.cards) {
+      add(deckZoneOf(id, d, r.catalog), id, count);
+    }
   }
-  const arrs = [...byCat.entries()].map(([group, map]) => [
-    group,
-    [...map.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
-  ] as const);
-  const orderKeys = [...GROUP_ORDER.map((g) => g.key), '其他'];
-  return orderKeys
-    .filter((k) => byCat.has(k))
-    .map((k) => ({
-      key: k,
-      label: GROUP_ORDER.find((g) => g.key === k)?.label ?? k,
-      cards: arrs.find(([g]) => g === k)?.[1] ?? []
-    }))
-    .filter((g) => g.cards.length > 0);
+  return ZONE_GROUPS.filter((g) => byZone.has(g.key)).map((g) => ({
+    key: g.key,
+    label: g.label,
+    oneRow: g.oneRow,
+    rotate: g.rotate ?? false,
+    cards: [...(byZone.get(g.key)?.values() ?? [])].sort(
+      (a, b) => b.count - a.count || a.name.localeCompare(b.name)
+    )
+  }));
 });
+
+/** 顶部一排:传奇 / 选定 / 符文 / 战场(战场卡图横置) */
+const topZoneGroups = computed(() =>
+  groupedCards.value.filter(
+    (g) =>
+      g.key === 'legend' ||
+      g.key === 'hero' ||
+      g.key === 'rune' ||
+      g.key === 'battlefield'
+  )
+);
+
+/** 主牌堆 / 备牌:卡片网格 */
+const gridZoneGroups = computed(() =>
+  groupedCards.value.filter((g) => g.key === 'main' || g.key === 'side')
+);
 
 const totalCopies = computed(() => {
   const d = selectedDeck.value;
@@ -167,6 +212,21 @@ const totalCopies = computed(() => {
   let s = 0;
   for (const c of d.cards.values()) s += c;
   return s;
+});
+
+/** 赛事(归一化名)→ 参赛人数;当前选中卡组的参赛人数 */
+const eventEntryByKey = computed(() => {
+  const r = store.result;
+  const m = new Map<string, number>();
+  if (r) {
+    for (const e of r.events) m.set(e.name, e.deckCount);
+  }
+  return m;
+});
+const selectedEntry = computed(() => {
+  const d = selectedDeck.value;
+  if (!d) return null;
+  return eventEntryByKey.value.get(normalizeEventKey(d.activityName)) ?? null;
 });
 
 async function copyTTS(): Promise<void> {
@@ -209,7 +269,6 @@ async function copyTTS(): Promise<void> {
           <select v-model="sortMode" v-if="store.result?.hasWinData" class="mini-select" title="排序">
             <option value="rank">按名次</option>
             <option value="wins">按胜场</option>
-            <option value="winRate">按胜率</option>
           </select>
         </div>
       </div>
@@ -238,62 +297,95 @@ async function copyTTS(): Promise<void> {
         <template #cell-wins="{ row }">
           <span class="font-semibold tabular-nums">{{ (row as DeckRow).wins ?? '—' }}</span>
         </template>
-        <template #cell-winRate="{ row }">
-          <span
-            class="tabular-nums"
-            :class="(row as DeckRow).winRate != null && (row as DeckRow).winRate! >= 57 ? 'text-delta-up font-semibold' : ''"
-          >
-            {{ (row as DeckRow).winRate != null ? `${(row as DeckRow).winRate}%` : '—' }}
-          </span>
-        </template>
       </DataTable>
     </section>
 
     <!-- 卡组详情抽屉 -->
     <Drawer :open="drawerOpen" wide :title="selectedDeck ? `${selectedDeck.playerName} · ${selectedDeck.hero}` : ''" @update:open="(v) => (drawerOpen = v)" @close="drawerOpen = false">
       <template v-if="selectedDeck && store.result">
-        <!-- 头部信息 -->
-        <div class="card p-4 mb-4 space-y-2">
-          <div class="flex items-center justify-between flex-wrap gap-2">
-            <div class="flex items-center gap-3 divide-x divide-panel-border">
-              <div class="text-center pr-3">
-                <div class="text-[10px] text-ink-faint">名次</div>
-                <div class="text-xl font-bold text-ink tabular-nums">
-                  {{
-                    selectedDeck.rank < Number.MAX_SAFE_INTEGER ? selectedDeck.rank : '—'
-                  }}
-                </div>
-              </div>
-              <div class="text-center px-3" v-if="selectedDeck.wins !== null">
-                <div class="text-[10px] text-ink-faint">胜场</div>
-                <div class="text-xl font-bold text-delta-up tabular-nums">
-                  {{ selectedDeck.wins }}<span class="text-xs text-ink-faint">/{{ selectedDeck.eventRounds ?? '?' }}</span>
-                </div>
-              </div>
-              <div class="text-center" :class="selectedDeck.wins !== null ? '' : 'px-3'">
-                <div class="text-[10px] text-ink-faint">总张数</div>
-                <div class="text-xl font-bold text-brand tabular-nums">{{ totalCopies }}</div>
-              </div>
+        <!-- 头部信息(紧凑一行:名次 · 胜场 · 总张数 · 赛事 · 日期 · 城市 · 门店) -->
+        <div class="card p-3 mb-3">
+          <div class="flex items-center justify-between gap-3 flex-wrap">
+            <div class="flex items-center gap-x-3 gap-y-0.5 text-xs text-ink-muted tabular-nums flex-wrap min-w-0">
+              <span class="whitespace-nowrap">
+                名次
+                <b class="text-ink font-bold">{{ selectedDeck.rank < Number.MAX_SAFE_INTEGER ? selectedDeck.rank : '—' }}</b>
+              </span>
+              <span v-if="selectedDeck.wins !== null" class="whitespace-nowrap">
+                胜场
+                <b class="text-delta-up font-bold">{{ selectedDeck.wins }}<span class="text-ink-faint font-normal">/{{ selectedDeck.eventRounds ?? '?' }}</span></b>
+              </span>
+              <span class="whitespace-nowrap">
+                总张数
+                <b class="text-brand font-bold">{{ totalCopies }}</b>
+              </span>
+              <span class="whitespace-nowrap">
+                参赛人数
+                <b class="text-ink font-bold">{{ selectedEntry ?? '—' }}</b>
+              </span>
+              <span class="text-ink-faint truncate min-w-0">{{ selectedDeck.activityName }}</span>
+              <span v-if="selectedDeck.date" class="text-ink-faint whitespace-nowrap">· {{ selectedDeck.date }}</span>
+              <span v-if="selectedDeck.city && selectedDeck.city !== '未知'" class="text-ink-faint whitespace-nowrap">· {{ selectedDeck.city }}</span>
+              <span v-if="selectedDeck.shopName" class="text-ink-faint whitespace-nowrap">· {{ selectedDeck.shopName }}</span>
             </div>
             <button
               v-if="selectedDeck.ttsCode"
               @click="copyTTS"
-              class="btn-brand px-3 py-1.5 text-xs"
+              class="btn-brand px-3 py-1 text-xs shrink-0"
             >
-              {{ copied ? '✅ 已复制' : '📋 复制 TTS 码' }}
+              {{ copied ? '已复制' : '复制 TTS 码' }}
             </button>
-          </div>
-          <div class="text-xs text-ink-faint leading-relaxed">
-            {{ selectedDeck.activityName }}
-            <span v-if="selectedDeck.date"> · {{ selectedDeck.date }}</span>
-            <span v-if="selectedDeck.city && selectedDeck.city !== '未知'"> · {{ selectedDeck.city }}</span>
-            <span v-if="selectedDeck.shopName"> · {{ selectedDeck.shopName }}</span>
           </div>
         </div>
 
-        <!-- 分组卡表 -->
+        <!-- 分组卡表(区域:传奇/选定/符文/战场 并排一行,战场横置;主牌堆/备牌 网格) -->
         <div class="space-y-5">
-          <div v-for="g in groupedCards" :key="g.key">
+          <!-- 顶部一排:传奇 / 选定 / 符文 / 战场 -->
+          <div
+            v-if="topZoneGroups.length"
+            class="flex items-start gap-6 overflow-x-auto pb-2"
+          >
+            <div v-for="g in topZoneGroups" :key="g.key" class="shrink-0">
+              <h4 class="text-[10px] font-bold text-ink-faint uppercase tracking-[0.18em] mb-1.5">
+                {{ g.label }}
+                <span class="ml-1">{{
+                  g.cards.reduce((s, c) => s + c.count, 0)
+                }}</span>
+              </h4>
+              <div class="flex gap-3">
+                <template v-if="g.key === 'battlefield'">
+                  <div
+                    v-for="c in g.cards"
+                    :key="c.id"
+                    class="shrink-0 -rotate-90"
+                    :title="`${c.name} ×${c.count}`"
+                  >
+                    <CardThumb
+                      :id="c.id"
+                      :name="c.name"
+                      :catalog="store.result.catalog"
+                      :count="c.count"
+                      size="md"
+                      :show-name="false"
+                    />
+                  </div>
+                </template>
+                <CardThumb
+                  v-else
+                  v-for="c in g.cards"
+                  :key="c.id"
+                  :id="c.id"
+                  :name="c.name"
+                  :catalog="store.result.catalog"
+                  :count="c.count"
+                  size="md"
+                />
+              </div>
+            </div>
+          </div>
+
+          <!-- 主牌堆 / 备牌:卡片网格 -->
+          <div v-for="g in gridZoneGroups" :key="g.key">
             <h4 class="text-xs font-bold text-ink-muted uppercase tracking-[0.18em] mb-2 sticky top-[60px] sticky-head-solid py-1 z-10">
               {{ g.label }}
               <span class="text-ink-faint ml-1">{{

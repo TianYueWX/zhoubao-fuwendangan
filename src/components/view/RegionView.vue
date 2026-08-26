@@ -4,7 +4,7 @@
  *   1. 城市 × 英雄 出场率分组柱状图(点击城市 → 全局过滤)
  *   2. 城市站点气泡地图
  *   3. 省份热度地图
- *   4. 城市 × 英雄热力图(Top8率 / 真实胜率 切换)
+ *   4. 城市 × 英雄热力图(Top8率 / Top4率 切换)
  *   5. 赛事一览表(精确城市 / 门店 / 规模)
  */
 import { computed, onMounted, ref } from 'vue';
@@ -21,7 +21,7 @@ onMounted(() => {
   ensureChinaMap();
 });
 
-const heatMode = ref<'top8' | 'win'>('top8');
+const heatMode = ref<'top8' | 'top4'>('top8');
 
 const sortedCities = computed(() => {
   if (!store.result) return [] as string[];
@@ -184,8 +184,8 @@ const heatOption = computed<ChartOptionInput | null>(() => {
       const cell = heat.get(c)?.get(heroFull);
       if (!cell || cell.n < 5) continue;
       let v: number;
-      if (heatMode.value === 'win' && cell.winsSum != null && cell.roundsSum) {
-        v = +((cell.winsSum / cell.roundsSum) * 100).toFixed(1);
+      if (heatMode.value === 'top4') {
+        v = +((cell.top4 / cell.n) * 100).toFixed(1);
       } else {
         v = +((cell.top8 / cell.n) * 100).toFixed(1);
       }
@@ -196,7 +196,7 @@ const heatOption = computed<ChartOptionInput | null>(() => {
 
   const { axisBase } = themedAxes();
   const cc = getChartColors();
-  const suffix = heatMode.value === 'win' ? '%' : '%';
+  const suffix = '%';
   return {
     grid: { left: 110, right: 60, top: 30, bottom: 70 },
     xAxis: { type: 'category', data: cities, splitArea: { show: true }, ...axisBase },
@@ -220,8 +220,8 @@ const heatOption = computed<ChartOptionInput | null>(() => {
         const cell = heat.get(city)?.get(hero);
         return (
           `<b>${city} · ${hero}</b><br/>` +
-          `${heatMode.value === 'win' ? '真实胜率' : 'Top8 率'}: ${datum.value[2]}%<br/>` +
-          `样本:${cell?.n ?? 0} 套`
+          `${heatMode.value === 'top4' ? 'Top4 率' : 'Top8 率'}: ${datum.value[2]}%<br/>` +
+          `数量:${cell?.n ?? 0} 套`
         );
       }
     },
@@ -286,16 +286,14 @@ const eventRows = computed<EventRow[]>(() =>
               Top8 率
             </button>
             <button
-              :class="['px-2.5 py-1 rounded-lg transition-all', heatMode === 'win' ? 'tab-active font-medium' : 'card text-ink-muted']"
-              @click="heatMode = 'win'"
-              :disabled="!store.hasWinData"
-              :title="store.hasWinData ? '' : '需导入 rank_data.json'"
+              :class="['px-2.5 py-1 rounded-lg transition-all', heatMode === 'top4' ? 'tab-active font-medium' : 'card text-ink-muted']"
+              @click="heatMode = 'top4'"
             >
-              真实胜率{{ store.hasWinData ? '' : ' 🔒' }}
+              Top4 率
             </button>
           </div>
         </div>
-        <p class="text-[11px] text-ink-faint mb-1">仅统计 ≥5 套样本的城市×英雄组合</p>
+        <p class="text-[11px] text-ink-faint mb-1">仅统计 ≥5 套的城市×英雄组合</p>
         <ChartCard :option="heatOption" height="380px" />
       </section>
     </div>

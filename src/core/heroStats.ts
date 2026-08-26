@@ -12,6 +12,7 @@ import type {
   HeroStats
 } from '@/types';
 import { UNKNOWN_CITY } from '@/utils/cityRegex';
+import { convertScore } from './stats';
 import type { WeekBucket } from '@/types';
 
 export interface HeroStatsOptions {
@@ -37,7 +38,10 @@ interface UsageAgg {
   energySum: number;
 }
 
-/** Top 样本 → 卡牌携带率聚合(两个入口共用;按规范键归并多印刷版本) */
+/** Top 样本 → 卡牌携带率聚合(两个入口共用;按规范键归并多印刷版本)
+ * 范围:仅统计 maindeck(单位/法术/装备)+ chosen champion(英雄单位)+ battlefield(战场)。
+ * 排除结构性卡:符文(每套按规则自动携带)与传奇(每套恰好 1 张、定义双色域),
+ * 它们携带率恒为 100%,会污染核心卡榜单。 */
 function aggregateUsage(
   topDecks: readonly Deck[],
   catalog: CardCatalog,
@@ -50,6 +54,10 @@ function aggregateUsage(
       const key = catalog.canonicalById.get(id) ?? id;
       if (seen.has(key)) continue;
       seen.add(key);
+      const repId = catalog.canonicalId.get(key) ?? id;
+      const cat = catalog.cardCategory.get(repId);
+      // 结构性卡不进核心卡统计(符文/传奇)
+      if (cat === '符文' || cat === '传奇') continue;
       let u = usage.get(key);
       if (!u) {
         u = { deckCount: 0, totalCount: 0, energySum: 0 };
@@ -57,7 +65,6 @@ function aggregateUsage(
       }
       u.deckCount += 1;
       u.totalCount += count;
-      const repId = catalog.canonicalId.get(key) ?? id;
       const energy = catalog.cardEnergy.get(repId) ?? 0;
       u.energySum += energy * count;
     }
@@ -88,6 +95,8 @@ function aggregateUsage(
 function aggregateWins(heroDecks: readonly Deck[]): {
   winRate: number | null;
   avgWins: number | null;
+  winsSum: number | null;
+  roundsSum: number | null;
 } {
   let winsSum = 0;
   let roundsSum = 0;
@@ -98,10 +107,14 @@ function aggregateWins(heroDecks: readonly Deck[]): {
     roundsSum += d.eventRounds;
     winsDecks += 1;
   }
-  if (winsDecks === 0 || roundsSum === 0) return { winRate: null, avgWins: null };
+  if (winsDecks === 0 || roundsSum === 0) {
+    return { winRate: null, avgWins: null, winsSum: null, roundsSum: null };
+  }
   return {
     winRate: (winsSum / roundsSum) * 100,
-    avgWins: winsSum / winsDecks
+    avgWins: winsSum / winsDecks,
+    winsSum,
+    roundsSum
   };
 }
 
@@ -137,10 +150,16 @@ export function computeHeroStats(
     // 4) Top 卡组内的卡牌聚合
     const cards = aggregateUsage(topDecks, catalog, topCount);
 
-    // 5) Top8 率统计(基于全样本)
+    // 5) 名次转化统计(基于全样本):Top8 / Top4 / 冠军 / 亚军
     let top8 = 0;
+    let top4 = 0;
+    let champions = 0;
+    let runnersUp = 0;
     for (const d of heroDecks) {
       if (d.rank >= 1 && d.rank <= 8) top8++;
+      if (d.rank >= 1 && d.rank <= 4) top4++;
+      if (d.rank === 1) champions++;
+      if (d.rank === 2) runnersUp++;
     }
 
     // 6) 周次聚合(zero-fill)
@@ -158,7 +177,7 @@ export function computeHeroStats(
     }
 
     // 8) 真实胜率
-    const { winRate, avgWins } = aggregateWins(heroDecks);
+    const { winRate, avgWins, winsSum, roundsSum } = aggregateWins(heroDecks);
 
     result.set(hero, {
       total: heroDecks.length,
@@ -166,7 +185,23 @@ export function computeHeroStats(
       topDecks,
       popularity: totalDecks > 0 ? (heroDecks.length / totalDecks) * 100 : 0,
       top8Rate: heroDecks.length > 0 ? (top8 / heroDecks.length) * 100 : 0,
+      top4,
+      top4Rate: heroDecks.length > 0 ? (top4 / heroDecks.length) * 100 : 0,
+      champions,
+      championRate: heroDecks.length > 0 ? (champions / heroDecks.length) * 100 : 0,
+      runnersUp,
+      runnerUpRate: heroDecks.length > 0 ? (runnersUp / heroDecks.length) * 100 : 0,
+      convert: convertScore(
+        heroDecks.length > 0 ? (top8 / heroDecks.length) * 100 : 0,
+        heroDecks.length > 0 ? (top4 / heroDecks.length) * 100 : 0,
+        heroDecks.length > 0 ? (champions / heroDecks.length) * 100 : 0,
+        heroDecks.length > 0 ? (runnersUp / heroDecks.length) * 100 : 0
+      ),
       winRate,
+      // 收缩值由分析管线统一写入(analyzer.ts,保证与视图层 quickStats 同口径)
+      winRateAdj: null,
+      wins: winsSum,
+      rounds: roundsSum,
       avgWins,
       tier: null,
       tierScore: null,

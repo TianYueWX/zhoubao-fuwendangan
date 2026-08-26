@@ -26,16 +26,14 @@ export function reportToMarkdown(r: WeeklyReport): string {
     `# 符文战场 Meta 报告 · ${r.currLabel}`,
     '',
     `> 对比 ${r.prevLabel}(${r.prevSample} 套) → ${r.currLabel}(${r.currSample} 套)`,
-    `> 环境胜率 ${fmt1(r.envCurr ? r.envCurr * 100 : null)}${
-      r.envDelta != null ? `(${r.envDelta > 0 ? '↑' : '↓'}${Math.abs(r.envDelta).toFixed(1)}pp)` : ''
-    } · Meta 集中度 HHI ${fmt0(r.hhiCurr)}(${r.hhiCurr - r.hhiPrev >= 0 ? '↑' : '↓'}${Math.abs(r.hhiCurr - r.hhiPrev).toFixed(0)})`,
+    `> Meta 集中度 HHI ${fmt0(r.hhiCurr)}(${r.hhiCurr - r.hhiPrev >= 0 ? '↑' : '↓'}${Math.abs(r.hhiCurr - r.hhiPrev).toFixed(0)})`,
     ''
   ];
 
   const timeline =
     r.heroTimeline.length > 0
       ? [
-          '## 📈 周际热度(出场率)',
+          '## 周际热度(出场率)',
           ...r.heroTimeline.map(
             (h) =>
               `- ${h.hero}:${h.pickRates.map((v) => fmt1(v)).join(' → ')}(${r.weeks.map((w) => w.label).join(' / ')})`
@@ -45,11 +43,11 @@ export function reportToMarkdown(r: WeeklyReport): string {
       : '';
 
   const body = [
-    moversLines('🔥 热度上升', r.popUp),
-    moversLines('🧊 热度下降', r.popDown),
-    moversLines('📊 胜率变化', r.winMovers),
-    moversLines('⚔️ 传奇热度', r.legMovers),
-    moversLines('🎨 域对热度', r.domainMovers)
+    moversLines('热度上升', r.popUp),
+    moversLines('热度下降', r.popDown),
+    moversLines('转化变化', r.convertMovers),
+    moversLines('传奇热度', r.legMovers),
+    moversLines('域对热度', r.domainMovers)
   ].join('\n');
 
   const foot = `> 数据仅供竞技参考 · Riot Games 与本工具无关`;

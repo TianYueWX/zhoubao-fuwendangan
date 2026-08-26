@@ -80,6 +80,37 @@ export const CARD_COLOR_LABELS: Readonly<Record<CardColor, string>> = Object.fre
 /** 传奇卡定义的双色域(域对),如 ['red','blue'] = 狂怒·心灵 */
 export type DomainPair = readonly [CardColor, CardColor] | readonly [CardColor];
 
+/**
+ * 卡牌在卡组中的区域(卡级创建类型,来自数据源 deckCardCreateType)。
+ * 区域(构筑视角):选定英雄(卡组级,isMainHero)/ 传奇卡 / 主牌堆 / 符文 / 战场 / 备牌。
+ */
+export type CardZoneType = 'legend' | 'main' | 'rune' | 'battlefield' | 'side';
+
+/**
+ * deckCardCreateType → 中文名(数据源映射;经 decks_data.json 实测校准:3=战场 4=符文)。
+ * TTS_code 顺序固定:传奇→选定→主卡堆→战场→符文→备牌,与之一一对应。
+ */
+export const CARD_TYPE_MAP: Readonly<Record<number, string>> = Object.freeze({
+  1: '传奇卡',
+  2: '主卡堆',
+  3: '战场',
+  4: '符文',
+  5: '备牌'
+});
+
+/** 卡组构筑的区域分组(构筑对比矩阵的分组,与 TTS_code 固定顺序一致) */
+export type DeckZone = 'legend' | 'hero' | 'main' | 'battlefield' | 'rune' | 'side';
+
+/** 区域分组显示名(构筑对比矩阵,顺序与 TTS_code 固定顺序一致) */
+export const DECK_ZONE_LABELS: Readonly<Record<DeckZone, string>> = Object.freeze({
+  legend: '传奇',
+  hero: '选定英雄',
+  main: '主牌堆',
+  battlefield: '战场',
+  rune: '符文',
+  side: '备牌'
+});
+
 export interface CardMeta {
   /** 卡牌编号,如 'OGN-308' */
   id: string;
@@ -126,7 +157,7 @@ export interface CardCatalog {
   cardCategory: ReadonlyMap<string, CardCategory>;
   /** 编号 → 颜色域 */
   cardColors: ReadonlyMap<string, readonly CardColor[]>;
-  /** 编号 → 卡图 CDN URL(来自 prints 或 decks_cache,可能不全) */
+  /** 编号 → 卡图 CDN URL(来自 card_prints,可能不全) */
   cardImg: ReadonlyMap<string, string>;
   /** 编号 → 规范键(同名+副标题;多印刷版本同键) */
   canonicalById: ReadonlyMap<string, string>;
@@ -148,7 +179,7 @@ export interface WeekBucket {
 }
 
 /* ──────────────────────────────────────────────────────────────
- * 增强数据源原始行(rank_data.json / shop_data.json / decks_cache.json)
+ * 增强数据源原始行(rank_data.json / shop_data.json)
  * ──────────────────────────────────────────────────────────── */
 
 /** rank_data.json 单行:真实胜场数据 */
@@ -159,7 +190,7 @@ export interface RankRow {
   finalRanking?: number | null;
   /** 瑞士轮胜场数 */
   winCount?: number | null;
-  /** 卡组 ID,关联 decks_cache.json 的 key */
+  /** 卡组 ID(rank 数据自带,用于对比去重等) */
   cardGroupId?: number | null;
   shopProvince?: string | null;
   date?: string | null;
@@ -177,23 +208,6 @@ export interface ShopRow {
   shopName?: string | null;
   playerMaxCount?: number | null;
 }
-
-/** decks_cache.json 中单张卡条目 */
-export interface CacheCardEntry {
-  cardNo?: string | null;
-  cardName?: string | null;
-  subTitle?: string | null;
-  hero?: string | null;
-  isMainHero?: boolean | null;
-  cardCategoryName?: string | null;
-  rarity?: string | null;
-  frontImage?: string | null;
-  cardColorList?: readonly string[] | null;
-  cardCount?: number | null;
-}
-
-/** decks_cache.json 顶层结构:cardGroupId → 卡牌列表 */
-export type DeckCacheData = Readonly<Record<string, readonly CacheCardEntry[]>>;
 
 /** 赛事元信息(join shop_data + decks 推断轮次后) */
 export interface EventMeta {
@@ -230,8 +244,14 @@ export interface Deck {
   /** 该 deck 所属的周次 bucket */
   week: WeekBucket;
   ttsCode: string;
-  /** TTS_code 解析结果:编号 → 张数 */
+  /** 卡表:编号 → 张数(TTS_code 或 decks_data.json deckList 解析) */
   cards: ReadonlyMap<string, number>;
+  /** TTS token 卡号序列(保序,区域分组用;同一卡号可跨区域,如主卡堆+备牌各 1 张) */
+  cardTokens: readonly string[] | null;
+  /** 每卡区域(来自 decks_data.json 的 deckCardCreateType,CARD_TYPE_MAP),无数据为 null */
+  cardZones: ReadonlyMap<string, CardZoneType> | null;
+  /** 选定英雄卡号(deckList 中 isMainHero=true 的卡),无数据为 null */
+  mainHeroCardNo: string | null;
   /* —— 以下字段来自增强数据源(join 后填充),无数据时为 null/空 —— */
   /** 瑞士轮胜场数(rank_data.winCount) */
   wins: number | null;
@@ -243,7 +263,7 @@ export interface Deck {
   shopCity: string;
   /** 门店名,可空 */
   shopName: string;
-  /** 关联的卡组明细 ID(decks_cache key),可空 */
+  /** 关联的卡组明细 ID(rank 数据自带),可空 */
   cardGroupId: number | null;
 }
 
@@ -315,8 +335,28 @@ export interface HeroStats {
   popularity: number;
   /** Top8 率 = 该英雄 Top8 内数量 / total % */
   top8Rate: number;
-  /** 加权真实胜率(%)= Σwins / ΣeventRounds;无胜场数据时 null */
+  /** Top4 次数(rank ≤ 4) */
+  top4: number;
+  /** Top4 率(%) = top4 / total × 100 */
+  top4Rate: number;
+  /** 夺冠次数(rank = 1) */
+  champions: number;
+  /** 冠军率(%) = champions / total × 100 */
+  championRate: number;
+  /** 亚军次数(rank = 2) */
+  runnersUp: number;
+  /** 亚军率(%) = runnersUp / total × 100 */
+  runnerUpRate: number;
+  /** 转化综合分(%) = Top8率×0.35 + Top4率×0.35 + 冠军率×0.2 + 亚军率×0.1 */
+  convert: number;
+  /** 加权真实胜率(%)= Σwins / ΣeventRounds;无胜场数据时 null(数据层保留,评级不再使用) */
   winRate: number | null;
+  /** 贝叶斯收缩后的胜率(%)(向环境均值收缩,Tier 评级用),无数据为 null */
+  winRateAdj: number | null;
+  /** Σwins(收缩与展示用),无胜场数据为 null */
+  wins: number | null;
+  /** ΣeventRounds(收缩用),无胜场数据为 null */
+  rounds: number | null;
   /** 平均胜场数;无胜场数据时 null */
   avgWins: number | null;
   /** Tier 分级;样本不足或无胜率数据时 null(表格显示 '-') */
@@ -340,10 +380,8 @@ export interface RegionHeatCell {
   n: number;
   /** Top8 内数量 */
   top8: number;
-  /** Σwins(用于城市×英雄胜率热力),无数据时为 null */
-  winsSum: number | null;
-  /** ΣeventRounds,与 winsSum 配对使用 */
-  roundsSum: number | null;
+  /** Top4 内数量(rank ≤ 4) */
+  top4: number;
 }
 
 /** 城市 → 英雄 → 计数 */
@@ -480,62 +518,8 @@ export interface AnalysisResult {
   winMatchedDecks: number;
   /** shop_data 精确匹配到的赛事数 */
   shopMatchedEvents: number;
-  /** decks_cache 中可提供卡图的编号数 */
-  imageCount: number;
   /** 颜色域 / 域对统计(基于高排名样本) */
   colorStats: ColorStatsResult | null;
-}
-
-/* ──────────────────────────────────────────────────────────────
- * v3 数据包 / 预设数据模型(多包并存)
- * ──────────────────────────────────────────────────────────── */
-
-/** 导入槽位(砍掉 v2 的 cache 槽位后为 5 个) */
-export type SlotKindV3 = 'deck' | 'base' | 'prints' | 'rank' | 'shop';
-
-/** 预设数据清单中的单个文件条目 */
-export interface PresetFileEntry {
-  /** 对应槽位 */
-  slot: SlotKindV3;
-  /** 相对 public/data/ 的路径,如 's4-w3/decks_data.csv' */
-  path: string;
-  /** 字节数 */
-  size: number;
-}
-
-/** 预设数据包元信息 */
-export interface PresetPackageMeta {
-  /** 稳定 id,如 's4-w3' */
-  id: string;
-  /** 展示名,如 '第四赛季 · 第三周(2026-08-23)' */
-  label: string;
-  season?: string;
-  week?: string;
-  /** 数据包内赛事日期范围 [起, 止] */
-  dateRange?: [string, string];
-  /** 文件数(应为 5) */
-  fileCount: number;
-  files: PresetFileEntry[];
-}
-
-/** public/data/manifest.json 结构 */
-export interface PresetManifest {
-  version: 1;
-  generatedAt: string;
-  packages: PresetPackageMeta[];
-}
-
-/** 已加载数据包的运行时元信息(多包 store 用) */
-export interface PackageMeta {
-  id: string;
-  label: string;
-  weekKey: string;
-  season: string;
-  source: 'preset' | 'upload';
-  sampleCount: number;
-  eventCount: number;
-  dateRange: [string, string] | null;
-  loadedAt: number;
 }
 
 /* ──────────────────────────────────────────────────────────────
