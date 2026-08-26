@@ -11,7 +11,8 @@
 | R1 | §3.4 传奇排行引擎 + LegendaryCompare 组件 + 总览集成;smoke 全链路修复 | 2732/2732 覆盖、域对口径 15/15 一致、构建通过、已提交 e2445ae |
 | R2 | **P1 贝叶斯收缩**(stats.ts:shrinkWinRate/envPrior;quickStats 与 legendaryStats 默认启用);**P2 设计 tokens**(tailwind 域色/Tier/Δ + DeltaBadge + StatCard Δ 支持);**P0 预设管线**(prepare-preset.mjs + manifest.json + PresetLoader 一键加载 + preset.ts)+ **Worker 解析**(parse.worker + workerParse,FileDrop 大 JSON 走 Worker) | 收缩公式校验 ✓、影流之主小样本降位 ✓、预设脚本真实产出 4.6MB/5 文件 ✓、worker 独立 chunk ✓、构建通过 |
 | R3 | **delta 周环比引擎**(delta.ts:buildDeltas/deltasFromRows/movers/HHI);**总览双叙事切换**(本周聚焦/趋势周报:周报模式 = 包内周次分组真实环比,含 KPI Δ、热度升降榜、胜率变化榜);**移动端**(<lg 隐藏侧边栏,头部横向导航条,主区窄边距) | 真实数据周环比 ✓(卡莎 -3.5pp、菲奥娜 +2.3pp、HHI 578→632);构建通过 |
-| ⏳ R4+ | 多包 Pinia store + IndexedDB、其余视图迁移、MetaTimeline 周际线图、传奇/域对 movers、移动端图表适配 | — |
+| R4 | **周报引擎化**(core/report.ts:buildWeeklyReport 纯函数,含周际时间线/传奇 movers/域对 movers);**MetaTimeline 线图**(Top6 英雄周际出场率);**复制周报 Markdown**(utils/reportMarkdown.ts,创作者一键发布);总览周报模式补齐 | 周报 6/6 Markdown 断言 ✓(标题/上升榜/胜率榜/传奇/域对/免责);时间线叙事 ✓(易 10.1→12.9 走强、卡莎 10.6→7.5 退潮、域对 blue+red -2.9pp 自洽);构建通过 |
+| ⏳ R5+ | 其余视图迁移(英雄/单卡/地域/卡组 v3 化)、多包 Pinia store + IndexedDB(依赖放开后)、移动端图表适配、ChartCard PNG 导出 | — |
 
 > ⚠️ 环境限制:R2 尝试安装 pinia/dexie 被沙箱只读拦截(ERR_PNPM_EROFS)。store 暂用 v2 响应式单例(API 面按 Pinia 习惯组织),依赖放开后可平滑迁移。
 

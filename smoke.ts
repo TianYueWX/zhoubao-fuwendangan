@@ -2,7 +2,8 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import Papa from 'papaparse';
-import { runAnalysis, legendaryRows, sortLegendaryRows, shrinkWinRate, envPriorWinRate, quickHeroRows, deltasFromRows, movers, hhi } from '@/core';
+import { runAnalysis, legendaryRows, sortLegendaryRows, shrinkWinRate, envPriorWinRate, quickHeroRows, deltasFromRows, movers, hhi, buildWeeklyReport } from '@/core';
+import { reportToMarkdown } from '@/utils/reportMarkdown';
 import type { Deck } from '@/types';
 
 const PKG = resolve(process.cwd(), '城市赛第四赛季第三周_全量数据包');
@@ -158,3 +159,36 @@ const envCurr = envPriorWinRate(currDecks);
 const hhiPrev = hhi(prevHeroes.map((r) => ({ rate: r.popularity })));
 const hhiCurr = hhi(currHeroes.map((r) => ({ rate: r.popularity })));
 console.log(`环境胜率:${envPrev != null ? (envPrev * 100).toFixed(1) : '—'}% → ${envCurr != null ? (envCurr * 100).toFixed(1) : '—'}% | HHI:${hhiPrev.toFixed(0)} → ${hhiCurr.toFixed(0)}`);
+
+/* ── 周报引擎 + Markdown 验证 ── */
+console.log('\n== 周报引擎(buildWeeklyReport)==');
+const rep = buildWeeklyReport(result.allDecks, result.hasWinData, result.catalog);
+if (!rep) {
+  console.error('✗ 周报引擎返回 null(周次不足)');
+  process.exitCode = 1;
+} else {
+  console.log(`期间:${rep.prevLabel} → ${rep.currLabel} | 样本 ${rep.prevSample}→${rep.currSample} | 环境胜率 ${rep.envDelta != null ? rep.envDelta.toFixed(1) + 'pp' : '—'} | HHI ${rep.hhiCurr.toFixed(0)}`);
+  console.log('时间线周次:', rep.weeks.map((w) => w.label).join(' | '));
+  console.log('Top 时间线英雄:', rep.heroTimeline.slice(0, 3).map((h) => `${h.hero}[${h.pickRates.map((v) => (v == null ? '—' : v.toFixed(1))).join(',')}]`).join(' '));
+  console.log('传奇 movers Top3:', rep.legMovers.slice(0, 3).map((it) => `${it.key}${it.delta! > 0 ? '+' : ''}${it.delta?.toFixed(1)}pp`).join(' | '));
+  console.log('域对 movers Top3:', rep.domainMovers.slice(0, 3).map((it) => `${it.key}${it.delta! > 0 ? '+' : ''}${it.delta?.toFixed(1)}pp`).join(' | '));
+
+  const md = reportToMarkdown(rep);
+  const mdLines = md.split('\n');
+  console.log('\n-- Markdown 预览(前 14 行) --');
+  console.log(mdLines.slice(0, 14).join('\n'));
+  const checks: [string, boolean][] = [
+    [`标题含当期周次 ${rep.currLabel}`, md.includes(`# 符文战场 Meta 周报 · ${rep.currLabel}`)],
+    ['含热度上升榜', md.includes('## 🔥 热度上升')],
+    ['含胜率变化榜', md.includes('## 📊 胜率变化')],
+    ['含传奇热度', md.includes('## ⚔️ 传奇热度')],
+    ['含域对热度', md.includes('## 🎨 域对热度')],
+    ['含免责声明', md.includes('Riot Games 与本工具无关')]
+  ];
+  let ok = true;
+  for (const [name, pass] of checks) {
+    if (!pass) ok = false;
+    console.log(`${pass ? '✓' : '✗'} ${name}`);
+  }
+  if (!ok) process.exitCode = 1;
+}

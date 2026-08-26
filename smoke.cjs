@@ -2556,6 +2556,164 @@ function hhi(pickRates) {
   return sum;
 }
 
+// src/core/report.ts
+function aggregateBy(rows, keyFn, valueFn) {
+  const out = /* @__PURE__ */ new Map();
+  for (const r of rows) {
+    const k = keyFn(r);
+    out.set(k, (out.get(k) ?? 0) + valueFn(r));
+  }
+  return out;
+}
+function buildWeeklyReport(allDecks, hasWinData, catalog, opts = {}) {
+  const { popTop = 5, winTop = 8, legTop = 8, timelineHeroes = 6 } = opts;
+  const byWeek2 = /* @__PURE__ */ new Map();
+  for (const d of allDecks) {
+    const k = d.week.label || "\u672A\u77E5";
+    const arr = byWeek2.get(k);
+    if (arr) arr.push(d);
+    else byWeek2.set(k, [d]);
+  }
+  const labels = [...byWeek2.keys()].sort((a, b) => a.localeCompare(b));
+  if (labels.length < 2) return null;
+  const weeks = labels.map((label) => {
+    const decks = byWeek2.get(label);
+    return {
+      label,
+      sample: decks.length,
+      events: new Set(decks.map((d) => d.activityName)).size
+    };
+  });
+  const prevLabel = labels[labels.length - 2];
+  const currLabel = labels[labels.length - 1];
+  const prevG = byWeek2.get(prevLabel);
+  const currG = byWeek2.get(currLabel);
+  const prevHeroes2 = quickHeroRows(prevG, prevG.length, hasWinData);
+  const currHeroes2 = quickHeroRows(currG, currG.length, hasWinData);
+  const toRows = (rows) => rows.map((x) => ({
+    key: x.hero,
+    value: x.popularity,
+    sample: x.total
+  }));
+  const popItems2 = deltasFromRows(toRows(prevHeroes2), toRows(currHeroes2));
+  const winItems2 = deltasFromRows(
+    prevHeroes2.map((x) => ({
+      key: x.hero,
+      value: x.winRate ?? x.top8Rate,
+      sample: x.total
+    })),
+    currHeroes2.map((x) => ({
+      key: x.hero,
+      value: x.winRate ?? x.top8Rate,
+      sample: x.total
+    }))
+  );
+  const legPrev = legendaryRows(prevG, catalog, prevG.length);
+  const legCurr = legendaryRows(currG, catalog, currG.length);
+  const legPopPrev = aggregateBy(legPrev, (r) => r.name, (r) => r.total);
+  const legPopCurr = aggregateBy(legCurr, (r) => r.name, (r) => r.total);
+  const toPct = (m, total) => new Map([...m.entries()].map(([k, v]) => [k, v / Math.max(total, 1) * 100]));
+  const legItems = deltasFromRows(
+    [...toPct(legPopPrev, prevG.length)].map(([key, value]) => ({ key, value, sample: legPopPrev.get(key) ?? 0 })),
+    [...toPct(legPopCurr, currG.length)].map(([key, value]) => ({ key, value, sample: legPopCurr.get(key) ?? 0 }))
+  );
+  const domainPrev = aggregateBy(legPrev, (r) => r.colors.join("+"), (r) => r.total);
+  const domainCurr = aggregateBy(legCurr, (r) => r.colors.join("+"), (r) => r.total);
+  const domainItems = deltasFromRows(
+    [...toPct(domainPrev, prevG.length)].map(([key, value]) => ({ key, value, sample: domainPrev.get(key) ?? 0 })),
+    [...toPct(domainCurr, currG.length)].map(([key, value]) => ({ key, value, sample: domainCurr.get(key) ?? 0 }))
+  );
+  const weekHeroes = labels.map((label) => {
+    const decks = byWeek2.get(label);
+    return { label, rows: quickHeroRows(decks, decks.length, hasWinData) };
+  });
+  const pickByWeek = /* @__PURE__ */ new Map();
+  const winByWeek = /* @__PURE__ */ new Map();
+  const totalPick = /* @__PURE__ */ new Map();
+  for (const { label, rows } of weekHeroes) {
+    const p = /* @__PURE__ */ new Map();
+    const w = /* @__PURE__ */ new Map();
+    for (const r of rows) {
+      p.set(r.hero, r.popularity);
+      w.set(r.hero, r.winRate);
+      totalPick.set(r.hero, (totalPick.get(r.hero) ?? 0) + r.popularity);
+    }
+    pickByWeek.set(label, p);
+    winByWeek.set(label, w);
+  }
+  const topHeroes = [...totalPick.entries()].sort((a, b) => b[1] - a[1]).slice(0, timelineHeroes);
+  const heroTimeline = topHeroes.map(([hero]) => ({
+    hero,
+    pickRates: labels.map((l) => pickByWeek.get(l)?.get(hero) ?? null),
+    winRates: labels.map((l) => winByWeek.get(l)?.get(hero) ?? null)
+  }));
+  const envPrev2 = envPriorWinRate(prevG);
+  const envCurr2 = envPriorWinRate(currG);
+  const hhiPrev2 = hhi(prevHeroes2.map((x) => ({ rate: x.popularity })));
+  const hhiCurr2 = hhi(currHeroes2.map((x) => ({ rate: x.popularity })));
+  return {
+    prevLabel,
+    currLabel,
+    weeks,
+    prevSample: prevG.length,
+    currSample: currG.length,
+    sampleDelta: prevG.length > 0 ? (currG.length - prevG.length) / prevG.length * 100 : null,
+    prevEvents: weeks[weeks.length - 2]?.events ?? 0,
+    currEvents: weeks[weeks.length - 1]?.events ?? 0,
+    envPrev: envPrev2,
+    envCurr: envCurr2,
+    envDelta: envPrev2 != null && envCurr2 != null ? (envCurr2 - envPrev2) * 100 : null,
+    hhiPrev: hhiPrev2,
+    hhiCurr: hhiCurr2,
+    popUp: movers(popItems2, { direction: "up", topN: popTop }),
+    popDown: movers(popItems2, { direction: "down", topN: popTop }),
+    winMovers: movers(winItems2, { topN: winTop }),
+    legMovers: movers(legItems, { topN: legTop }),
+    domainMovers: movers(domainItems, { topN: legTop }),
+    heroTimeline
+  };
+}
+
+// src/utils/reportMarkdown.ts
+var fmt1 = (v) => v == null ? "\u2014" : `${v.toFixed(1)}%`;
+var fmt0 = (v) => v == null ? "\u2014" : `${v.toFixed(0)}`;
+var pp = (it) => `${it.delta > 0 ? "+" : ""}${it.delta.toFixed(1)}pp`;
+function moversLines(title, items) {
+  if (items.length === 0) return "";
+  const lines = items.map((it) => {
+    const rank = it.prevRank != null && it.currRank != null ? ` \xB7 \u540D\u6B21 ${it.prevRank}\u2192${it.currRank}` : "";
+    return `- ${it.key}:${fmt1(it.prev)} \u2192 ${fmt1(it.curr)}(${pp(it)})${rank}`;
+  });
+  return `## ${title}
+${lines.join("\n")}
+`;
+}
+function reportToMarkdown(r) {
+  const head = [
+    `# \u7B26\u6587\u6218\u573A Meta \u5468\u62A5 \xB7 ${r.currLabel}`,
+    "",
+    `> \u5BF9\u6BD4 ${r.prevLabel}(${r.prevSample} \u5957) \u2192 ${r.currLabel}(${r.currSample} \u5957)`,
+    `> \u73AF\u5883\u80DC\u7387 ${fmt1(r.envCurr ? r.envCurr * 100 : null)}${r.envDelta != null ? `(${r.envDelta > 0 ? "\u2191" : "\u2193"}${Math.abs(r.envDelta).toFixed(1)}pp)` : ""} \xB7 Meta \u96C6\u4E2D\u5EA6 HHI ${fmt0(r.hhiCurr)}(${r.hhiCurr - r.hhiPrev >= 0 ? "\u2191" : "\u2193"}${Math.abs(r.hhiCurr - r.hhiPrev).toFixed(0)})`,
+    ""
+  ];
+  const timeline = r.heroTimeline.length > 0 ? [
+    "## \u{1F4C8} \u5468\u9645\u70ED\u5EA6(\u51FA\u573A\u7387)",
+    ...r.heroTimeline.map(
+      (h) => `- ${h.hero}:${h.pickRates.map((v) => fmt1(v)).join(" \u2192 ")}(${r.weeks.map((w) => w.label).join(" / ")})`
+    ),
+    ""
+  ].join("\n") : "";
+  const body = [
+    moversLines("\u{1F525} \u70ED\u5EA6\u4E0A\u5347", r.popUp),
+    moversLines("\u{1F9CA} \u70ED\u5EA6\u4E0B\u964D", r.popDown),
+    moversLines("\u{1F4CA} \u80DC\u7387\u53D8\u5316", r.winMovers),
+    moversLines("\u2694\uFE0F \u4F20\u5947\u70ED\u5EA6", r.legMovers),
+    moversLines("\u{1F3A8} \u57DF\u5BF9\u70ED\u5EA6", r.domainMovers)
+  ].join("\n");
+  const foot = `> \u6570\u636E\u4EC5\u4F9B\u7ADE\u6280\u53C2\u8003 \xB7 Riot Games \u4E0E\u672C\u5DE5\u5177\u65E0\u5173`;
+  return [head.join("\n"), timeline, body, foot].filter(Boolean).join("\n");
+}
+
 // smoke.ts
 var PKG = (0, import_node_path.resolve)(process.cwd(), "\u57CE\u5E02\u8D5B\u7B2C\u56DB\u8D5B\u5B63\u7B2C\u4E09\u5468_\u5168\u91CF\u6570\u636E\u5305");
 function csv(name) {
@@ -2688,6 +2846,36 @@ var envCurr = envPriorWinRate(currDecks);
 var hhiPrev = hhi(prevHeroes.map((r) => ({ rate: r.popularity })));
 var hhiCurr = hhi(currHeroes.map((r) => ({ rate: r.popularity })));
 console.log(`\u73AF\u5883\u80DC\u7387:${envPrev != null ? (envPrev * 100).toFixed(1) : "\u2014"}% \u2192 ${envCurr != null ? (envCurr * 100).toFixed(1) : "\u2014"}% | HHI:${hhiPrev.toFixed(0)} \u2192 ${hhiCurr.toFixed(0)}`);
+console.log("\n== \u5468\u62A5\u5F15\u64CE(buildWeeklyReport)==");
+var rep = buildWeeklyReport(result.allDecks, result.hasWinData, result.catalog);
+if (!rep) {
+  console.error("\u2717 \u5468\u62A5\u5F15\u64CE\u8FD4\u56DE null(\u5468\u6B21\u4E0D\u8DB3)");
+  process.exitCode = 1;
+} else {
+  console.log(`\u671F\u95F4:${rep.prevLabel} \u2192 ${rep.currLabel} | \u6837\u672C ${rep.prevSample}\u2192${rep.currSample} | \u73AF\u5883\u80DC\u7387 ${rep.envDelta != null ? rep.envDelta.toFixed(1) + "pp" : "\u2014"} | HHI ${rep.hhiCurr.toFixed(0)}`);
+  console.log("\u65F6\u95F4\u7EBF\u5468\u6B21:", rep.weeks.map((w) => w.label).join(" | "));
+  console.log("Top \u65F6\u95F4\u7EBF\u82F1\u96C4:", rep.heroTimeline.slice(0, 3).map((h) => `${h.hero}[${h.pickRates.map((v) => v == null ? "\u2014" : v.toFixed(1)).join(",")}]`).join(" "));
+  console.log("\u4F20\u5947 movers Top3:", rep.legMovers.slice(0, 3).map((it) => `${it.key}${it.delta > 0 ? "+" : ""}${it.delta?.toFixed(1)}pp`).join(" | "));
+  console.log("\u57DF\u5BF9 movers Top3:", rep.domainMovers.slice(0, 3).map((it) => `${it.key}${it.delta > 0 ? "+" : ""}${it.delta?.toFixed(1)}pp`).join(" | "));
+  const md = reportToMarkdown(rep);
+  const mdLines = md.split("\n");
+  console.log("\n-- Markdown \u9884\u89C8(\u524D 14 \u884C) --");
+  console.log(mdLines.slice(0, 14).join("\n"));
+  const checks = [
+    [`\u6807\u9898\u542B\u5F53\u671F\u5468\u6B21 ${rep.currLabel}`, md.includes(`# \u7B26\u6587\u6218\u573A Meta \u5468\u62A5 \xB7 ${rep.currLabel}`)],
+    ["\u542B\u70ED\u5EA6\u4E0A\u5347\u699C", md.includes("## \u{1F525} \u70ED\u5EA6\u4E0A\u5347")],
+    ["\u542B\u80DC\u7387\u53D8\u5316\u699C", md.includes("## \u{1F4CA} \u80DC\u7387\u53D8\u5316")],
+    ["\u542B\u4F20\u5947\u70ED\u5EA6", md.includes("## \u2694\uFE0F \u4F20\u5947\u70ED\u5EA6")],
+    ["\u542B\u57DF\u5BF9\u70ED\u5EA6", md.includes("## \u{1F3A8} \u57DF\u5BF9\u70ED\u5EA6")],
+    ["\u542B\u514D\u8D23\u58F0\u660E", md.includes("Riot Games \u4E0E\u672C\u5DE5\u5177\u65E0\u5173")]
+  ];
+  let ok = true;
+  for (const [name, pass] of checks) {
+    if (!pass) ok = false;
+    console.log(`${pass ? "\u2713" : "\u2717"} ${name}`);
+  }
+  if (!ok) process.exitCode = 1;
+}
 /*! Bundled license information:
 
 papaparse/papaparse.js:
