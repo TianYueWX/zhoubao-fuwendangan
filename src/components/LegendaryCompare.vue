@@ -30,7 +30,7 @@ const topN = ref(2);
 const TOP_N_OPTIONS = [2, 3, 5, 10] as const;
 
 const metricOptions: ReadonlyArray<{ id: LegendaryMetric; label: string; disabled: boolean }> = [
-  { id: 'winRate', label: '真实胜率', disabled: false },
+  { id: 'winRate', label: '胜率·修正', disabled: false },
   { id: 'popularity', label: '出场率', disabled: false },
   { id: 'top8Rate', label: 'Top8 率', disabled: false }
 ];
@@ -84,7 +84,7 @@ function onImgErr(cardNo: string): void {
           每套卡组由 1 张传奇定义双色域;对比 {{ topN }} 名最佳传奇的强度与热度
           <span v-if="!hasWinData" class="text-amber-500 dark:text-amber-400"
             >(未导入胜场,按出场率/Top8 率排序)</span
-          >
+          ><span v-else class="text-slate-400">;胜率为贝叶斯收缩修正值(小样本向环境均值收缩)</span>
         </p>
       </div>
       <div class="flex items-center gap-2 flex-wrap shrink-0">
@@ -220,13 +220,18 @@ function onImgErr(cardNo: string): void {
             v-for="m in (['winRate', 'popularity', 'top8Rate'] as LegendaryMetric[])"
             :key="m"
             class="flex items-center gap-2"
-            :title="`${r.name} · ${m === 'winRate' ? '真实胜率' : m === 'popularity' ? '出场率' : 'Top8 率'}: ${fmt(
-              metricValue(r, m),
-              m === 'winRate' ? 1 : 1
-            )} (样本 ${r.total})`"
+            :title="`${r.name} · ${
+              m === 'winRate'
+                ? `胜率:修正 ${fmt(metricValue(r, m))} / 原始 ${
+                    r.winRate != null ? fmt(r.winRate) : '—'
+                  } (样本 ${r.total} 套,${r.rounds ?? 0} 轮)`
+                : m === 'popularity'
+                  ? `出场率: ${fmt(metricValue(r, m))}`
+                  : `Top8 率: ${fmt(metricValue(r, m))}`
+            }`"
           >
             <span class="w-12 shrink-0 text-[10px] text-slate-400 text-right tabular-nums">{{
-              m === 'winRate' ? '胜率' : m === 'popularity' ? '出场' : 'Top8'
+              m === 'winRate' ? '胜率*' : m === 'popularity' ? '出场' : 'Top8'
             }}</span>
             <div class="flex-1 h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
               <div
@@ -238,7 +243,12 @@ function onImgErr(cardNo: string): void {
               fmt(metricValue(r, m))
             }}</span>
           </div>
-          <div class="text-[10px] text-slate-400 tabular-nums mt-0.5">样本 {{ r.total }} 套</div>
+          <div class="text-[10px] text-slate-400 tabular-nums mt-0.5">
+            样本 {{ r.total }} 套
+            <span v-if="r.winRate != null && r.winRateAdj != null"
+              >· 修正 {{ fmt(r.winRateAdj) }} / 原始 {{ fmt(r.winRate) }}</span
+            >
+          </div>
         </div>
       </article>
     </div>

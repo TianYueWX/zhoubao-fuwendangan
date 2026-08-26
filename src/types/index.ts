@@ -481,6 +481,58 @@ export interface AnalysisResult {
 }
 
 /* ──────────────────────────────────────────────────────────────
+ * v3 数据包 / 预设数据模型(多包并存)
+ * ──────────────────────────────────────────────────────────── */
+
+/** 导入槽位(砍掉 v2 的 cache 槽位后为 5 个) */
+export type SlotKindV3 = 'deck' | 'base' | 'prints' | 'rank' | 'shop';
+
+/** 预设数据清单中的单个文件条目 */
+export interface PresetFileEntry {
+  /** 对应槽位 */
+  slot: SlotKindV3;
+  /** 相对 public/data/ 的路径,如 's4-w3/decks_data.csv' */
+  path: string;
+  /** 字节数 */
+  size: number;
+}
+
+/** 预设数据包元信息 */
+export interface PresetPackageMeta {
+  /** 稳定 id,如 's4-w3' */
+  id: string;
+  /** 展示名,如 '第四赛季 · 第三周(2026-08-23)' */
+  label: string;
+  season?: string;
+  week?: string;
+  /** 数据包内赛事日期范围 [起, 止] */
+  dateRange?: [string, string];
+  /** 文件数(应为 5) */
+  fileCount: number;
+  files: PresetFileEntry[];
+}
+
+/** public/data/manifest.json 结构 */
+export interface PresetManifest {
+  version: 1;
+  generatedAt: string;
+  packages: PresetPackageMeta[];
+}
+
+/** 已加载数据包的运行时元信息(多包 store 用) */
+export interface PackageMeta {
+  id: string;
+  label: string;
+  weekKey: string;
+  season: string;
+  source: 'preset' | 'upload';
+  sampleCount: number;
+  eventCount: number;
+  dateRange: [string, string] | null;
+  loadedAt: number;
+}
+
+/* ──────────────────────────────────────────────────────────────
  * 图表相关辅助类型
  * ──────────────────────────────────────────────────────────── */
 

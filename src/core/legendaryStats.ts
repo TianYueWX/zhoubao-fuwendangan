@@ -9,8 +9,9 @@
  * ============================================================== */
 
 import type { CardCatalog, CardColor, Deck } from '@/types';
+import { envPriorWinRate, shrinkWinRate } from './stats';
 
-/** 排行指标:真实胜率(缺省降级 Top8 率)/ 出场率 / Top8 率 */
+/** 排行指标:真实胜率(收缩修正,缺省降级 Top8 率)/ 出场率 / Top8 率 */
 export type LegendaryMetric = 'winRate' | 'popularity' | 'top8Rate';
 
 /** 单个传奇卡的聚合结果 */
@@ -31,6 +32,12 @@ export interface LegendaryRow {
   popularity: number;
   /** 加权真实胜率(%),无胜场数据为 null */
   winRate: number | null;
+  /** 贝叶斯收缩后的胜率(%)(向环境均值收缩,排行与对比用),无数据为 null */
+  winRateAdj: number | null;
+  /** 胜场合计(join 成功的卡组) */
+  wins: number | null;
+  /** 轮次合计(join 成功的卡组) */
+  rounds: number | null;
   /** 平均胜场(仅含 join 成功的卡组) */
   avgWins: number | null;
   /** 最常见搭配英雄名 */
@@ -53,15 +60,25 @@ interface LegendaryAgg {
   heroes: Map<string, number>;
 }
 
+export interface LegendaryOptions {
+  /** 贝叶斯收缩(默认开):胜率向环境均值收缩,缓解小样本霸榜 */
+  shrink?: boolean;
+  /** 收缩强度(等效轮次),默认 SHRINK_STRENGTH=10 */
+  strength?: number;
+}
+
 /**
  * 全量聚合:每套卡组 → 传奇卡(取第一张 '传奇' 类型卡,与 colorStats 口径一致)。
- * 胜率 = Σwins / Σrounds(加权口径,同 heroStats)。
+ * 胜率 = Σwins / Σrounds(加权口径,同 heroStats);收缩开启时输出 winRateAdj。
  */
 export function legendaryRows(
   decks: readonly Deck[],
   catalog: CardCatalog,
-  grandTotal: number
+  grandTotal: number,
+  opts: LegendaryOptions = {}
 ): LegendaryRow[] {
+  const shrink = opts.shrink ?? true;
+  const strength = opts.strength;
   const byLeg = new Map<string, LegendaryAgg>();
 
   for (const d of decks) {
@@ -96,9 +113,13 @@ export function legendaryRows(
   }
 
   const rows: LegendaryRow[] = [];
+  // 环境先验 = 全量卡组 Σwins/Σrounds(收缩用)
+  const prior = shrink ? envPriorWinRate(decks) : null;
   for (const [cardNo, a] of byLeg) {
     const meta = catalog.byId.get(cardNo);
     const topHero = [...a.heroes.entries()].sort((x, y) => y[1] - x[1])[0];
+    const hasWin = a.winDecks > 0 && a.roundsSum > 0;
+    const raw = hasWin ? (a.winsSum / a.roundsSum) * 100 : null;
     rows.push({
       cardNo,
       name: meta?.name ?? cardNo,
@@ -107,7 +128,10 @@ export function legendaryRows(
       top8: a.top8,
       top8Rate: a.total > 0 ? (a.top8 / a.total) * 100 : 0,
       popularity: grandTotal > 0 ? (a.total / grandTotal) * 100 : 0,
-      winRate: a.winDecks > 0 && a.roundsSum > 0 ? (a.winsSum / a.roundsSum) * 100 : null,
+      winRate: raw,
+      winRateAdj: hasWin && prior != null ? shrinkWinRate(a.winsSum, a.roundsSum, prior, strength) : raw,
+      wins: hasWin ? a.winsSum : null,
+      rounds: hasWin ? a.roundsSum : null,
       avgWins: a.winDecks > 0 ? a.winsSum / a.winDecks : null,
       topHero: topHero?.[0] ?? '—',
       topHeroRate: topHero && a.total > 0 ? (topHero[1] / a.total) * 100 : 0,
@@ -120,9 +144,9 @@ export function legendaryRows(
   return rows;
 }
 
-/** 取某行的指标值;胜率缺失时降级为 Top8 率 */
+/** 取某行的指标值;胜率用贝叶斯收缩值(无数据降级 Top8 率) */
 export function metricValue(r: LegendaryRow, m: LegendaryMetric): number {
-  if (m === 'winRate') return r.winRate ?? r.top8Rate;
+  if (m === 'winRate') return r.winRateAdj ?? r.top8Rate;
   return r[m];
 }
 

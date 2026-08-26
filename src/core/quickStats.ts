@@ -7,6 +7,7 @@
 
 import type { Deck, TierRating } from '@/types';
 import { rateTiers, MIN_TIER_SAMPLE } from './tier';
+import { envPriorWinRate, shrinkWinRate } from './stats';
 
 export interface QuickHeroRow {
   hero: string;
@@ -15,7 +16,7 @@ export interface QuickHeroRow {
   top8Rate: number;
   /** 出场率(%)= total / grandTotal */
   popularity: number;
-  /** 加权真实胜率(%),无数据为 null */
+  /** 加权真实胜率(%),无数据为 null;开启收缩时为贝叶斯修正值 */
   winRate: number | null;
   /** 平均胜场 */
   avgWins: number | null;
@@ -23,12 +24,23 @@ export interface QuickHeroRow {
   tierScore: number | null;
 }
 
+export interface QuickHeroOptions {
+  /** 贝叶斯收缩(默认开):胜率向环境均值收缩,缓解小样本霸榜 */
+  shrink?: boolean;
+  /** 收缩强度(等效轮次),默认 SHRINK_STRENGTH=10 */
+  strength?: number;
+}
+
 export function quickHeroRows(
   decks: readonly Deck[],
   grandTotal: number,
   hasWinData: boolean,
-  minSample = MIN_TIER_SAMPLE
+  opts: QuickHeroOptions = {}
 ): QuickHeroRow[] {
+  const shrink = opts.shrink ?? true;
+  const strength = opts.strength;
+  /** 环境先验(Σwins/Σrounds);无胜场数据或关闭收缩时为 null */
+  const prior = hasWinData && shrink ? envPriorWinRate(decks) : null;
   const byHero = new Map<
     string,
     { total: number; top8: number; winsSum: number; roundsSum: number; winDecks: number }
@@ -56,7 +68,11 @@ export function quickHeroRows(
     top8Rate: a.total > 0 ? (a.top8 / a.total) * 100 : 0,
     popularity: grandTotal > 0 ? (a.total / grandTotal) * 100 : 0,
     winRate:
-      a.winDecks > 0 && a.roundsSum > 0 ? (a.winsSum / a.roundsSum) * 100 : null,
+      a.winDecks > 0 && a.roundsSum > 0
+        ? prior != null
+          ? shrinkWinRate(a.winsSum, a.roundsSum, prior, strength)
+          : (a.winsSum / a.roundsSum) * 100
+        : null,
     avgWins: a.winDecks > 0 ? a.winsSum / a.winDecks : null,
     tier: null,
     tierScore: null
@@ -71,6 +87,7 @@ export function quickHeroRows(
     { hasWinData }
   );
 
+  const minSample = MIN_TIER_SAMPLE;
   rows.forEach((r, i) => {
     if (r.total < minSample) return;
     const t = rated[i];

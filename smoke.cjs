@@ -2351,8 +2351,29 @@ var DEFAULT_ARCHETYPE_OPTIONS = Object.freeze({
   archMax: 3
 });
 
+// src/core/stats.ts
+var SHRINK_STRENGTH = 10;
+function shrinkWinRate(wins, rounds, prior2, strength = SHRINK_STRENGTH) {
+  if (rounds <= 0) return prior2 * 100;
+  return (wins + strength * prior2) / (rounds + strength) * 100;
+}
+function envPriorWinRate(decks) {
+  let wins = 0;
+  let rounds = 0;
+  for (const d of decks) {
+    if (d.wins !== null && d.eventRounds !== null && d.eventRounds > 0) {
+      wins += d.wins;
+      rounds += d.eventRounds;
+    }
+  }
+  if (rounds <= 0) return null;
+  return wins / rounds;
+}
+
 // src/core/legendaryStats.ts
-function legendaryRows(decks, catalog, grandTotal) {
+function legendaryRows(decks, catalog, grandTotal, opts = {}) {
+  const shrink = opts.shrink ?? true;
+  const strength = opts.strength;
   const byLeg = /* @__PURE__ */ new Map();
   for (const d of decks) {
     let leg = null;
@@ -2384,9 +2405,12 @@ function legendaryRows(decks, catalog, grandTotal) {
     agg.heroes.set(hero, (agg.heroes.get(hero) ?? 0) + 1);
   }
   const rows = [];
+  const prior2 = shrink ? envPriorWinRate(decks) : null;
   for (const [cardNo, a] of byLeg) {
     const meta = catalog.byId.get(cardNo);
     const topHero = [...a.heroes.entries()].sort((x, y) => y[1] - x[1])[0];
+    const hasWin = a.winDecks > 0 && a.roundsSum > 0;
+    const raw = hasWin ? a.winsSum / a.roundsSum * 100 : null;
     rows.push({
       cardNo,
       name: meta?.name ?? cardNo,
@@ -2395,7 +2419,10 @@ function legendaryRows(decks, catalog, grandTotal) {
       top8: a.top8,
       top8Rate: a.total > 0 ? a.top8 / a.total * 100 : 0,
       popularity: grandTotal > 0 ? a.total / grandTotal * 100 : 0,
-      winRate: a.winDecks > 0 && a.roundsSum > 0 ? a.winsSum / a.roundsSum * 100 : null,
+      winRate: raw,
+      winRateAdj: hasWin && prior2 != null ? shrinkWinRate(a.winsSum, a.roundsSum, prior2, strength) : raw,
+      wins: hasWin ? a.winsSum : null,
+      rounds: hasWin ? a.roundsSum : null,
       avgWins: a.winDecks > 0 ? a.winsSum / a.winDecks : null,
       topHero: topHero?.[0] ?? "\u2014",
       topHeroRate: topHero && a.total > 0 ? topHero[1] / a.total * 100 : 0,
@@ -2407,7 +2434,7 @@ function legendaryRows(decks, catalog, grandTotal) {
   return rows;
 }
 function metricValue(r, m) {
-  if (m === "winRate") return r.winRate ?? r.top8Rate;
+  if (m === "winRate") return r.winRateAdj ?? r.top8Rate;
   return r[m];
 }
 function sortLegendaryRows(rows, metric, minSample = 5) {
@@ -2484,6 +2511,27 @@ for (const [key, n] of legByColors) {
 }
 console.log(`\u57DF\u5BF9\u53E3\u5F84\u4E00\u81F4\u6027(Top \u6837\u672C ${result.sampleSize} \u5957,${legByColors.size} \u4E2A\u57DF\u5BF9): ${pairOk} \u4E00\u81F4 / ${pairMiss} \u4E0D\u4E00\u81F4`);
 console.log("\u5E73\u5747\u6BCF\u5957\u5361\u7EC4\u4F20\u5947\u6570:", (covered / result.totalDecks).toFixed(4));
+console.log("\n== \u8D1D\u53F6\u65AF\u6536\u7F29 ==");
+var prior = envPriorWinRate(result.allDecks);
+console.log("\u73AF\u5883\u5148\u9A8C\u80DC\u7387:", prior != null ? (prior * 100).toFixed(2) + "%" : "null");
+var u1 = shrinkWinRate(9, 9, 0.5);
+var u2 = shrinkWinRate(100, 200, 0.5);
+console.log(`shrinkWinRate(9/9, prior=0.5) = ${u1.toFixed(2)}% (\u671F\u671B 73.68%) | (100/200) = ${u2.toFixed(2)}% (\u671F\u671B 50.00%)`);
+if (Math.abs(u1 - 73.68) > 0.1 || Math.abs(u2 - 50) > 0.1) {
+  console.error("\u2717 \u6536\u7F29\u516C\u5F0F\u6821\u9A8C\u5931\u8D25");
+  process.exitCode = 1;
+} else {
+  console.log("\u2713 \u6536\u7F29\u516C\u5F0F\u6821\u9A8C\u901A\u8FC7");
+}
+var byWinAdj = sortLegendaryRows(legs, "winRate");
+console.log("-- \u6309\u4FEE\u6B63\u80DC\u7387 Top5 --");
+byWinAdj.slice(0, 5).forEach(
+  (r, i) => console.log(`#${i + 1} ${r.name}(${r.cardNo}) n=${r.total} \u4FEE\u6B63=${r.winRateAdj?.toFixed(1)}% \u539F\u59CB=${r.winRate?.toFixed(1)}% rounds=${r.rounds}`)
+);
+var shadow = legs.find((r) => r.cardNo === "VEN-191");
+var shadowRank = byWinAdj.findIndex((r) => r.cardNo === "VEN-191") + 1;
+console.log(`\u5F71\u6D41\u4E4B\u4E3B(VEN-191):\u539F\u59CB#1 \u2192 \u4FEE\u6B63\u540E\u7B2C ${shadowRank} \u540D(\u4FEE\u6B63 ${shadow?.winRateAdj?.toFixed(1)}% / \u539F\u59CB ${shadow?.winRate?.toFixed(1)}%)`);
+console.log("\u82F1\u96C4\u699C(Tier)\u662F\u5426\u540C\u6B65\u6536\u7F29:", result.heroes ? "(\u5206\u6790\u7BA1\u7EBF\u4ECD\u4E3A\u539F\u59CB\u53E3\u5F84,\u89C6\u56FE\u5C42 quickStats \u5DF2\u6536\u7F29)" : "");
 /*! Bundled license information:
 
 papaparse/papaparse.js:

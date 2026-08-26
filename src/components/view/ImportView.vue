@@ -9,6 +9,7 @@ import { store, runStoredAnalysis } from '@/store/analysis';
 import { SLOT_META } from '@/store/analysis';
 import FileDrop from '@/components/FileDrop.vue';
 import MappingPanel from '@/components/MappingPanel.vue';
+import PresetLoader from '@/components/PresetLoader.vue';
 
 function runAndGo(): void {
   if (runStoredAnalysis()) {
@@ -49,6 +50,9 @@ const quality = computed(() => {
 
 <template>
   <div class="fade-in max-w-5xl mx-auto space-y-6">
+    <!-- 内置预设数据包(v3) -->
+    <PresetLoader />
+
     <!-- 上传区 -->
     <section class="panel rounded-2xl p-6">
       <div class="flex flex-col md:flex-row items-start md:items-center justify-between mb-5 gap-4">

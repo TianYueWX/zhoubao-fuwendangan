@@ -7,9 +7,9 @@
 import { computed, ref } from 'vue';
 import {
   parseCSVFile,
-  parseJSONFile,
   detectSlotFromFilename
 } from '@/utils/dataParser';
+import { parseInWorker } from '@/utils/workerParse';
 import { store, loadSlotFile, SLOT_KINDS } from '@/store/analysis';
 import type { RawRow, RankRow, ShopRow, DeckCacheData } from '@/types';
 
@@ -41,12 +41,13 @@ function handleFile(e: Event): void {
     const target =
       auto === null ? props.slotIndex : Math.max(0, SLOT_KINDS.indexOf(auto));
 
-    if (target >= 3) {
-      // JSON 槽位
+    if (target >= 3 || file.name.toLowerCase().endsWith('.json')) {
+      // JSON 槽位(v3:大文件走 Web Worker 解析,主线程不卡顿)
       parsing.value = true;
-      parseJSONFile<unknown>(
-        file,
-        (data) => {
+      file
+        .text()
+        .then((text) => parseInWorker(text, 'json'))
+        .then((data) => {
           parsing.value = false;
           if (Array.isArray(data)) {
             loadSlotFile(target, data as RawRow[], file.name, auto !== null);
@@ -55,26 +56,11 @@ function handleFile(e: Event): void {
           } else {
             error.value = '无法识别的 JSON 结构';
           }
-        },
-        (err) => {
+        })
+        .catch((err: unknown) => {
           parsing.value = false;
-          error.value = `解析失败:${err.message}`;
-        }
-      );
-    } else if (file.name.toLowerCase().endsWith('.json')) {
-      // rank/shop JSON 也可能是数组结构,走 JSON 分支
-      parsing.value = true;
-      parseJSONFile<RankRow[] | ShopRow[]>(
-        file,
-        (rows) => {
-          parsing.value = false;
-          loadSlotFile(target, rows, file.name, auto !== null);
-        },
-        (err) => {
-          parsing.value = false;
-          error.value = `解析失败:${err.message}`;
-        }
-      );
+          error.value = `解析失败:${err instanceof Error ? err.message : String(err)}`;
+        });
     } else {
       parseCSVFile<RawRow>(
         file,

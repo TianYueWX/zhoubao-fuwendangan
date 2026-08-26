@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import Papa from 'papaparse';
-import { runAnalysis, legendaryRows, sortLegendaryRows } from '@/core';
+import { runAnalysis, legendaryRows, sortLegendaryRows, shrinkWinRate, envPriorWinRate } from '@/core';
 
 const PKG = resolve(process.cwd(), '城市赛第四赛季第三周_全量数据包');
 
@@ -88,3 +88,28 @@ for (const [key, n] of legByColors) {
 }
 console.log(`域对口径一致性(Top 样本 ${result.sampleSize} 套,${legByColors.size} 个域对): ${pairOk} 一致 / ${pairMiss} 不一致`);
 console.log('平均每套卡组传奇数:', (covered / result.totalDecks).toFixed(4));
+
+/* ── 贝叶斯收缩验证 ── */
+console.log('\n== 贝叶斯收缩 ==');
+const prior = envPriorWinRate(result.allDecks);
+console.log('环境先验胜率:', prior != null ? (prior * 100).toFixed(2) + '%' : 'null');
+// 纯函数断言
+const u1 = shrinkWinRate(9, 9, 0.5); // 100% → 73.68%
+const u2 = shrinkWinRate(100, 200, 0.5); // 50% 大样本 → ≈50.48%
+console.log(`shrinkWinRate(9/9, prior=0.5) = ${u1.toFixed(2)}% (期望 73.68%) | (100/200) = ${u2.toFixed(2)}% (期望 50.00%)`);
+if (Math.abs(u1 - 73.68) > 0.1 || Math.abs(u2 - 50.0) > 0.1) {
+  console.error('✗ 收缩公式校验失败');
+  process.exitCode = 1;
+} else {
+  console.log('✓ 收缩公式校验通过');
+}
+// 修正后胜率排行:小样本(影流之主 n=9)应被环境均值拉低
+const byWinAdj = sortLegendaryRows(legs, 'winRate');
+console.log('-- 按修正胜率 Top5 --');
+byWinAdj.slice(0, 5).forEach((r, i) =>
+  console.log(`#${i + 1} ${r.name}(${r.cardNo}) n=${r.total} 修正=${r.winRateAdj?.toFixed(1)}% 原始=${r.winRate?.toFixed(1)}% rounds=${r.rounds}`)
+);
+const shadow = legs.find((r) => r.cardNo === 'VEN-191');
+const shadowRank = byWinAdj.findIndex((r) => r.cardNo === 'VEN-191') + 1;
+console.log(`影流之主(VEN-191):原始#1 → 修正后第 ${shadowRank} 名(修正 ${shadow?.winRateAdj?.toFixed(1)}% / 原始 ${shadow?.winRate?.toFixed(1)}%)`);
+console.log('英雄榜(Tier)是否同步收缩:', result.heroes ? '(分析管线仍为原始口径,视图层 quickStats 已收缩)' : '');

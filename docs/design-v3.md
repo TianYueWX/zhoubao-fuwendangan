@@ -2,7 +2,17 @@
 
 > 状态:**已获用户认可(4 决策点全部确认)· 骨架实现进行中** | 基于:README + 城市赛第四赛季第三周_全量数据包 + v2.0.0 现有代码
 > 关键决策(已获用户确认):双受众(玩家/创作者)兼顾 | 多包并存+周环比 | 允许重设计统计口径 | 不处理隐私脱敏 | 预设数据置于项目 data/ 目录 | Pages 为主(file:// 降级)| Combo 并入单卡 Tab | public/data/ + manifest.json | 总览内双叙事切换
-> 追加需求(2026-08-26):**最佳传奇排行横向对比**(详见 §3.4)
+> 追加需求(2026-08-26):**最佳传奇排行横向对比**(详见 §3.4,已实现)
+
+## 0. 实现进度日志
+
+| 轮次 | 交付 | 验证 |
+|---|---|---|
+| R1 | §3.4 传奇排行引擎 + LegendaryCompare 组件 + 总览集成;smoke 全链路修复 | 2732/2732 覆盖、域对口径 15/15 一致、构建通过、已提交 e2445ae |
+| R2 | **P1 贝叶斯收缩**(stats.ts:shrinkWinRate/envPrior;quickStats 与 legendaryStats 默认启用);**P2 设计 tokens**(tailwind 域色/Tier/Δ + DeltaBadge + StatCard Δ 支持);**P0 预设管线**(prepare-preset.mjs + manifest.json + PresetLoader 一键加载 + preset.ts)+ **Worker 解析**(parse.worker + workerParse,FileDrop 大 JSON 走 Worker) | 收缩公式校验 ✓、影流之主小样本降位 ✓、预设脚本真实产出 4.6MB/5 文件 ✓、worker 独立 chunk ✓、构建通过 |
+| ⏳ R3+ | 多包 Pinia store + IndexedDB、预设包接入周对比(Δ 徽章全量接入)、其余视图迁移、双叙事总览、移动端 | — |
+
+> ⚠️ 环境限制:R2 尝试安装 pinia/dexie 被沙箱只读拦截(ERR_PNPM_EROFS)。store 暂用 v2 响应式单例(API 面按 Pinia 习惯组织),依赖放开后可平滑迁移。
 
 ---
 

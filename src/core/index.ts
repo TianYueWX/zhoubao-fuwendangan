@@ -32,3 +32,4 @@ export { quickHeroRows } from './quickStats';
 export type { QuickHeroRow } from './quickStats';
 export { legendaryRows, sortLegendaryRows, metricValue } from './legendaryStats';
 export type { LegendaryRow, LegendaryMetric } from './legendaryStats';
+export { shrinkWinRate, envPriorWinRate, shrinkBatch, SHRINK_STRENGTH } from './stats';

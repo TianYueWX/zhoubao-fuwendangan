@@ -15,7 +15,29 @@ export default {
         'card-border': 'var(--color-card-border)',
         'text-primary': 'var(--color-text-primary)',
         'text-muted': 'var(--color-text-muted)',
-        'text-subtle': 'var(--color-text-subtle)'
+        'text-subtle': 'var(--color-text-subtle)',
+        // v3 语义色(与 src/utils/palette.ts 的 CARD_COLOR_HEX / TIER_COLORS 对齐)
+        'brand-gold': '#e8b54a',
+        domain: {
+          red: '#e2372b',
+          green: '#3fa650',
+          blue: '#2f7dd1',
+          yellow: '#d9a514',
+          purple: '#8b48c9',
+          orange: '#e2762b',
+          colorless: '#94a3b8'
+        },
+        tier: {
+          s: '#e8b54a',
+          a: '#e05d5d',
+          b: '#5b8def',
+          c: '#94a3b8'
+        },
+        delta: {
+          up: '#4cc38a',
+          down: '#e05d5d',
+          flat: '#9aa3b5'
+        }
       },
       fontFamily: {
         sans: ['system-ui', '-apple-system', '"Segoe UI"', 'Roboto', '"Helvetica Neue"', 'Arial', '"Noto Sans SC"', '"PingFang SC"', '"Microsoft YaHei"', 'sans-serif']
