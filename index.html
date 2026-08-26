@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="light">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0a0a0a" />
+    <title>符文战场 · 终极 Meta 分析系统</title>
+
+    <!--
+      主题预加载脚本:在 Vue 加载之前依据 localStorage / 系统偏好设置 html.class,
+      避免首屏白闪。读 / 写的 key 必须与 src/composables/useTheme.ts 的 STORAGE_KEY 一致。
+    -->
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem('riftbound-theme');
+          var dark =
+            t === 'dark' ||
+            (t !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          document.documentElement.classList.toggle('dark', dark);
+          document.documentElement.classList.toggle('light', !dark);
+        } catch (e) {
+          /* localStorage 在某些隐私模式下不可用,降级到 light */
+        }
+      })();
+    </script>
+
+    <!--
+      中国地图数据(从 DataV GeoAtlas 离线打包,放在 public/china-geo.js):
+      使用绝对路径以便 Vite 把文件原样拷贝到 dist/(不作 bundle 也不需要 type="module"),
+      保证 file:// 协议下脚本能同步执行、window.chinaGeoJson 在 Vue mount 之前已就绪。
+    -->
+    <script src="/china-geo.js"></script>
+  </head>
+  <body class="min-h-screen">
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
