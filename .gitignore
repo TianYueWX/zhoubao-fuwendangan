@@ -1,12 +1,10 @@
 node_modules/
-assets/
 dist/
 .DS_Store
 *.log
 .env
 .env.local
 .vite/
-public/data/
 
 # UI 验证截图(临时)
 shots/
