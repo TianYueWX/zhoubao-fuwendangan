@@ -2,7 +2,8 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import Papa from 'papaparse';
-import { runAnalysis, legendaryRows, sortLegendaryRows, shrinkWinRate, envPriorWinRate } from '@/core';
+import { runAnalysis, legendaryRows, sortLegendaryRows, shrinkWinRate, envPriorWinRate, quickHeroRows, deltasFromRows, movers, hhi } from '@/core';
+import type { Deck } from '@/types';
 
 const PKG = resolve(process.cwd(), '城市赛第四赛季第三周_全量数据包');
 
@@ -113,3 +114,47 @@ const shadow = legs.find((r) => r.cardNo === 'VEN-191');
 const shadowRank = byWinAdj.findIndex((r) => r.cardNo === 'VEN-191') + 1;
 console.log(`影流之主(VEN-191):原始#1 → 修正后第 ${shadowRank} 名(修正 ${shadow?.winRateAdj?.toFixed(1)}% / 原始 ${shadow?.winRate?.toFixed(1)}%)`);
 console.log('英雄榜(Tier)是否同步收缩:', result.heroes ? '(分析管线仍为原始口径,视图层 quickStats 已收缩)' : '');
+
+/* ── 周环比引擎验证(包内按周分组,后两周对比)── */
+console.log('\n== 周环比引擎 ==');
+const byWeek = new Map<string, Deck[]>();
+for (const d of result.allDecks) {
+  const k = d.week.label || '未知';
+  const arr = byWeek.get(k);
+  if (arr) arr.push(d);
+  else byWeek.set(k, [d]);
+}
+const weekLabels = [...byWeek.keys()].sort();
+console.log('周次分布:', weekLabels.map((k) => `${k}=${byWeek.get(k)!.length}`).join(' | '));
+const [prevL, currL] = weekLabels.slice(-2);
+const prevDecks = byWeek.get(prevL)!;
+const currDecks = byWeek.get(currL)!;
+
+const prevHeroes = quickHeroRows(prevDecks, prevDecks.length, result.hasWinData);
+const currHeroes = quickHeroRows(currDecks, currDecks.length, result.hasWinData);
+const popItems = deltasFromRows(
+  prevHeroes.map((r) => ({ key: r.hero, value: r.popularity, sample: r.total })),
+  currHeroes.map((r) => ({ key: r.hero, value: r.popularity, sample: r.total }))
+);
+const winItems = deltasFromRows(
+  prevHeroes.map((r) => ({ key: r.hero, value: r.winRate ?? r.top8Rate, sample: r.total })),
+  currHeroes.map((r) => ({ key: r.hero, value: r.winRate ?? r.top8Rate, sample: r.total }))
+);
+console.log(`对比期间:${prevL}(${prevDecks.length} 套) → ${currL}(${currDecks.length} 套)`);
+console.log('-- 热度上升 Top4 --');
+movers(popItems, { direction: 'up', topN: 4 }).forEach((it) =>
+  console.log(`▲ ${it.key}: ${it.prev?.toFixed(1)}% → ${it.curr?.toFixed(1)}% (Δ${it.delta?.toFixed(1)}pp, 名次 ${it.prevRank}→${it.currRank})`)
+);
+console.log('-- 热度下降 Top4 --');
+movers(popItems, { direction: 'down', topN: 4 }).forEach((it) =>
+  console.log(`▼ ${it.key}: ${it.prev?.toFixed(1)}% → ${it.curr?.toFixed(1)}% (Δ${it.delta?.toFixed(1)}pp, 名次 ${it.prevRank}→${it.currRank})`)
+);
+console.log('-- 胜率变化 Top3 --');
+movers(winItems, { topN: 3 }).forEach((it) =>
+  console.log(`${it.delta! > 0 ? '▲' : '▼'} ${it.key}: 胜率 ${it.prev?.toFixed(1)}% → ${it.curr?.toFixed(1)}% (Δ${it.delta?.toFixed(1)}pp)`)
+);
+const envPrev = envPriorWinRate(prevDecks);
+const envCurr = envPriorWinRate(currDecks);
+const hhiPrev = hhi(prevHeroes.map((r) => ({ rate: r.popularity })));
+const hhiCurr = hhi(currHeroes.map((r) => ({ rate: r.popularity })));
+console.log(`环境胜率:${envPrev != null ? (envPrev * 100).toFixed(1) : '—'}% → ${envCurr != null ? (envCurr * 100).toFixed(1) : '—'}% | HHI:${hhiPrev.toFixed(0)} → ${hhiCurr.toFixed(0)}`);

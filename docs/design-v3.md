@@ -10,7 +10,8 @@
 |---|---|---|
 | R1 | §3.4 传奇排行引擎 + LegendaryCompare 组件 + 总览集成;smoke 全链路修复 | 2732/2732 覆盖、域对口径 15/15 一致、构建通过、已提交 e2445ae |
 | R2 | **P1 贝叶斯收缩**(stats.ts:shrinkWinRate/envPrior;quickStats 与 legendaryStats 默认启用);**P2 设计 tokens**(tailwind 域色/Tier/Δ + DeltaBadge + StatCard Δ 支持);**P0 预设管线**(prepare-preset.mjs + manifest.json + PresetLoader 一键加载 + preset.ts)+ **Worker 解析**(parse.worker + workerParse,FileDrop 大 JSON 走 Worker) | 收缩公式校验 ✓、影流之主小样本降位 ✓、预设脚本真实产出 4.6MB/5 文件 ✓、worker 独立 chunk ✓、构建通过 |
-| ⏳ R3+ | 多包 Pinia store + IndexedDB、预设包接入周对比(Δ 徽章全量接入)、其余视图迁移、双叙事总览、移动端 | — |
+| R3 | **delta 周环比引擎**(delta.ts:buildDeltas/deltasFromRows/movers/HHI);**总览双叙事切换**(本周聚焦/趋势周报:周报模式 = 包内周次分组真实环比,含 KPI Δ、热度升降榜、胜率变化榜);**移动端**(<lg 隐藏侧边栏,头部横向导航条,主区窄边距) | 真实数据周环比 ✓(卡莎 -3.5pp、菲奥娜 +2.3pp、HHI 578→632);构建通过 |
+| ⏳ R4+ | 多包 Pinia store + IndexedDB、其余视图迁移、MetaTimeline 周际线图、传奇/域对 movers、移动端图表适配 | — |
 
 > ⚠️ 环境限制:R2 尝试安装 pinia/dexie 被沙箱只读拦截(ERR_PNPM_EROFS)。store 暂用 v2 响应式单例(API 面按 Pinia 习惯组织),依赖放开后可平滑迁移。
 

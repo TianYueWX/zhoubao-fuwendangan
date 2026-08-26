@@ -27,7 +27,7 @@ const toneDot = computed(
 
 <template>
   <aside
-    class="w-56 shrink-0 border-r border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl sticky top-0 h-screen flex flex-col"
+    class="hidden lg:flex w-56 shrink-0 border-r border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl sticky top-0 h-screen flex-col"
   >
     <!-- 品牌 -->
     <div class="px-5 pt-5 pb-4">

@@ -2370,6 +2370,58 @@ function envPriorWinRate(decks) {
   return wins / rounds;
 }
 
+// src/core/quickStats.ts
+function quickHeroRows(decks, grandTotal, hasWinData, opts = {}) {
+  const shrink = opts.shrink ?? true;
+  const strength = opts.strength;
+  const prior2 = hasWinData && shrink ? envPriorWinRate(decks) : null;
+  const byHero = /* @__PURE__ */ new Map();
+  for (const d of decks) {
+    const hero = d.hero || "\u672A\u77E5";
+    let agg = byHero.get(hero);
+    if (!agg) {
+      agg = { total: 0, top8: 0, winsSum: 0, roundsSum: 0, winDecks: 0 };
+      byHero.set(hero, agg);
+    }
+    agg.total += 1;
+    if (d.rank >= 1 && d.rank <= 8) agg.top8 += 1;
+    if (d.wins !== null && d.eventRounds !== null && d.eventRounds > 0) {
+      agg.winsSum += d.wins;
+      agg.roundsSum += d.eventRounds;
+      agg.winDecks += 1;
+    }
+  }
+  const rows = Array.from(byHero.entries()).map(([hero, a]) => ({
+    hero,
+    total: a.total,
+    top8Rate: a.total > 0 ? a.top8 / a.total * 100 : 0,
+    popularity: grandTotal > 0 ? a.total / grandTotal * 100 : 0,
+    winRate: a.winDecks > 0 && a.roundsSum > 0 ? prior2 != null ? shrinkWinRate(a.winsSum, a.roundsSum, prior2, strength) : a.winsSum / a.roundsSum * 100 : null,
+    avgWins: a.winDecks > 0 ? a.winsSum / a.winDecks : null,
+    tier: null,
+    tierScore: null
+  }));
+  const rated = rateTiers(
+    rows.map((r) => ({
+      winRate: r.winRate,
+      top8Rate: r.top8Rate,
+      popularity: r.popularity
+    })),
+    { hasWinData }
+  );
+  const minSample = MIN_TIER_SAMPLE;
+  rows.forEach((r, i) => {
+    if (r.total < minSample) return;
+    const t = rated[i];
+    if (t) {
+      r.tier = t.tier;
+      r.tierScore = t.tierScore;
+    }
+  });
+  rows.sort((a, b) => b.popularity - a.popularity);
+  return rows;
+}
+
 // src/core/legendaryStats.ts
 function legendaryRows(decks, catalog, grandTotal, opts = {}) {
   const shrink = opts.shrink ?? true;
@@ -2439,6 +2491,69 @@ function metricValue(r, m) {
 }
 function sortLegendaryRows(rows, metric, minSample = 5) {
   return [...rows].filter((r) => r.total >= minSample).sort((a, b) => metricValue(b, metric) - metricValue(a, metric) || b.total - a.total);
+}
+
+// src/core/delta.ts
+function buildDeltas(prev, curr, prevSamples, currSamples, opts = {}) {
+  const { minAbsDelta = 0.5, minSample = 10 } = opts;
+  const keys = /* @__PURE__ */ new Set([...prev.keys(), ...curr.keys()]);
+  function ranks(map) {
+    const sorted = [...map.entries()].sort((a, b) => b[1] - a[1]);
+    const out = /* @__PURE__ */ new Map();
+    sorted.forEach(([k], i) => out.set(k, i + 1));
+    return out;
+  }
+  const prevRanks = ranks(prev);
+  const currRanks = ranks(curr);
+  const items = [];
+  for (const key of keys) {
+    const p = prev.get(key) ?? null;
+    const c = curr.get(key) ?? null;
+    const prevSample = prevSamples?.get(key) ?? 0;
+    const currSample = currSamples?.get(key) ?? 0;
+    const delta = p != null && c != null ? c - p : null;
+    const pr = prevRanks.get(key) ?? null;
+    const cr = currRanks.get(key) ?? null;
+    items.push({
+      key,
+      prev: p,
+      curr: c,
+      delta,
+      prevRank: pr,
+      currRank: cr,
+      rankChange: pr != null && cr != null ? pr - cr : null,
+      prevSample,
+      currSample,
+      significant: delta != null && Math.abs(delta) >= minAbsDelta && currSample >= minSample
+    });
+  }
+  return items;
+}
+function deltasFromRows(prevRows, currRows, opts) {
+  const toMap = (rows) => {
+    const v = /* @__PURE__ */ new Map();
+    const s = /* @__PURE__ */ new Map();
+    for (const r of rows) {
+      if (r.value != null) v.set(r.key, r.value);
+      s.set(r.key, r.sample);
+    }
+    return { v, s };
+  };
+  const p = toMap(prevRows);
+  const c = toMap(currRows);
+  return buildDeltas(p.v, c.v, p.s, c.s, opts);
+}
+function movers(items, opts = {}) {
+  const { direction = "all", significantOnly = true, topN = 5 } = opts;
+  return items.filter((it) => it.delta != null).filter((it) => significantOnly ? it.significant : true).filter((it) => {
+    if (direction === "up") return it.delta > 0;
+    if (direction === "down") return it.delta < 0;
+    return true;
+  }).sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta)).slice(0, topN);
+}
+function hhi(pickRates) {
+  const sum = pickRates.reduce((s, r) => s + r.rate * r.rate, 0);
+  return sum;
 }
 
 // smoke.ts
@@ -2532,6 +2647,47 @@ var shadow = legs.find((r) => r.cardNo === "VEN-191");
 var shadowRank = byWinAdj.findIndex((r) => r.cardNo === "VEN-191") + 1;
 console.log(`\u5F71\u6D41\u4E4B\u4E3B(VEN-191):\u539F\u59CB#1 \u2192 \u4FEE\u6B63\u540E\u7B2C ${shadowRank} \u540D(\u4FEE\u6B63 ${shadow?.winRateAdj?.toFixed(1)}% / \u539F\u59CB ${shadow?.winRate?.toFixed(1)}%)`);
 console.log("\u82F1\u96C4\u699C(Tier)\u662F\u5426\u540C\u6B65\u6536\u7F29:", result.heroes ? "(\u5206\u6790\u7BA1\u7EBF\u4ECD\u4E3A\u539F\u59CB\u53E3\u5F84,\u89C6\u56FE\u5C42 quickStats \u5DF2\u6536\u7F29)" : "");
+console.log("\n== \u5468\u73AF\u6BD4\u5F15\u64CE ==");
+var byWeek = /* @__PURE__ */ new Map();
+for (const d of result.allDecks) {
+  const k = d.week.label || "\u672A\u77E5";
+  const arr = byWeek.get(k);
+  if (arr) arr.push(d);
+  else byWeek.set(k, [d]);
+}
+var weekLabels = [...byWeek.keys()].sort();
+console.log("\u5468\u6B21\u5206\u5E03:", weekLabels.map((k) => `${k}=${byWeek.get(k).length}`).join(" | "));
+var [prevL, currL] = weekLabels.slice(-2);
+var prevDecks = byWeek.get(prevL);
+var currDecks = byWeek.get(currL);
+var prevHeroes = quickHeroRows(prevDecks, prevDecks.length, result.hasWinData);
+var currHeroes = quickHeroRows(currDecks, currDecks.length, result.hasWinData);
+var popItems = deltasFromRows(
+  prevHeroes.map((r) => ({ key: r.hero, value: r.popularity, sample: r.total })),
+  currHeroes.map((r) => ({ key: r.hero, value: r.popularity, sample: r.total }))
+);
+var winItems = deltasFromRows(
+  prevHeroes.map((r) => ({ key: r.hero, value: r.winRate ?? r.top8Rate, sample: r.total })),
+  currHeroes.map((r) => ({ key: r.hero, value: r.winRate ?? r.top8Rate, sample: r.total }))
+);
+console.log(`\u5BF9\u6BD4\u671F\u95F4:${prevL}(${prevDecks.length} \u5957) \u2192 ${currL}(${currDecks.length} \u5957)`);
+console.log("-- \u70ED\u5EA6\u4E0A\u5347 Top4 --");
+movers(popItems, { direction: "up", topN: 4 }).forEach(
+  (it) => console.log(`\u25B2 ${it.key}: ${it.prev?.toFixed(1)}% \u2192 ${it.curr?.toFixed(1)}% (\u0394${it.delta?.toFixed(1)}pp, \u540D\u6B21 ${it.prevRank}\u2192${it.currRank})`)
+);
+console.log("-- \u70ED\u5EA6\u4E0B\u964D Top4 --");
+movers(popItems, { direction: "down", topN: 4 }).forEach(
+  (it) => console.log(`\u25BC ${it.key}: ${it.prev?.toFixed(1)}% \u2192 ${it.curr?.toFixed(1)}% (\u0394${it.delta?.toFixed(1)}pp, \u540D\u6B21 ${it.prevRank}\u2192${it.currRank})`)
+);
+console.log("-- \u80DC\u7387\u53D8\u5316 Top3 --");
+movers(winItems, { topN: 3 }).forEach(
+  (it) => console.log(`${it.delta > 0 ? "\u25B2" : "\u25BC"} ${it.key}: \u80DC\u7387 ${it.prev?.toFixed(1)}% \u2192 ${it.curr?.toFixed(1)}% (\u0394${it.delta?.toFixed(1)}pp)`)
+);
+var envPrev = envPriorWinRate(prevDecks);
+var envCurr = envPriorWinRate(currDecks);
+var hhiPrev = hhi(prevHeroes.map((r) => ({ rate: r.popularity })));
+var hhiCurr = hhi(currHeroes.map((r) => ({ rate: r.popularity })));
+console.log(`\u73AF\u5883\u80DC\u7387:${envPrev != null ? (envPrev * 100).toFixed(1) : "\u2014"}% \u2192 ${envCurr != null ? (envCurr * 100).toFixed(1) : "\u2014"}% | HHI:${hhiPrev.toFixed(0)} \u2192 ${hhiCurr.toFixed(0)}`);
 /*! Bundled license information:
 
 papaparse/papaparse.js:

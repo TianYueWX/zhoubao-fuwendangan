@@ -6,13 +6,18 @@
  *  - 内容区:7 个视图页面
  */
 import { computed } from 'vue';
-import { store, runStoredAnalysis, type ViewName } from '@/store/analysis';
+import { store, runStoredAnalysis, views, type ViewName } from '@/store/analysis';
 import ThemeSwitcher from '@/components/ThemeSwitcher.vue';
 import SidebarNav from '@/components/layout/SidebarNav.vue';
 import FilterBar from '@/components/FilterBar.vue';
 import { ViewComponents } from '@/components/view';
 
 const activeViewComponent = computed(() => ViewComponents[store.currentView as ViewName]);
+
+/** 移动端横向导航(<lg 时替代侧边栏) */
+const mobileNav = computed(() =>
+  views.map((v) => ({ ...v, disabled: v.id !== 'import' && !store.result }))
+);
 </script>
 
 <template>
@@ -48,7 +53,29 @@ const activeViewComponent = computed(() => ViewComponents[store.currentView as V
 
       <FilterBar />
 
-      <main class="flex-1 px-6 py-6">
+      <!-- 移动端横向导航(<lg 替代侧边栏) -->
+      <nav
+        class="lg:hidden sticky top-[56px] z-40 panel rounded-none border-x-0 border-t-0 flex gap-1.5 overflow-x-auto px-4 py-2"
+      >
+        <button
+          v-for="v in mobileNav"
+          :key="v.id"
+          :disabled="v.disabled"
+          @click="store.currentView = v.id"
+          :class="[
+            'shrink-0 px-3 py-1.5 rounded-lg text-xs transition-all whitespace-nowrap',
+            store.currentView === v.id
+              ? 'tab-active font-medium'
+              : v.disabled
+                ? 'text-slate-300 dark:text-slate-700 cursor-not-allowed'
+                : 'text-slate-500 dark:text-gray-400 hover:bg-black/5 dark:hover:bg-white/5'
+          ]"
+        >
+          {{ v.emoji }} {{ v.label }}
+        </button>
+      </nav>
+
+      <main class="flex-1 px-4 lg:px-6 py-6">
         <component :is="activeViewComponent" />
       </main>
 
