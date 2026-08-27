@@ -9,7 +9,7 @@ import { computed, ref } from 'vue';
 import { store, runStoredAnalysis, loadCardData, loadSlotFile, SLOT_KINDS } from '@/store/analysis';
 import { SLOT_META } from '@/store/analysis';
 import { detectSlotFromFilename, parseCSVFile } from '@/utils/dataParser';
-import { parseInWorker } from '@/utils/workerParse';
+import { parseJsonAuto } from '@/utils/streamJson';
 import FileDrop from '@/components/FileDrop.vue';
 import CardDataFallback from '@/components/CardDataFallback.vue';
 import MappingPanel from '@/components/MappingPanel.vue';
@@ -34,6 +34,7 @@ async function handleBatch(e: Event): Promise<void> {
   batchSummary.value = [];
   const results: { slot: string; fileName: string; ok: boolean }[] = [];
   for (const file of Array.from(files)) {
+    console.log('[ImportView.handleBatch] FILE', file.name, 'size:', file.size);
     const auto = detectSlotFromFilename(file.name);
     if (auto === 'base' || auto === 'prints') {
       // 卡表已内置预加载,静默跳过
@@ -46,8 +47,9 @@ async function handleBatch(e: Event): Promise<void> {
     const target = SLOT_KINDS.indexOf(auto);
     try {
       if (file.name.toLowerCase().endsWith('.json')) {
-        const text = await file.text();
-        const data = (await parseInWorker(text, 'json')) as RawRow[] | null;
+        console.log('[ImportView.handleBatch] JSON FILE, calling parseJsonAuto...');
+        const data = await parseJsonAuto(file) as RawRow[] | null;
+        console.log('[ImportView.handleBatch] parseJsonAuto returned', data?.length, 'items');
         if (!Array.isArray(data)) throw new Error('JSON 应为数组');
         loadSlotFile(target, data, file.name, true);
       } else {
@@ -66,6 +68,7 @@ async function handleBatch(e: Event): Promise<void> {
       }
       results.push({ slot: auto, fileName: file.name, ok: true });
     } catch (err: unknown) {
+      console.error('[ImportView.handleBatch] ERROR:', err);
       results.push({ slot: auto, fileName: file.name, ok: false });
     }
   }

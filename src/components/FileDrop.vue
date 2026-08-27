@@ -13,7 +13,7 @@ import {
   parseCSVFile,
   detectSlotFromFilename
 } from '@/utils/dataParser';
-import { parseInWorker } from '@/utils/workerParse';
+import { parseJsonAuto } from '@/utils/streamJson';
 import { store, loadSlotFile, SLOT_KINDS } from '@/store/analysis';
 import type { RawRow, RankRow, ShopRow } from '@/types';
 
@@ -41,15 +41,33 @@ function friendlyReadError(err: unknown, fileName: string): string {
   if (
     e?.name === 'NotReadableError' ||
     e?.name === 'NotFoundError' ||
-    msg.includes('could not be read')
+    msg.includes('could not be read') ||
+    msg.includes('size') ||
+    msg.includes('NotReadableError')
   ) {
-    return `${fileName} 无法读取:文件可能已被移动/删除、位于未同步的云端或网络目录,或超出浏览器可读大小。请确认文件已保存在本地磁盘后重试。`;
+    return `${fileName} 无法读取。请将文件复制到 ~/Downloads 后重试，或使用 Firefox。`;
   }
   return `${fileName}:${msg}`;
 }
 
 async function processOne(file: File): Promise<void> {
+  console.log('[FileDrop] processOne START', file.name, 'size:', file.size, 'type:', file.type);
+
+  // Chrome Flatpak/Snap sandbox: file.size === 0 means Chrome can't read the file
+  if (file.size === 0) {
+    const msg = `${file.name}: 文件大小显示为 0，Chrome 无法读取。\n\n` +
+      `可能原因：\n` +
+      `1. Flatpak/Snap 版 Chrome（沙箱限制）\n` +
+      `2. 文件在符号链接/特殊挂载点\n\n` +
+      `解决方法：\n` +
+      `• 将文件复制到 ~/Downloads 后重试\n` +
+      `• 或使用 Firefox 上传\n` +
+      `• Flatpak 用户：flatpak override --filesystem=home com.google.Chrome`;
+    throw new Error(msg);
+  }
+
   const auto = detectSlotFromFilename(file.name);
+  console.log('[FileDrop] detectSlotFromFilename:', auto);
   // 卡表/印刷已内置预加载(随站点发布),拖入/选中时静默跳过
   if (auto === 'base' || auto === 'prints') {
     // eslint-disable-next-line no-console
@@ -58,18 +76,22 @@ async function processOne(file: File): Promise<void> {
   }
   const target =
     auto === null ? props.slotIndex : Math.max(0, SLOT_KINDS.indexOf(auto));
+  console.log('[FileDrop] target slot:', target, 'slotIndex:', props.slotIndex);
 
   if (target >= 1 || file.name.toLowerCase().endsWith('.json')) {
-    // JSON 槽位(v3:大文件走 Web Worker 解析,主线程不卡顿)
+    // JSON 槽位:使用流式解析避免 Chrome NotReadableError (大文件不一次性读入内存)
     try {
-      const text = await file.text();
-      const data = (await parseInWorker(text, 'json')) as RawRow[] | RankRow[] | ShopRow[] | null;
+      console.log('[FileDrop] CALLING parseJsonAuto...');
+      const data = await parseJsonAuto(file) as RawRow[] | RankRow[] | ShopRow[];
+      console.log('[FileDrop] parseJsonAuto RETURNED', data?.length, 'items');
       if (Array.isArray(data)) {
         loadSlotFile(target, data as RawRow[], file.name, auto !== null);
+        console.log('[FileDrop] loadSlotFile DONE');
       } else {
         throw new Error(`${file.name}:无法识别的 JSON 结构(应为数组)`);
       }
     } catch (err: unknown) {
+      console.error('[FileDrop] ERROR in processOne:', err);
       throw new Error(friendlyReadError(err, file.name));
     }
   } else {
