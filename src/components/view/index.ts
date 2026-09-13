@@ -1,33 +1,66 @@
 /* ================================================================
  * src/components/view/index.ts
- * 让 App.vue 一行 import 完成
- * 英雄与传奇已融合为 HeroLegendView(构筑视角):
- *   'heroes' 保留为兼容值(总览页下钻),导航栏仅展示「传奇构筑」;
- *   Combo 已并入传奇构筑页,无独立栏目。
+ *
+ * 工具 code → 视图组件。
+ *
+ * 新增工具的两步:
+ *   1) 在 src/tools/catalog.ts 登记(code/分组/数据源/是否需要数据)
+ *   2) 在此把该 code 映射到组件(未实现内容时先用 ToolPlaceholder)
+ * 导航、首页工具台、路由、状态徽章都会自动跟上。
  * ================================================================ */
 
+import HomeView from './HomeView.vue';
+import JournalView from './JournalView.vue';
+import ArchiveView from './ArchiveView.vue';
+import IssueView from './IssueView.vue';
 import ImportView from './ImportView.vue';
 import OverviewView from './OverviewView.vue';
 import HeroLegendView from './HeroLegendView.vue';
 import CardsView from './CardsView.vue';
 import RegionView from './RegionView.vue';
 import DecksView from './DecksView.vue';
+import ToolPlaceholder from './ToolPlaceholder.vue';
 
-export const ViewComponents = {
+/** 需要 props.code 的占位视图(云端/资料类工具的架构位) */
+const placeholder = ToolPlaceholder;
+
+export const ViewComponents: Record<string, unknown> = {
+  /* 首页:工具台(所有工具的入口) */
+  home: HomeView,
+
+  /* 期刊栏目:期刊本体与其次级路由 */
+  journal: JournalView,
+  archive: ArchiveView,
+  issue: IssueView,
+
+  /* 本地数据工具 */
   import: ImportView,
   overview: OverviewView,
-  heroes: HeroLegendView,
   cards: CardsView,
   legendary: HeroLegendView,
+  heroes: HeroLegendView, // 兼容:英雄与传奇同一视图
   region: RegionView,
-  decks: DecksView
-} as const;
+  decks: DecksView,
+
+  /* 云端内容(待接入 Supabase) */
+  blog: placeholder,
+  qa: placeholder,
+
+  /* 静态资料(随站点发布) */
+  rules: placeholder,
+  carddex: placeholder
+};
 
 export {
+  HomeView,
+  JournalView,
+  ArchiveView,
+  IssueView,
   ImportView,
   OverviewView,
   HeroLegendView,
   CardsView,
   RegionView,
-  DecksView
+  DecksView,
+  ToolPlaceholder
 };

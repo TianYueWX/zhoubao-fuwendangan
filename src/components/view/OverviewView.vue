@@ -19,8 +19,12 @@ import TierBadge from '@/components/TierBadge.vue';
 import DeltaBadge from '@/components/DeltaBadge.vue';
 import SectionHeading from '@/components/SectionHeading.vue';
 import CardThumb from '@/components/CardThumb.vue';
+import SortableTh from '@/components/SortableTh.vue';
+import TableDownloadButton from '@/components/TableDownloadButton.vue';
+import { useTableSort, type SortableColumn } from '@/composables/useTableSort';
 import { quickHeroRows, buildWeeklyReport, legendaryRows, sortLegendaryRows, MIN_LEGEND_SAMPLE } from '@/core';
 import type { DeltaItem } from '@/core';
+import type { QuickHeroRow } from '@/core/quickStats';
 import type { LegendaryRow } from '@/core/legendaryStats';
 import { reportToMarkdown } from '@/utils/reportMarkdown';
 import { CHART_PALETTE } from '@/utils/palette';
@@ -51,6 +55,23 @@ const tierRows = computed(() => {
       b.total - a.total
   );
 });
+
+/* ── 表头点击排序(默认保持上面的原始顺序) ── */
+const TIER_COLUMNS: readonly SortableColumn<QuickHeroRow>[] = [
+  // Tier 按等级序(S→A→B→C→未评级),而非字母序
+  { key: 'tier', type: 'number', value: (r) => tierOrder[(r.tier ?? 'null') as keyof typeof tierOrder] },
+  { key: 'hero', type: 'text' },
+  { key: 'total', type: 'number' },
+  { key: 'popularity', type: 'number' },
+  { key: 'top8Rate', type: 'number' },
+  { key: 'top4Rate', type: 'number' },
+  { key: 'champions', type: 'number' },
+  { key: 'runnersUp', type: 'number' },
+  { key: 'tierScore', type: 'number' }
+];
+const tierSort = useTableSort(tierRows, TIER_COLUMNS);
+/** 模板用:排序后的行(顶层 ref 自动解包) */
+const tierRowsSorted = tierSort.sorted;
 
 /* ── 传奇综合表现榜(metaScore = 转化综合分 × log10(数量+10) × 名次权重) ──
  * 转化只代表「强」;乘上对数热度(又主流)与名次权重(又稳定)才是 T0 定义。
@@ -130,6 +151,27 @@ const rankText = (it: DeltaItem<string>): string => {
   if (it.prevRank == null || it.currRank == null) return '';
   return `名次 ${it.prevRank}→${it.currRank}`;
 };
+
+/** 转化变化榜(趋势叙事):可点表头排序,默认保持引擎给出的顺序 */
+const convertRows = computed<readonly DeltaItem<string>[]>(
+  () => report.value?.convertMovers ?? []
+);
+const CONVERT_COLUMNS: readonly SortableColumn<DeltaItem<string>>[] = [
+  { key: 'key', type: 'text' },
+  { key: 'prev', type: 'number' },
+  { key: 'curr', type: 'number' },
+  { key: 'delta', type: 'number' },
+  // 名次变动:rankChange 为「上期名次 - 本期名次」,升序 = 上升最多在前
+  { key: 'rankChange', type: 'number' },
+  { key: 'currSample', type: 'number' }
+];
+const convertSort = useTableSort(convertRows, CONVERT_COLUMNS);
+/** 模板用:排序后的行 */
+const convertRowsSorted = convertSort.sorted;
+
+/* ── 长图导出:目标表格元素(点按时取值) ── */
+const tierTableEl = ref<HTMLTableElement | null>(null);
+const convertTableEl = ref<HTMLTableElement | null>(null);
 
 /* ── KPI(报眼) ── */
 const kpis = computed(() => {
@@ -402,24 +444,33 @@ function gotoHero(hero: string): void {
       <section class="grid grid-cols-1 xl:grid-cols-5 gap-8 xl:divide-x xl:divide-panel-border">
         <div class="xl:col-span-3 xl:pr-8 min-w-0">
           <SectionHeading eyebrow="第二版 · 强弱榜" title="传奇 Tier List"
-            :note="`综合分 = Top8率35% + Top4率35% + 冠军率20% + 亚军率10% · 全量展示不限数量 · 点击行下钻英雄拆解`" />
+            :note="`综合分 = Top8率35% + Top4率35% + 冠军率20% + 亚军率10% · 全量展示不限数量 · 点击行下钻英雄拆解`">
+            <template #actions>
+              <TableDownloadButton
+                :target="() => tierTableEl"
+                title="传奇 Tier List"
+                eyebrow="第二版 · 强弱榜"
+                note="综合分 = Top8率35% + Top4率35% + 冠军率20% + 亚军率10% · 全量展示不限数量"
+              />
+            </template>
+          </SectionHeading>
           <div class="overflow-x-auto max-h-[430px] overflow-y-auto">
-            <table class="w-full text-sm">
+            <table ref="tierTableEl" class="w-full text-sm">
               <thead class="sticky-thead">
                 <tr class="text-ink-faint border-b border-panel-border text-xs">
-                  <th class="py-2 px-2 text-left">Tier</th>
-                  <th class="py-2 px-2 text-left">英雄</th>
-                  <th class="py-2 px-2 text-right">数量</th>
-                  <th class="py-2 px-2 text-right">出场率</th>
-                  <th class="py-2 px-2 text-right">Top8 率</th>
-                  <th class="py-2 px-2 text-right">Top4 率</th>
-                  <th class="py-2 px-2 text-right">冠军</th>
-                  <th class="py-2 px-2 text-right">亚军</th>
-                  <th class="py-2 px-2 text-right">评分</th>
+                  <SortableTh :sort="tierSort" col-key="tier" label="Tier" align="left" />
+                  <SortableTh :sort="tierSort" col-key="hero" label="英雄" align="left" />
+                  <SortableTh :sort="tierSort" col-key="total" label="数量" align="right" />
+                  <SortableTh :sort="tierSort" col-key="popularity" label="出场率" align="right" />
+                  <SortableTh :sort="tierSort" col-key="top8Rate" label="Top8 率" align="right" />
+                  <SortableTh :sort="tierSort" col-key="top4Rate" label="Top4 率" align="right" />
+                  <SortableTh :sort="tierSort" col-key="champions" label="冠军" align="right" />
+                  <SortableTh :sort="tierSort" col-key="runnersUp" label="亚军" align="right" />
+                  <SortableTh :sort="tierSort" col-key="tierScore" label="评分" align="right" />
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="r in tierRows" :key="r.hero"
+                <tr v-for="r in tierRowsSorted" :key="r.hero"
                   class="table-row border-b border-[rgba(59,74,90,0.08)] cursor-pointer" @click="gotoHero(r.hero)">
                   <td class="py-1.5 px-2">
                     <TierBadge :tier="r.tier" size="sm" />
@@ -592,21 +643,30 @@ function gotoHero(hero: string): void {
 
         <!-- 转化变化榜 -->
         <section>
-          <SectionHeading small title="转化变化榜" />
+          <SectionHeading small title="转化变化榜">
+            <template #actions>
+              <TableDownloadButton
+                :target="() => convertTableEl"
+                title="转化变化榜"
+                eyebrow="趋势对比"
+                note="周际对比 · 转化综合分 = Top8率35% + Top4率35% + 冠军率20% + 亚军率10%"
+              />
+            </template>
+          </SectionHeading>
           <div class="overflow-x-auto">
-            <table class="w-full text-sm">
+            <table ref="convertTableEl" class="w-full text-sm">
               <thead class="sticky-thead">
                 <tr class="text-ink-faint border-b border-panel-border text-xs">
-                  <th class="py-2 px-2 text-left">英雄</th>
-                  <th class="py-2 px-2 text-right">上期转化</th>
-                  <th class="py-2 px-2 text-right">本期转化</th>
-                  <th class="py-2 px-2 text-right">Δ</th>
-                  <th class="py-2 px-2 text-right">名次变动</th>
-                  <th class="py-2 px-2 text-right">本期数量</th>
+                  <SortableTh :sort="convertSort" col-key="key" label="英雄" align="left" />
+                  <SortableTh :sort="convertSort" col-key="prev" label="上期转化" align="right" />
+                  <SortableTh :sort="convertSort" col-key="curr" label="本期转化" align="right" />
+                  <SortableTh :sort="convertSort" col-key="delta" label="Δ" align="right" />
+                  <SortableTh :sort="convertSort" col-key="rankChange" label="名次变动" align="right" />
+                  <SortableTh :sort="convertSort" col-key="currSample" label="本期数量" align="right" />
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="it in report.convertMovers" :key="it.key"
+                <tr v-for="it in convertRowsSorted" :key="it.key"
                   class="border-b border-[rgba(59,74,90,0.08)] last:border-0">
                   <td class="py-1.5 px-2 font-medium text-ink-muted">{{ it.key }}</td>
                   <td class="py-1.5 px-2 text-right tabular-nums">{{ it.prev?.toFixed(1) }}</td>

@@ -10,11 +10,20 @@
  * 无 DOM / Vue 依赖;视图层只消费 WeeklyReport。
  * ============================================================== */
 
-import type { CardCatalog, Deck } from '@/types';
+import type { CardCatalog, CardColor, Deck } from '@/types';
+import { CARD_COLOR_LABELS } from '@/types';
 import { quickHeroRows } from './quickStats';
 import { legendaryRows } from './legendaryStats';
 import { wilsonLowerBoundPct } from './stats';
 import { deltasFromRows, hhi, movers, type DeltaItem } from './delta';
+
+/**
+ * 域对聚合键(展示用中文):['red','blue'] → '狂怒·心灵'。
+ * 用中文而非 'red+blue':该键会直接出现在榜单、周报正文与复制的 Markdown 里。
+ */
+function domainKeyOf(row: { colors: readonly CardColor[] }): string {
+  return row.colors.map((c) => CARD_COLOR_LABELS[c]).join('·');
+}
 
 export interface WeekPoint {
   label: string;
@@ -149,8 +158,8 @@ export function buildWeeklyReport(
     [...toWilson(legPopPrev, prevG.length)].map(([key, value]) => ({ key, value, sample: legPopPrev.get(key) ?? 0 })),
     [...toWilson(legPopCurr, currG.length)].map(([key, value]) => ({ key, value, sample: legPopCurr.get(key) ?? 0 }))
   );
-  const domainPrev = aggregateBy(legPrev, (r) => r.colors.join('+'), (r) => r.total);
-  const domainCurr = aggregateBy(legCurr, (r) => r.colors.join('+'), (r) => r.total);
+  const domainPrev = aggregateBy(legPrev, domainKeyOf, (r) => r.total);
+  const domainCurr = aggregateBy(legCurr, domainKeyOf, (r) => r.total);
   const domainItems = deltasFromRows(
     [...toWilson(domainPrev, prevG.length)].map(([key, value]) => ({ key, value, sample: domainPrev.get(key) ?? 0 })),
     [...toWilson(domainCurr, currG.length)].map(([key, value]) => ({ key, value, sample: domainCurr.get(key) ?? 0 }))

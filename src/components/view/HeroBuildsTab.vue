@@ -9,6 +9,7 @@
 import { computed, ref, watch } from 'vue';
 import { store, applyGlobalFilters } from '@/store/analysis';
 import DataTable from '@/components/DataTable.vue';
+import TableDownloadButton from '@/components/TableDownloadButton.vue';
 import CardThumb from '@/components/CardThumb.vue';
 import SectionHeading from '@/components/SectionHeading.vue';
 import { compareWeekBucket } from '@/utils/isoWeek';
@@ -17,6 +18,9 @@ import { DECK_ZONE_LABELS } from '@/types';
 import type { CardCatalog, Deck, DeckZone } from '@/types';
 
 const props = defineProps<{ hero: string; legKey: string | null }>();
+
+/* ── 长图导出:构筑对比矩阵 ── */
+const matrixTableEl = ref<HTMLTableElement | null>(null);
 
 const MAX_COMPARE = 10;
 
@@ -314,7 +318,11 @@ function winLine(d: Deck): string {
     <section>
       <SectionHeading small title="候选卡组(按名次)" :note="`共 ${sortedCandidates.length} 套 · 点击行或勾选加入对比`" />
       <DataTable :rows="candRows" :columns="candColumns" :page-size="10" search-placeholder="搜索选手 / 城市 / 赛事…"
-        max-height="460px" @row-click="onRowClick">
+        max-height="460px"
+        :export-title="`${hero} · 候选卡组`"
+        export-eyebrow="对比版 · Candidates"
+        export-note="按名次优先排序(最佳 = 短时间窗口内最好成绩);胜场来自 rank_data.json"
+        @row-click="onRowClick">
         <template #cell-sel="{ row }">
           <input type="checkbox" class="accent-[var(--color-brand)] w-4 h-4 cursor-pointer"
             :checked="(row as CandRow).sel" @click.stop @change="onRowClick(row)" />
@@ -349,11 +357,17 @@ function winLine(d: Deck): string {
               独有
             </span>
           </div>
+          <TableDownloadButton
+            :target="() => matrixTableEl"
+            :title="`${hero} · 构筑对比`"
+            eyebrow="对比版 · Head to Head"
+            :note="`${selectedDecks.length} 套卡组横向对比 · 彩色=部分携带/独有,无色=共通 · ×N 为该卡张数`"
+          />
         </template>
       </SectionHeading>
 
       <div class="overflow-x-auto max-h-[680px] overflow-y-auto border border-card-border rounded-xl">
-        <table class="w-max min-w-full text-sm border-separate border-spacing-0">
+        <table ref="matrixTableEl" class="w-max min-w-full text-sm border-separate border-spacing-0">
           <thead class="sticky-thead">
             <tr class="text-ink-faint text-xs">
               <th class="py-1 px-1.5 text-left font-medium whitespace-nowrap sticky left-0 z-[3] w-[100px]"

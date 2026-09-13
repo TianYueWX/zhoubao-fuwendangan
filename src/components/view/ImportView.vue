@@ -6,18 +6,21 @@
  *  - 分析按钮 + 增强数据质量报告 + 城市映射修正
  */
 import { computed, ref } from 'vue';
-import { store, runStoredAnalysis, loadCardData, loadSlotFile, SLOT_KINDS } from '@/store/analysis';
+import { store, runStoredAnalysis, loadCardData, loadSlotFile, SLOT_KINDS, inferPackLabel } from '@/store/analysis';
 import { SLOT_META } from '@/store/analysis';
 import { detectSlotFromFilename, parseCSVFile } from '@/utils/dataParser';
 import { parseJsonAuto } from '@/utils/streamJson';
 import FileDrop from '@/components/FileDrop.vue';
 import CardDataFallback from '@/components/CardDataFallback.vue';
 import MappingPanel from '@/components/MappingPanel.vue';
+import PackagePanel from '@/components/PackagePanel.vue';
+import SectionHeading from '@/components/SectionHeading.vue';
 import type { RawRow } from '@/types';
 
+/** 分析并入档为「期」;停留在数据页以便继续管理多包 */
 function runAndGo(): void {
   if (runStoredAnalysis()) {
-    store.currentView = 'overview';
+    store.draftLabel = '';
   }
 }
 
@@ -108,10 +111,10 @@ const quality = computed(() => {
       <div class="flex flex-col md:flex-row items-start md:items-center justify-between mb-5 gap-4">
         <div>
           <p class="eyebrow mb-1.5">投稿箱 · Submissions</p>
-          <h3 class="font-display font-bold text-xl text-ink">上传赛事数据包</h3>
+          <h3 class="font-display font-bold text-xl text-ink">载入赛事数据包</h3>
           <p class="text-xs text-ink-faint mt-1.5">
             卡表与卡图索引已内置预加载(随站点发布);上传赛事卡组 CSV 即可分析,可选
-            JSON 解锁胜场明细与精确城市。文件按名称自动识别槽位;若浏览器提示无法读取,请确认文件已保存在本地磁盘。
+            JSON 解锁胜场明细与精确城市。每次分析生成一「期」,可继续载入下一期做周际对比。
           </p>
           <div class="mt-3 card p-3 flex items-center gap-3 flex-wrap">
             <label
@@ -135,10 +138,20 @@ const quality = computed(() => {
             </div>
           </div>
         </div>
-        <button @click="runAndGo" :disabled="!store.isReady || store.isAnalyzing"
-          class="btn-brand px-8 py-2.5 shrink-0">
-          {{ store.isAnalyzing ? '分析中…' : '启动分析' }}
-        </button>
+        <div class="shrink-0 flex flex-col items-stretch gap-2 md:w-[280px]">
+          <label class="flex flex-col gap-1">
+            <span class="text-[11px] text-ink-faint">刊名(留空按文件名自动推断)</span>
+            <input
+              v-model="store.draftLabel"
+              :placeholder="inferPackLabel(store.slots[0]?.fileName)"
+              class="bg-card-bg border border-card-border rounded-md px-2.5 py-1.5 text-xs text-ink"
+            />
+          </label>
+          <button @click="runAndGo" :disabled="!store.isReady || store.isAnalyzing"
+            class="btn-brand px-8 py-2.5">
+            {{ store.isAnalyzing ? '分析中…' : '分析并入档为「期」' }}
+          </button>
+        </div>
       </div>
 
       <!-- 内置卡表预加载状态 -->
@@ -196,11 +209,17 @@ const quality = computed(() => {
       </p>
     </section>
 
+    <!-- 数据包库(多包管理) -->
+    <template v-if="store.hasPackages">
+      <div class="hairline"></div>
+      <PackagePanel />
+    </template>
+
     <!-- 数据质量 -->
     <template v-if="quality">
       <div class="hairline"></div>
       <section>
-        <SectionHeading eyebrow="校对记 · Fact Check" title="数据质量报告" />
+        <SectionHeading eyebrow="校对记 · Fact Check" :title="`数据质量报告 · ${store.sourceLabel}`" />
         <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div v-for="q in quality" :key="q.label" class="card p-4 flex items-start gap-3">
             <span class="w-1.5 h-6 rounded-full mt-0.5 shrink-0" :class="q.ok ? 'bg-delta-up' : 'bg-delta-down'"></span>

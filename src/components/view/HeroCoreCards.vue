@@ -4,9 +4,12 @@
  * 仅统计 maindeck(单位/法术/装备)+ chosen champion(英雄单位)+ battlefield(战场),
  * 不含符文/传奇(结构性卡,携带率恒为 100%)。
  */
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { store } from '@/store/analysis';
 import SectionHeading from '@/components/SectionHeading.vue';
+import SortableTh from '@/components/SortableTh.vue';
+import TableDownloadButton from '@/components/TableDownloadButton.vue';
+import { useTableSort, type SortableColumn } from '@/composables/useTableSort';
 
 const props = defineProps<{ hero: string }>();
 
@@ -32,24 +35,53 @@ const coreCards = computed<CoreCardRow[]>(() => {
     energy: c.energy
   }));
 });
+
+/* ── 表头点击排序(默认保持携带率降序;rank 为原始 Top 名次,排序后不重编号) ── */
+const CORE_COLUMNS: readonly SortableColumn<CoreCardRow>[] = [
+  { key: 'rank', type: 'number' },
+  { key: 'name', type: 'text' },
+  { key: 'rarity', type: 'text' },
+  { key: 'avg', type: 'number' },
+  { key: 'rate', type: 'number' }
+];
+const coreSort = useTableSort(coreCards, CORE_COLUMNS);
+const coreCardsSorted = coreSort.sorted;
+
+/* ── 长图导出 ── */
+const coreTableEl = ref<HTMLTableElement | null>(null);
 </script>
 
 <template>
   <section>
-    <SectionHeading eyebrow="装备单 · Loadout" title="核心卡 Top 20" note="按高排名卡组携带率排序;仅统计主卡组 + 英雄 + 战场(不含符文/传奇)" />
+    <SectionHeading eyebrow="装备单 · Loadout" title="核心卡 Top 20" note="按高排名卡组携带率排序;仅统计主卡组 + 英雄 + 战场(不含符文/传奇)">
+      <template #actions>
+        <TableDownloadButton
+          :target="() => coreTableEl"
+          :title="`${hero} · 核心卡 Top 20`"
+          eyebrow="装备单 · Loadout"
+          :note="`按高排名卡组携带率排序;仅统计主卡组 + 英雄 + 战场(不含符文/传奇)`"
+        />
+      </template>
+    </SectionHeading>
     <div class="overflow-y-auto max-h-[580px]">
-      <table class="w-full text-sm">
+      <table ref="coreTableEl" class="w-full text-sm">
         <thead class="sticky-thead">
           <tr class="text-ink-faint border-b border-panel-border text-xs">
-            <th class="py-2 px-2 text-left">#</th>
-            <th class="py-2 px-2 text-left">卡牌</th>
-            <th class="py-2 px-2 text-right">稀有度</th>
-            <th class="py-2 px-2 text-right">平均张数</th>
-            <th class="py-2 px-2 text-right w-[38%]">携带率</th>
+            <SortableTh :sort="coreSort" col-key="rank" label="#" align="left" />
+            <SortableTh :sort="coreSort" col-key="name" label="卡牌" align="left" />
+            <SortableTh :sort="coreSort" col-key="rarity" label="稀有度" align="right" />
+            <SortableTh :sort="coreSort" col-key="avg" label="平均张数" align="right" />
+            <SortableTh
+              :sort="coreSort"
+              col-key="rate"
+              label="携带率"
+              align="right"
+              class-name="w-[38%]"
+            />
           </tr>
         </thead>
         <tbody>
-          <tr v-for="c in coreCards" :key="String(c.id)" class="border-b border-[rgba(59,74,90,0.08)]">
+          <tr v-for="c in coreCardsSorted" :key="String(c.id)" class="border-b border-[rgba(59,74,90,0.08)]">
             <td class="py-1.5 px-2 text-ink-faint tabular-nums">{{ c.rank }}</td>
             <td class="py-1.5 px-2 font-medium text-ink-muted">
               {{ c.name }}

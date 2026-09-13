@@ -75,7 +75,7 @@ const columns = [
   { key: 'hero', label: '英雄', type: 'text' as const, sortable: true },
   { key: 'city', label: '城市', type: 'text' as const, sortable: true },
   { key: 'event', label: '赛事', type: 'text' as const, sortable: true },
-  { key: 'wins', label: store.result?.hasWinData ? '胜场' : '', type: 'number' as const, sortable: false, align: 'right' as const }
+  { key: 'wins', label: store.result?.hasWinData ? '胜场' : '', type: 'number' as const, sortable: true, align: 'right' as const }
 ];
 
 const visibleColumns = computed(() =>
@@ -242,6 +242,7 @@ async function copyTTS(): Promise<void> {
     /* 剪贴板不可用 */
   }
 }
+
 </script>
 
 <template>
@@ -279,6 +280,9 @@ async function copyTTS(): Promise<void> {
         :page-size="20"
         search-placeholder="搜索选手 / 英雄 / 赛事…"
         max-height="620px"
+        export-title="卡组浏览器"
+        export-eyebrow="构筑库 · Decks"
+        export-note="名次为赛事最终排名;胜场来自 rank_data.json 的瑞士轮统计;点击行可展开完整构筑"
         @row-click="openDeck"
       >
         <template #cell-rank="{ row }">

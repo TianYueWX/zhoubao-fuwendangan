@@ -8,6 +8,9 @@ import { computed, ref, watch } from 'vue';
 import { store } from '@/store/analysis';
 import CardThumb from '@/components/CardThumb.vue';
 import SectionHeading from '@/components/SectionHeading.vue';
+import SortableTh from '@/components/SortableTh.vue';
+import TableDownloadButton from '@/components/TableDownloadButton.vue';
+import { useTableSort, type SortableColumn } from '@/composables/useTableSort';
 import { countCards } from '@/core';
 import { CARD_COLOR_HEX } from '@/utils/palette';
 import type { CardCategory } from '@/types';
@@ -56,7 +59,23 @@ const filterEnergy = ref('');
 
 const typeOptions = ['单位', '英雄单位', '法术', '装备'] as const;
 
-const rows = computed(() => {
+interface StapleRow {
+  id: string;
+  name: string;
+  category: string;
+  colors: readonly string[];
+  energy: number;
+  rarity: string;
+  banned: boolean;
+  rate: number;
+  avgCopies: number;
+  globalRate: number;
+  diff: number;
+  /** 原始位次(按携带率排定的 Top N 名次);排序后不重编号 */
+  rank: number;
+}
+
+const rows = computed<StapleRow[]>(() => {
   const r = store.result;
   if (!r || decks.value.length === 0) return [];
   const counts = countCards(decks.value, r.catalog);
@@ -71,19 +90,7 @@ const rows = computed(() => {
     }
   }
 
-  const list: Array<{
-    id: string;
-    name: string;
-    category: string;
-    colors: readonly string[];
-    energy: number;
-    rarity: string;
-    banned: boolean;
-    rate: number;
-    avgCopies: number;
-    globalRate: number;
-    diff: number;
-  }> = [];
+  const list: Array<Omit<StapleRow, 'rank'>> = [];
 
   for (const [key, deckCount] of counts) {
     // 规范键 → 代表编号(同名+副标题归并,优先有卡图)
@@ -121,8 +128,27 @@ const rows = computed(() => {
   }
 
   list.sort((a, b) => b.rate - a.rate || a.name.localeCompare(b.name));
-  return list.slice(0, 60);
+  // 位次在截断后固定下来:表头排序只换行序,不重编号(仍代表原始 Top 名次)
+  return list.slice(0, 60).map((c, i) => ({ ...c, rank: i + 1 }));
 });
+
+/* ── 表头点击排序(默认保持携带率降序) ── */
+const STAPLE_COLUMNS: readonly SortableColumn<StapleRow>[] = [
+  { key: 'rank', type: 'number' },
+  { key: 'name', type: 'text' },
+  { key: 'category', type: 'text' },
+  { key: 'colors', type: 'text', value: (r) => r.colors.join('') },
+  { key: 'energy', type: 'number' },
+  { key: 'avgCopies', type: 'number' },
+  { key: 'rate', type: 'number' },
+  { key: 'diff', type: 'number' }
+];
+const stapleSort = useTableSort(rows, STAPLE_COLUMNS);
+const sortedRows = stapleSort.sorted;
+
+/* ── 长图导出 ── */
+const stapleTableEl = ref<HTMLTableElement | null>(null);
+const STAPLE_NOTE = '携带率 = 使用该卡的卡组占比;"对照"为全环境口径差值';
 </script>
 
 <template>
@@ -133,7 +159,16 @@ const rows = computed(() => {
           eyebrow="常备单卡 · Staples"
           title="万金油单卡"
           note='携带率 = 使用该卡的卡组占比;"对照"为全环境口径差值'
-        />
+        >
+          <template #actions>
+            <TableDownloadButton
+              :target="() => stapleTableEl"
+              title="万金油单卡"
+              eyebrow="常备单卡 · Staples"
+              :note="`${scope} · ${STAPLE_NOTE}`"
+            />
+          </template>
+        </SectionHeading>
         <select v-model="scope" class="mini-select max-w-[260px] mt-1">
           <option v-for="o in scopeOptions" :key="String(o.value)" :value="o.value">
             {{ o.label }}
@@ -166,26 +201,32 @@ const rows = computed(() => {
       </div>
 
       <div class="overflow-x-auto max-h-[640px] overflow-y-auto">
-        <table class="w-full text-sm">
+        <table ref="stapleTableEl" class="w-full text-sm">
           <thead class="sticky-thead">
             <tr class="text-ink-faint border-b border-panel-border text-xs">
-              <th class="py-2 px-2 text-left">#</th>
-              <th class="py-2 px-2 text-left">卡牌</th>
-              <th class="py-2 px-2 text-left">类型</th>
-              <th class="py-2 px-2 text-center">色域</th>
-              <th class="py-2 px-2 text-right">费</th>
-              <th class="py-2 px-2 text-right">均张</th>
-              <th class="py-2 px-2 text-right w-[26%]">携带率</th>
-              <th class="py-2 px-2 text-right">对照Δ</th>
+              <SortableTh :sort="stapleSort" col-key="rank" label="#" align="left" />
+              <SortableTh :sort="stapleSort" col-key="name" label="卡牌" align="left" />
+              <SortableTh :sort="stapleSort" col-key="category" label="类型" align="left" />
+              <SortableTh :sort="stapleSort" col-key="colors" label="色域" align="center" />
+              <SortableTh :sort="stapleSort" col-key="energy" label="费" align="right" />
+              <SortableTh :sort="stapleSort" col-key="avgCopies" label="均张" align="right" />
+              <SortableTh
+                :sort="stapleSort"
+                col-key="rate"
+                label="携带率"
+                align="right"
+                class-name="w-[26%]"
+              />
+              <SortableTh :sort="stapleSort" col-key="diff" label="对照Δ" align="right" />
             </tr>
           </thead>
           <tbody>
             <tr
-              v-for="(c, i) in rows"
+              v-for="c in sortedRows"
               :key="c.id"
               class="table-row border-b border-[rgba(59,74,90,0.08)]"
             >
-              <td class="py-1.5 px-2 text-ink-faint tabular-nums">{{ i + 1 }}</td>
+              <td class="py-1.5 px-2 text-ink-faint tabular-nums">{{ c.rank }}</td>
               <td class="py-1.5 px-2">
                 <div class="flex items-center gap-2.5">
                   <CardThumb

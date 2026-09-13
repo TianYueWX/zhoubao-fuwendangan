@@ -129,6 +129,9 @@ function openDetail(row: Record<string, unknown>): void {
       :page-size="15"
       search-placeholder="搜索卡名…"
       max-height="380px"
+      :export-title="`${hero} · Combo 羁绊`"
+      export-eyebrow="羁绊挖掘 · Synergy"
+      :export-note="`Lift ≥ ${minLift} · 携带率门槛 ≥ ${minBasePercent}% · 共 ${decks.length} 套样本`"
       @row-click="openDetail"
     >
       <template #cell-lift="{ row }">

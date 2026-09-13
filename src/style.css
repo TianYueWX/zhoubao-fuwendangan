@@ -305,6 +305,11 @@ table,
 .sortable:hover {
   color: var(--color-brand);
 }
+/* 当前排序列(仍可点击切换升降) */
+.sortable-active,
+.sortable-active:hover {
+  color: var(--color-brand);
+}
 
 /* sticky 表头底色 */
 .sticky-thead th {

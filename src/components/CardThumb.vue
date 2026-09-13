@@ -30,7 +30,10 @@ function onErr(): void {
 </script>
 
 <template>
-  <div class="flex flex-col items-center gap-1 group relative">
+  <div
+    class="flex flex-col items-center gap-1 group relative"
+    :data-card-colors="colors.join(',')"
+  >
     <div
       v-if="isBanned"
       class="absolute -top-1 -right-1 z-10 px-1 rounded bg-brand text-brand-ink text-[9px] font-bold shadow"

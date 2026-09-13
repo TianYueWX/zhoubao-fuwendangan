@@ -10,6 +10,9 @@
 import { computed, onMounted, ref } from 'vue';
 import ChartCard from '@/components/ChartCard.vue';
 import SectionHeading from '@/components/SectionHeading.vue';
+import SortableTh from '@/components/SortableTh.vue';
+import TableDownloadButton from '@/components/TableDownloadButton.vue';
+import { useTableSort, type SortableColumn } from '@/composables/useTableSort';
 import { store } from '@/store/analysis';
 import { UNKNOWN_CITY } from '@/utils/cityRegex';
 import { ensureChinaMap, CITY_COORDS } from '@/utils/chinaMap';
@@ -261,6 +264,22 @@ const eventRows = computed<EventRow[]>(() =>
     rounds: e.rounds
   }))
 );
+
+/* ── 表头点击排序(默认保持赛事原始顺序) ── */
+const EVENT_COLUMNS: readonly SortableColumn<EventRow>[] = [
+  { key: 'date', type: 'text' },
+  { key: 'name', type: 'text' },
+  { key: 'city', type: 'text' },
+  { key: 'shopName', type: 'text' },
+  { key: 'deckCount', type: 'number' },
+  { key: 'playerMax', type: 'number' },
+  { key: 'rounds', type: 'number' }
+];
+const eventSort = useTableSort(eventRows, EVENT_COLUMNS);
+const eventRowsSorted = eventSort.sorted;
+
+/* ── 长图导出 ── */
+const eventTableEl = ref<HTMLTableElement | null>(null);
 </script>
 
 <template>
@@ -322,23 +341,32 @@ const eventRows = computed<EventRow[]>(() =>
 
     <!-- 赛事一览 -->
     <section>
-      <SectionHeading eyebrow="赛事志 · Events" small title="赛事一览" />
+      <SectionHeading eyebrow="赛事志 · Events" small title="赛事一览">
+        <template #actions>
+          <TableDownloadButton
+            :target="() => eventTableEl"
+            title="赛事一览"
+            eyebrow="赛事志 · Events"
+            note="门店/规模/轮次来自 shop_data.json;卡组数为实际参赛套数"
+          />
+        </template>
+      </SectionHeading>
       <div class="overflow-x-auto max-h-[360px] overflow-y-auto">
-        <table class="w-full text-sm">
+        <table ref="eventTableEl" class="w-full text-sm">
           <thead class="sticky-thead">
             <tr class="text-ink-faint border-b border-panel-border text-xs">
-              <th class="py-2 px-2 text-left">日期</th>
-              <th class="py-2 px-2 text-left">赛事</th>
-              <th class="py-2 px-2 text-left">城市</th>
-              <th class="py-2 px-2 text-left">门店</th>
-              <th class="py-2 px-2 text-right">卡组数</th>
-              <th class="py-2 px-2 text-right">上限</th>
-              <th class="py-2 px-2 text-right">轮次</th>
+              <SortableTh :sort="eventSort" col-key="date" label="日期" align="left" />
+              <SortableTh :sort="eventSort" col-key="name" label="赛事" align="left" />
+              <SortableTh :sort="eventSort" col-key="city" label="城市" align="left" />
+              <SortableTh :sort="eventSort" col-key="shopName" label="门店" align="left" />
+              <SortableTh :sort="eventSort" col-key="deckCount" label="卡组数" align="right" />
+              <SortableTh :sort="eventSort" col-key="playerMax" label="上限" align="right" />
+              <SortableTh :sort="eventSort" col-key="rounds" label="轮次" align="right" />
             </tr>
           </thead>
           <tbody>
             <tr
-              v-for="e in eventRows"
+              v-for="e in eventRowsSorted"
               :key="String(e.date) + String(e.name)"
               class="table-row border-b border-[rgba(59,74,90,0.08)] cursor-pointer"
               :class="selectedCity && e.city === selectedCity ? 'bg-brand-soft' : ''"

@@ -8,3 +8,11 @@ dist/
 
 # UI 验证截图(临时)
 shots/
+
+# 预设数据包(由 scripts/prepare-preset.mjs 从根目录数据包生成,不入库)
+public/data/s4-w3/
+public/data/manifest.json
+
+# 项目内 pnpm store(全局 store 只读时的替代;删除会让 node_modules 失效)
+.pnpm-store/
+.npm-cache/
