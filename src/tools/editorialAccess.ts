@@ -1,38 +1,24 @@
-/* ================================================================
- * src/tools/editorialAccess.ts
- *
- * 编辑部的「暗门」状态。
- *
- * 编辑部是内容后台,不该出现在公开资料站的导航里。它靠一个彩蛋解锁:
- * **连点报头刊名 KNOCK_TARGET 次(每次间隔不超过 KNOCK_WINDOW_MS)**
- * 即可让「编辑部」出现在栏目导航中。
- *
- * 设计约束:
- *   - 解锁是**持久**的(localStorage):否则每次刷新都要重新敲一遍暗门。
- *   - 解锁只是「看见入口」,**不等于有权限** —— 真正的门禁是登录 +
- *     服务端 RLS 策略,这里只负责藏。
- *   - 敲击进度只在第 2 下之后才显示(报头刊名下方长出一条朱砂细线),
- *     偶发的一次误点看不出任何异常。
- * ============================================================== */
-
+/** 编辑部隐藏入口:依次点击「符 → 文 → 档 → 案」。
+ * 这里只控制入口状态;管理员登录与服务端权限校验保持独立。
+ */
 import { ref } from 'vue';
 
 /** 需要连点几次 */
-export const KNOCK_TARGET = 5;
+export const KNOCK_TARGET = 4;
 /** 相邻两次点击的最大间隔(毫秒),超时则计数归零 */
 export const KNOCK_WINDOW_MS = 3000;
 
 const UNLOCK_KEY = 'riftbound-editorial-unlocked';
 
-/** 是否已解锁编辑部入口 */
+/** 当前标签页会话是否已解锁入口;刷新可恢复,不长期保存。 */
 export const editorialUnlocked = ref(false);
 
-/** 当前敲击进度(0–KNOCK_TARGET),仅供报头细线使用 */
+/** 当前敲击进度(0–KNOCK_TARGET),用于验证四字顺序 */
 export const knockProgress = ref(0);
 
 export function loadEditorialUnlock(): boolean {
   try {
-    const on = localStorage.getItem(UNLOCK_KEY) === '1';
+    const on = sessionStorage.getItem(UNLOCK_KEY) === '1';
     editorialUnlocked.value = on;
     return on;
   } catch {
@@ -45,9 +31,9 @@ export function unlockEditorial(): void {
   editorialUnlocked.value = true;
   knockProgress.value = 0;
   try {
-    localStorage.setItem(UNLOCK_KEY, '1');
+    sessionStorage.setItem(UNLOCK_KEY, '1');
   } catch {
-    /* 隐私模式:本次会话内有效,刷新后需重新敲 */
+    /* 存储不可用时仅保留内存状态,刷新后需重新解锁。 */
   }
 }
 
@@ -56,7 +42,7 @@ export function lockEditorial(): void {
   editorialUnlocked.value = false;
   knockProgress.value = 0;
   try {
-    localStorage.removeItem(UNLOCK_KEY);
+    sessionStorage.removeItem(UNLOCK_KEY);
   } catch {
     /* ignore */
   }
@@ -75,34 +61,31 @@ function scheduleDecay(): void {
   }, KNOCK_WINDOW_MS);
 }
 
-/**
- * 记一次敲击。
- * @returns 'already' 此前已解锁(调用方应走正常行为,不要误判为刚解锁)
- *          'unlocked' 本次刚好解锁
- *          'progress' 仅累计进度
- */
-export function knock(): 'already' | 'unlocked' | 'progress' {
-  if (editorialUnlocked.value) return 'already';
+/** 离开首页或点击顺序错误时清理进度。 */
+export function resetKnock(): void {
+  knockProgress.value = 0;
+  lastKnockAt = 0;
+  if (decayTimer) clearTimeout(decayTimer);
+  decayTimer = null;
+}
 
+/** 每次都验证完整顺序,解锁后显示入口,不自动跳转。 */
+export function knock(characterIndex: number): 'unlocked' | 'progress' {
   const now = Date.now();
-  // 间隔超时 → 重新计数(所以慢悠悠点 5 下不算)
-  if (now - lastKnockAt > KNOCK_WINDOW_MS) knockProgress.value = 0;
+  if (now - lastKnockAt > KNOCK_WINDOW_MS) resetKnock();
   lastKnockAt = now;
-  knockProgress.value += 1;
 
-  if (knockProgress.value >= KNOCK_TARGET) {
+  if (characterIndex !== knockProgress.value) {
+    resetKnock();
+    if (characterIndex !== 0) return 'progress';
+    lastKnockAt = now;
+  }
+  knockProgress.value += 1;
+  if (knockProgress.value === KNOCK_TARGET) {
+    resetKnock();
     unlockEditorial();
-    if (decayTimer) {
-      clearTimeout(decayTimer);
-      decayTimer = null;
-    }
     return 'unlocked';
   }
   scheduleDecay();
   return 'progress';
-}
-
-/** 进度百分比(0–100),报头细线宽度用 */
-export function knockPercent(): number {
-  return Math.min(100, Math.round((knockProgress.value / KNOCK_TARGET) * 100));
 }

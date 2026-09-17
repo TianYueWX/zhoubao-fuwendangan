@@ -31,7 +31,7 @@ const sourceLabel = computed(() => SOURCE_LABEL[tool.value?.source ?? 'journal']
     <header>
       <div class="flex items-center justify-between gap-4 flex-wrap text-[11px] text-ink-faint">
         <button class="hover:text-brand transition-colors" @click="navigate({ view: 'journal' })">
-          ← 返回工具台
+          ← 返回首页
         </button>
         <span class="font-latin tracking-[0.22em] uppercase">{{ group.latin }}</span>
       </div>

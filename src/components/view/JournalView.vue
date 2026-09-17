@@ -48,10 +48,7 @@ function openIssue(id: string): void {
   <div class="fade-in">
     <!-- ══════════ 刊头 ══════════ -->
     <section class="max-w-[980px] mx-auto text-center pt-6 pb-10">
-      <div class="flex items-center justify-between gap-4 text-[11px] text-ink-faint mb-6">
-        <button class="hover:text-brand transition-colors" @click="navigate({ view: 'home' })">
-          ← 返回工具台
-        </button>
+      <div class="flex items-center justify-end gap-4 text-[11px] text-ink-faint mb-6">
         <span class="font-latin tracking-[0.22em] uppercase">Journal</span>
       </div>
       <p class="eyebrow mb-3">Riftbound Meta Journal</p>

@@ -1,21 +1,8 @@
 <script setup lang="ts">
-/**
- * App.vue · 根组件(符文档案·周报)
- *
- * 版面:
- *   ┌ 报头 sticky:刊名 · 拉丁铭文 │ 工具导航(注册表驱动)│ 期号状态 ┐
- *   ├ 期刊次级条(仅期刊/往期/期号):期刊 · 往期 │ 周次 · 样本数      ┤
- *   ├ 内容区:当前工具视图(首页为工具台)                        │
- *   └ 页脚落款
- *
- * 导航不写死任何工具:全部来自 src/tools/catalog.ts。
- * 启动时探测各数据源健康状态并回写状态机(云端未配置不算错误)。
- */
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { store, runStoredAnalysis, loadCardData, applyGlobalFilters, weekBuckets } from '@/store/analysis';
 import { navigate, startRouter, syncUrl } from '@/router/hash';
 import {
-  navGroups,
   sectionBarTools,
   groupOf,
   findTool,
@@ -26,21 +13,16 @@ import {
 import { setSourceState, setToolState } from '@/tools/state';
 import { probeSupabase } from '@/tools/sources/supabase';
 import { bootstrapAuth, isEditorialAdmin } from '@/tools/sources/auth';
-import {
-  editorialUnlocked,
-  loadEditorialUnlock,
-  knock,
-  knockProgress,
-  knockPercent
-} from '@/tools/editorialAccess';
+import { editorialUnlocked, loadEditorialUnlock } from '@/tools/editorialAccess';
 import { ViewComponents } from '@/components/view';
 
 let stopRouter: (() => void) | null = null;
 
 onMounted(async () => {
-  // 编辑部暗门状态(连点报头刊名解锁)+ 会话恢复,都不阻塞首屏
+  // 恢复编辑部状态与会话,不阻塞首页导航
   loadEditorialUnlock();
   void bootstrapAuth();
+  stopRouter = startRouter();
 
   // 内置卡表(cards_base × card_prints)预加载;结果写入工具状态机
   setSourceState('local', { status: 'loading', message: '卡表加载中' });
@@ -51,7 +33,6 @@ onMounted(async () => {
   });
   setToolState('import', { status: cardsOk ? 'ready' : 'error' });
 
-  stopRouter = startRouter();
   window.addEventListener('scroll', onScroll, { passive: true });
 
   // 云端数据源探测(未配置 → unconfigured,不是错误;不阻塞首屏)
@@ -115,28 +96,8 @@ const activeViewComponent = computed(
 const PLACEHOLDER_CODES = ['blog', 'qa', 'rules', 'carddex'];
 const needsCodeProp = computed(() => PLACEHOLDER_CODES.includes(store.currentView));
 
-/** 栏目入口:该栏目下第一个工具(期刊栏目即期刊本体) */
-function firstToolOf(group: ToolGroupId): string {
-  return sectionBarTools(group)[0]?.code ?? homeCode;
-}
-
-/* ── 导航(栏目驱动) ── */
 const homeCode = HOME_CODE;
-/** 隐藏栏目(编辑部)仅在解锁后进入导航;未解锁时对访客完全不存在 */
-const groups = computed(() => navGroups(editorialUnlocked.value));
 const isHome = computed(() => store.currentView === homeCode);
-
-/**
- * 报头刊名:正常点击回工具台;连续快击 KNOCK_TARGET 次则解锁编辑部并进入。
- * 未解锁时行为与从前完全一致,不留任何可见痕迹。
- */
-function onBrandClick(): void {
-  if (knock() === 'unlocked') {
-    navigate({ view: 'editorial' });
-    return;
-  }
-  navigate({ view: homeCode });
-}
 
 /**
  * 当前所在的**一级栏目**。
@@ -147,12 +108,6 @@ const activeGroup = computed<ToolGroupId | null>(() => {
   if (v === HOME_CODE) return null; // 工具台不属于任何栏目
   if (v === 'archive' || v === 'issue') return 'journal';
   return findTool(v)?.group ?? null;
-});
-
-/** 该栏目是否已有数据包(决定期刊栏目标签的降级样式) */
-const groupNeedsData = computed(() => {
-  const g = activeGroup.value;
-  return g === 'journal' && !store.hasPackages;
 });
 
 /**
@@ -188,98 +143,17 @@ function onWeekChange(e: Event): void {
   store.filterWeek = (e.target as HTMLSelectElement).value;
 }
 
-const issueLabel = computed(() => store.sourceLabel || '未载入数据');
+
 </script>
 
 <template>
   <div class="min-h-screen flex flex-col">
-    <!-- ══════════ 报头(sticky) ══════════ -->
-    <header class="masthead-solid sticky top-0 z-50 shrink-0">
-      <div class="px-4 lg:px-8 h-14 flex items-center gap-3 lg:gap-6">
-        <!-- 左:刊名(点击回工具台;连点数次解锁编辑部暗门) -->
-        <button
-          class="relative flex items-baseline gap-3 min-w-0 shrink-0"
-          title="返回工具台"
-          @click="onBrandClick"
-        >
-          <h1 class="font-display text-[20px] lg:text-[22px] font-black text-ink truncate">
-            符文档案<span class="text-brand mx-0.5">·</span>周报
-          </h1>
-          <span class="hidden xl:inline font-latin text-[9px] tracking-[0.32em] text-ink-faint uppercase"
-            >Riftbound Rune Archive</span
-          >
-          <!-- 暗门进度:第 2 次敲击后才出现,一条朱砂细线 -->
-          <span
-            v-if="knockProgress >= 2"
-            class="absolute -bottom-1 left-0 h-[2px] bg-brand transition-all duration-200"
-            :style="{ width: `${knockPercent()}%` }"
-            aria-hidden="true"
-          ></span>
+    <header v-if="!isHome" class="masthead-solid sticky top-0 z-50 shrink-0">
+      <div class="px-4 lg:px-8 h-14 flex items-center">
+        <button class="text-sm text-ink-muted hover:text-brand transition-colors"
+          @click="navigate({ view: homeCode })">
+          <span aria-hidden="true">←</span> 返回首页
         </button>
-
-        <!-- 中:工具导航(全部来自注册表) -->
-        <nav
-          class="flex-1 min-w-0 h-full flex items-center gap-4 lg:gap-6 overflow-x-auto"
-          aria-label="工具导航"
-        >
-          <button
-            class="relative shrink-0 h-full px-0.5 transition-colors text-[13px] tracking-[0.08em]"
-            :class="isHome ? 'text-brand font-semibold' : 'text-ink-muted hover:text-brand'"
-            title="工具台"
-            @click="navigate({ view: homeCode })"
-          >
-            工具台
-            <span
-              v-if="isHome"
-              class="absolute left-0 right-0 bottom-0 h-[3px] bg-brand rounded-t-sm"
-              aria-hidden="true"
-            ></span>
-          </button>
-
-          <span class="w-px h-4 bg-panel-border shrink-0" aria-hidden="true"></span>
-
-          <button
-            v-for="g in groups"
-            :key="g.id"
-            class="relative shrink-0 h-full px-0.5 transition-colors text-[13px] tracking-[0.08em]"
-            :class="[
-              activeGroup === g.id
-                ? 'text-brand font-semibold'
-                : g.id === 'journal' && !store.hasPackages
-                  ? 'text-ink-faint/70 hover:text-brand'
-                  : 'text-ink-muted hover:text-brand'
-            ]"
-            :title="g.desc"
-            @click="navigate({ view: firstToolOf(g.id) })"
-          >
-            {{ g.label }}
-            <span
-              v-if="activeGroup === g.id"
-              class="absolute left-0 right-0 bottom-0 h-[3px] bg-brand rounded-t-sm"
-              aria-hidden="true"
-            ></span>
-          </button>
-        </nav>
-
-        <!-- 右:期号状态 -->
-        <div class="flex items-center gap-2.5 shrink-0">
-          <span
-            class="hidden sm:inline text-[11px] text-ink-faint truncate max-w-[180px]"
-            :title="issueLabel"
-          >
-            {{ issueLabel }}
-          </span>
-          <span
-            class="w-1.5 h-1.5 rounded-full shrink-0"
-            :class="{
-              'bg-delta-up': store.statusTone === 'ready',
-              'bg-accent': store.statusTone === 'busy',
-              'bg-delta-down': store.statusTone === 'error',
-              'bg-ink-faint/50': store.statusTone === 'idle'
-            }"
-            :title="store.statusLabel"
-          ></span>
-        </div>
       </div>
 
       <!-- 栏目内二级导航条(栏目驱动) -->
@@ -385,12 +259,12 @@ const issueLabel = computed(() => store.sourceLabel || '未载入数据');
     </header>
 
     <!-- ══════════ 内容区 ══════════ -->
-    <main class="flex-1 w-full max-w-[1720px] mx-auto px-4 lg:px-8 py-8">
+    <main :class="isHome ? 'w-full' : 'flex-1 w-full max-w-[1720px] mx-auto px-4 lg:px-8 py-8'">
       <component :is="activeViewComponent" v-bind="needsCodeProp ? { code: store.currentView } : {}" />
     </main>
 
     <!-- ══════════ 页脚 ══════════ -->
-    <footer class="px-4 lg:px-8 pb-8 max-w-[1720px] mx-auto w-full">
+    <footer v-if="!isHome" class="px-4 lg:px-8 pb-8 max-w-[1720px] mx-auto w-full">
       <div class="rune-rule mb-5"></div>
       <div class="text-center text-[11px] text-ink-faint space-y-1">
         <p class="font-display">符文档案 · 周报 — Riftbound 城市挑战赛赛事 Meta 情报</p>
@@ -400,7 +274,7 @@ const issueLabel = computed(() => store.sourceLabel || '未载入数据');
 
     <!-- 回到顶部 FAB -->
     <button
-      v-if="showTop"
+      v-if="!isHome && showTop"
       class="fixed bottom-6 right-6 z-50 w-11 h-11 rounded-full bg-brand text-brand-ink shadow-lg flex items-center justify-center text-lg leading-none transition-transform hover:scale-110 fade-in"
       aria-label="回到顶部"
       title="回到顶部"
