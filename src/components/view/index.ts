@@ -20,6 +20,12 @@ import CardsView from './CardsView.vue';
 import RegionView from './RegionView.vue';
 import DecksView from './DecksView.vue';
 import ToolPlaceholder from './ToolPlaceholder.vue';
+import EditorialHub from '../admin/EditorialHub.vue';
+import AdminCardEditor from '../admin/AdminCardEditor.vue';
+import AdminBatchOps from '../admin/AdminBatchOps.vue';
+import AdminRulesEditor from '../admin/AdminRulesEditor.vue';
+import AdminResources from '../admin/AdminResources.vue';
+import AdminSync from '../admin/AdminSync.vue';
 
 /** 需要 props.code 的占位视图(云端/资料类工具的架构位) */
 const placeholder = ToolPlaceholder;
@@ -48,7 +54,15 @@ export const ViewComponents: Record<string, unknown> = {
 
   /* 静态资料(随站点发布) */
   rules: placeholder,
-  carddex: placeholder
+  carddex: placeholder,
+
+  /* 编辑部(隐藏栏目:连点报头刊名解锁 + 管理员门禁) */
+  editorial: EditorialHub,
+  'editorial-cards': AdminCardEditor,
+  'editorial-batch': AdminBatchOps,
+  'editorial-rules': AdminRulesEditor,
+  'editorial-resources': AdminResources,
+  'editorial-sync': AdminSync
 };
 
 export {
@@ -62,5 +76,11 @@ export {
   CardsView,
   RegionView,
   DecksView,
-  ToolPlaceholder
+  ToolPlaceholder,
+  EditorialHub,
+  AdminCardEditor,
+  AdminBatchOps,
+  AdminRulesEditor,
+  AdminResources,
+  AdminSync
 };

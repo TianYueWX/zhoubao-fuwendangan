@@ -7,6 +7,8 @@
  *   #/              → 主入口工具(catalog.homeTool(),当前为期刊)
  *   #/journal       → 期刊(含往期与期号)        #/archive → 往期归档
  *   #/issue/{pkgId} → 期号正文
+ *   #/editorial     → 编辑部(后台 hub)
+ *   #/editorial/{sub} → 编辑部下属工具(cards/batch/rules/resources/sync)
  *   #/overview …    → 各数据工具 / 云端工具 / 资料工具(以 code 为准)
  *   #/tool/{code}   → 历史路径,仍可解析(向后兼容)
  *
@@ -16,7 +18,16 @@
  * ============================================================== */
 
 import { store } from '@/store/analysis';
-import { findTool, isKnownTool, HOME_CODE } from '@/tools/catalog';
+import { findTool, isKnownTool, HOME_CODE, TOOLS } from '@/tools/catalog';
+
+/**
+ * 编辑部二级路由的子工具名 —— 由注册表派生,不手写清单,避免与 catalog 漂移。
+ * 'editorial-cards' → 'cards'
+ */
+const EDITORIAL_PREFIX = 'editorial-';
+const EDITORIAL_SUBS: readonly string[] = TOOLS.filter((t) => t.code.startsWith(EDITORIAL_PREFIX)).map(
+  (t) => t.code.slice(EDITORIAL_PREFIX.length)
+);
 
 export interface Route {
   /** 工具 code,或内容层的 issue */
@@ -36,6 +47,12 @@ export function parseHash(hash: string): Route {
   }
   // 内容层次级路由:往期归档不是工具 code,但合法
   if (head === 'archive') return { view: 'archive' };
+  // 编辑部二级路由:#/editorial/{sub};无 sub 或 sub 非法 → 编辑部 hub
+  if (head === 'editorial') {
+    return tail && EDITORIAL_SUBS.includes(tail)
+      ? { view: `${EDITORIAL_PREFIX}${tail}` }
+      : { view: 'editorial' };
+  }
   // 历史路径兼容:#/tool/{code}
   if (head === 'tool') {
     return tail && isKnownTool(tail) ? { view: tail } : { view: HOME_CODE };
@@ -53,6 +70,10 @@ export function routeToHash(route: Route): string {
   if (route.view === HOME_CODE) return '#/';
   // 内容层次级路由不是工具 code,需原样映射(否则会被误判为非法而回落工具台)
   if (route.view === 'archive') return '#/archive';
+  // 编辑部下属工具回写成二级路径:#/editorial/cards
+  if (route.view.startsWith(EDITORIAL_PREFIX)) {
+    return `#/editorial/${route.view.slice(EDITORIAL_PREFIX.length)}`;
+  }
   const tool = findTool(route.view);
   if (!tool) return '#/';
   return `#/${tool.code}`;

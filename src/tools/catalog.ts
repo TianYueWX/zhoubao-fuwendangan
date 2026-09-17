@@ -21,7 +21,7 @@ import type { ToolName } from '@/store/analysis';
  * 层级关系:栏目(分组) → 工具 → 工具页面。
  * 「本地分析工具」不是一个栏目,而是**期刊栏目下的工具** —— 它们服务的是已载入的数据包。
  */
-export type ToolGroupId = 'journal' | 'cloud' | 'reference';
+export type ToolGroupId = 'journal' | 'cloud' | 'reference' | 'editorial';
 
 export interface ToolGroup {
   id: ToolGroupId;
@@ -29,6 +29,12 @@ export interface ToolGroup {
   /** 分区副标(英文铭文,报刊语言) */
   latin: string;
   desc: string;
+  /**
+   * 隐藏栏目:仅在对当前访客解锁后出现。
+   * 注册表仍是唯一事实来源 —— 可见性由调用方把 unlocked 传进
+   * navGroups() / visibleGroups(),本文件保持纯函数、不读运行时状态。
+   */
+  hidden?: boolean;
 }
 
 export const TOOL_GROUPS: readonly ToolGroup[] = Object.freeze([
@@ -49,6 +55,13 @@ export const TOOL_GROUPS: readonly ToolGroup[] = Object.freeze([
     label: '参考资料',
     latin: 'Reference',
     desc: '规则、卡表等随站点发布的静态资料'
+  },
+  {
+    id: 'editorial',
+    label: '编辑部',
+    latin: 'Editorial Desk',
+    desc: '档案内容校勘与发布 —— 卡表、规则书、资源与同步(需管理员登录)',
+    hidden: true
   }
 ]);
 
@@ -84,6 +97,8 @@ export interface ToolDef {
   needsData?: boolean;
   /** 是否在导航栏(报头)中显示;工具台始终显示全部 */
   inNav?: boolean;
+  /** 是否需要管理员登录(编辑部工具);未登录时视图内部降级为门禁页 */
+  requiresAuth?: boolean;
   /**
    * 是否为站点主入口(首页 = 工具台)。
    * 首页是**所有工具的入口**,本身不是工具,因此当前没有工具标记此项。
@@ -205,6 +220,77 @@ export const TOOLS: readonly ToolDef[] = Object.freeze([
     group: 'reference',
     source: 'static',
     badge: '资料'
+  },
+
+  /* ── 编辑部(隐藏栏目:连点报头刊名解锁,且必须管理员登录) ──
+   * editorial 是栏目首页(hub),其余 5 个工具各自独立成页。
+   * 路由形态 #/editorial 与 #/editorial/{cards|batch|rules|resources|sync},
+   * 由 src/router/hash.ts 做二级映射 —— 注册表里仍是扁平的 code。
+   */
+  {
+    code: 'editorial',
+    label: '编辑部',
+    desc: '后台总管:卡表、规则书、资源与数据同步的入口',
+    group: 'editorial',
+    source: 'supabase',
+    badge: '后台',
+    requiresAuth: true,
+    inNav: true
+  },
+  {
+    code: 'editorial-cards',
+    short: '卡牌',
+    label: '卡牌校勘',
+    desc: '单卡全字段编辑与印刷版本子表',
+    group: 'editorial',
+    source: 'supabase',
+    badge: '校勘',
+    requiresAuth: true,
+    inNav: true
+  },
+  {
+    code: 'editorial-batch',
+    short: '批量',
+    label: '批量校勘',
+    desc: '类表格内联编辑、批量禁限与数值调整',
+    group: 'editorial',
+    source: 'supabase',
+    badge: '校勘',
+    requiresAuth: true,
+    inNav: true
+  },
+  {
+    code: 'editorial-rules',
+    short: '规则',
+    label: '规则校勘',
+    desc: '规则书树形编辑与全文检索定位',
+    group: 'editorial',
+    source: 'supabase',
+    badge: '校勘',
+    requiresAuth: true,
+    inNav: true
+  },
+  {
+    code: 'editorial-resources',
+    short: '资源',
+    label: '资源与发布',
+    desc: '系列、图标库与版本发布标记',
+    group: 'editorial',
+    source: 'supabase',
+    badge: '校勘',
+    requiresAuth: true,
+    inNav: true
+  },
+  {
+    code: 'editorial-sync',
+    short: '同步',
+    label: '数据同步',
+    desc: '官方接口拉取、差异比对与三种落地方式',
+    group: 'editorial',
+    source: 'supabase',
+    badge: '管道',
+    requiresAuth: true,
+    inNav: true
   }
 ]);
 
@@ -214,6 +300,10 @@ export function findTool(code: string): ToolDef | null {
   return TOOLS.find((t) => t.code === code) ?? null;
 }
 
+/**
+ * 某分组下的全部已登记工具。
+ * 注意:不判断隐藏栏目 —— 调用方应先确认该分组对当前访客可见。
+ */
 export function toolsOf(group: ToolGroupId): ToolDef[] {
   return TOOLS.filter((t) => t.group === group);
 }
@@ -227,9 +317,25 @@ export function sectionBarTools(group: ToolGroupId): ToolDef[] {
   return TOOLS.filter((t) => t.group === group && t.inNav);
 }
 
-/** 出现在导航栏的一级栏目(有 inNav 工具的分组),顺序按 TOOL_GROUPS */
-export function navGroups(): ToolGroup[] {
-  return TOOL_GROUPS.filter((g) => TOOLS.some((t) => t.group === g.id && t.inNav));
+/**
+ * 出现在导航栏的一级栏目(有 inNav 工具的分组),顺序按 TOOL_GROUPS。
+ * @param unlocked 隐藏栏目(编辑部)是否已解锁;默认 false = 对访客完全不可见
+ */
+export function navGroups(unlocked = false): ToolGroup[] {
+  return TOOL_GROUPS.filter(
+    (g) => (!g.hidden || unlocked) && TOOLS.some((t) => t.group === g.id && t.inNav)
+  );
+}
+
+/** 工具台用:全部对当前访客可见的栏目(含无 inNav 工具的分组) */
+export function visibleGroups(unlocked = false): ToolGroup[] {
+  return TOOL_GROUPS.filter((g) => !g.hidden || unlocked);
+}
+
+/** 栏目对当前访客是否可见 */
+export function isGroupVisible(group: ToolGroupId, unlocked = false): boolean {
+  const g = TOOL_GROUPS.find((x) => x.id === group);
+  return !!g && (!g.hidden || unlocked);
 }
 
 /** 工具所属栏目 */

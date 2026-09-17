@@ -134,7 +134,9 @@ sans   : system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial,
 │    ├─ #/journal 本期周报   #/archive 往期   #/issue/{pkgId} 期号正文
 │    └─ #/import 数据管理 · #/overview · #/cards · #/legendary · #/region · #/decks
 ├─ 云端内容 #/blog · #/qa            (Supabase,未配置时标「未配置」)
-└─ 参考资料 #/rules · #/carddex      (随站点发布的静态资料)
+├─ 参考资料 #/rules · #/carddex      (随站点发布的静态资料)
+└─ 编辑部   #/editorial              (隐藏栏目,见 §10)
+     └─ #/editorial/{cards|batch|rules|resources|sync}
 ```
 
 ```
@@ -255,15 +257,108 @@ sans   : system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial,
 
 ---
 
-## 9. 与文档的差异(以本文为准)
+## 9. 编辑部(后台栏目)
+
+内容校勘与发布台。**默认不存在**于导航中,也不是公开内容的一部分。
+
+### 9.1 入口:彩蛋 + 门禁(两层,互不替代)
+
+| 层 | 规则 | 实现 |
+|---|---|---|
+| ① 可见性 | **连点报头刊名 5 次**(相邻两次间隔 ≤ 3 秒)解锁「编辑部」栏目 | `src/tools/editorialAccess.ts` |
+| ② 授权 | 登录且 `app_metadata.role === 'admin'` | `src/tools/sources/auth.ts` + 服务端 RLS |
+
+- 未解锁时,栏目在**报头、栏目条、工具台正文**三处均不存在;深链 `#/editorial/*` 只渲染门禁页。
+- 解锁只代表「看得见入口」,**不代表有权限** —— 未登录时栏目条只留「编辑部」一项,不列出 5 个工具(避免列出点了就撞门禁的死链)。
+- 进度反馈:第 2 次敲击起,刊名下方长出一条朱砂细线(复用栏目激活下划线的语言);未解锁时行为与普通返回工具台完全一致,不留痕迹。
+- 解锁状态持久化(`localStorage`),刷新不丢。
+
+### 9.2 全站唯一的持久化
+
+站点其余部分**全是内存态**(刷新即丢)。编辑部引入两个 localStorage key,除此以外不得再新增:
+
+| key | 内容 | 理由 |
+|---|---|---|
+| `riftbound-editorial-unlocked` | 彩蛋是否已解锁 | 否则每次刷新都要重敲暗门 |
+| `riftbound-editorial-session` | 管理员会话(access/refresh token) | 否则每次 F5 都要重登 |
+
+> 会话刷新必须**单飞**(所有调用共享同一个 in-flight Promise)。Supabase 的 refresh_token
+> 只能用一次且启用重用检测 —— 并发刷新会让整个会话连同全部刷新令牌被吊销。
+
+### 9.3 无组件库的取舍
+
+编辑部**不引入 Element Plus**(全站依赖仅 vue / echarts / papaparse / oboe)。
+下表是后台原界面的等价物,新写后台界面时照此选型,不要新增装饰元素:
+
+| 后台原控件 | 编辑部的等价物 | 位置 |
+|---|---|---|
+| `el-dialog` | 右侧滑出 `Drawer`,或**表格上方的内联面板** | 优先内联 |
+| `el-message` toast | 内容区顶部的 notice 细线(左 2px 竖线定调) | `AdminNotices.vue` |
+| `el-messagebox` 确认 | 就地二次确认按钮(点一下变「确认删除/取消」,4 秒复位) | `AdminConfirmButton.vue` |
+| `el-pagination` | 服务端分页控件(28px 方形 / 8px 圆角 / 激活朱砂) | `AdminPager.vue` |
+| `el-select multiple allow-create` | 原生 datalist 驱动的标签输入器 | `AdminTagInput.vue` |
+| `el-input-number` | 原生 `type="number"` + `.filter-select` 样式 | — |
+| `el-switch` | 「启用 │ 禁用」文字分段控件(`.tab-active`) | — |
+| `el-tree` | **扁平化渲染** + 每层一条 1px 缩进导线 | `AdminRulesEditor.vue` |
+| `el-table` 脏行黄底 | 藤黄 8% 底 + **左侧 2px 藤黄竖线** | `AdminBatchOps.vue` |
+
+**两条硬约定:**
+
+1. **不用模态框打断流程。** 批量操作配置、编辑表单、脏行拦截确认一律做成内联条或就地确认。
+2. **层级靠细线,不靠色块。** 树用缩进导线,脏行用左侧竖线,提示用左侧竖线。
+
+### 9.4 编辑部的口径注脚(必须随页展示)
+
+- 库中**没有触发器** → 所有写操作显式带 `updated_at`。
+- **「发布」= 触碰 `version.updated_at`** → 客户端据此判断缓存失效。没有其它含义。
+- 保存**只提交变更字段**,不整行覆盖。
+- 人工维护列(`keyword` / `advanced_tag` / `deck_limit` / `*_en` / `tts_cdn` / `print_order` / `is_default`)
+  永不被数据同步覆盖;**`is_banned` 默认也不写**,需在同步页显式勾选才纳入。
+- 规则检索用**子串匹配**而非库里的 `search_vector`:该列用 `simple` 配置生成,不切分中文,
+  实测召回仅为子串的 3–7%(法术 11 vs 288、伤害 2 vs 148)。
+- 卡表快照导出前必须自检格式(**数组列 JSON 编码 · 无 BOM · LF**),不符则拒绝下载 ——
+  这类错误在站点侧是静默失效(颜色丢失、卡图关联落空),不会报错。
+
+### 9.5 验证
+
+```bash
+npm run verify:all          # 全部套件
+npm run verify:editorial    # 浏览器端到端(需先 build:fast + preview)
+```
+
+| 套件 | 覆盖 |
+|---|---|
+| `verify:editorial` | 隐藏性、深链拦截、暗门、解锁≠授权、5 条工具路由、风格合规(计算样式)、未授权写入被拒、既有视图回归 |
+| `verify:admin-sync` | 同步导出层:`is_banned` 默认排除、列值不错位、人工维护列不出现、转义 |
+| `verify:admin-logic` | ±N 分组、变更字段计算、deck_limit 三态、输入校验 |
+| `verify:admin-snapshot` | 快照格式:表头与仓库文件逐字一致、JSON 数组、换行归一、格数错位可检出 |
+| `verify:admin-rules` | 规则树:成环免疫、防环、排序、检索 |
+| `verify:sanitizer` | 效果文本标签白名单(XSS 防护) |
+
+**与既有验证脚本的关系**(不是另起炉灶,是并列新增):
+
+| 既有 | 用途 | 与本套件的关系 |
+|---|---|---|
+| `npm run smoke`(`smoke.ts`) | 分析引擎正确性(需根目录赛事数据包) | 未被改动;改动后实测 10 项仍全过 |
+| `scripts/verify-ui.mjs` | 站点视觉/交互的 CDP 走查,产出截图 | 编辑部套件复用**同一套** CDP + headless chromium 设施与写法 |
+| `scripts/capture-style.mjs` 等 | 样式与表格的专项核对 | 未受影响 |
+
+编辑部的断言刻意独立成文件而非塞进 `verify-ui.mjs`:后者依赖已载入的赛事数据包、
+且会把截图写到工作区外,耦合进来会让两边都变脆。需要一次跑完时用
+`npm run verify:all`(类型检查 + 6 套断言)。
+
+---
+
+## 10. 与文档的差异(以本文为准)
 
 | 项 | `design-v3.md` | 当前代码 |
 |---|---|---|
 | 主题 | 宣纸 +「墨夜·古籍」深色 | **仅宣纸单主题**,无切换入口 |
 | 信息架构 | 7 视图平级导航 | **两段式**:内容层(首页/往期/期号正文)+ 工具层(6 个数据工具,从首页工具箱进) |
-| 多数据包 | 规划中(Pinia + Dexie 持久化) | **已实现多包并存**(响应式单例 `store.packages`,每包一「期」);**仍无持久化**——刷新丢内存态,回到首页空态 |
+| 多数据包 | 规划中(Pinia + Dexie 持久化) | **已实现多包并存**(响应式单例 `store.packages`,每包一「期」);赛事数据**仍无持久化**——刷新丢内存态,回到首页空态(例外:编辑部会话与暗门状态,见 §9.2) |
 | 预设包加载 | `PresetLoader` + `manifest.json` 一键加载 | **未接入 UI**(不自动加载);数据靠三槽位上传,`public/data/manifest.json` 仅供脚本 |
-| 路由 | 无 | **hash 路由**(`#/` · `#/archive` · `#/issue/{id}` · `#/tool/{id}`),支持深链与前进后退 |
+| 路由 | 无 | **hash 路由**(`#/` · `#/archive` · `#/issue/{id}` · `#/tool/{id}` · `#/editorial/{tool}`),支持深链与前进后退 |
 | 组件名 | `AppShell` / `KpiRow` / `TierList` / `MegaTimeline` 等 | 实际见 §6 与 `src/components/view/*`;内容层为 `HomeView` / `ArchiveView` / `IssueView` |
+| 后台 | 未规划 | **编辑部**(§9):隐藏栏目 + 门禁,5 个校勘工具,零组件库 |
 
 > 数据仅供竞技参考 · Riot Games 与本工具无关

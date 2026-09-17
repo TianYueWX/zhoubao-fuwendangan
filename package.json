@@ -5,12 +5,19 @@
   "type": "module",
   "description": "Riftbound (符文战场) TCG 赛事 Meta 分析系统 —— Vite + Vue 3 + TypeScript 重构版",
   "scripts": {
-    "dev": "vite",
     "build": "vue-tsc --noEmit -p tsconfig.json && vue-tsc --noEmit -p tsconfig.node.json && vite build",
     "build:fast": "vite build",
+    "dev": "vite",
     "preview": "vite preview",
-    "type-check": "vue-tsc --noEmit -p tsconfig.json && vue-tsc --noEmit -p tsconfig.node.json",
     "smoke": "node --experimental-strip-types --import ./scripts/register-hooks.mjs smoke.ts",
+    "type-check": "vue-tsc --noEmit -p tsconfig.json && vue-tsc --noEmit -p tsconfig.node.json",
+    "verify:admin-logic": "node scripts/verify-admin-logic.mjs",
+    "verify:admin-rules": "node scripts/verify-admin-rules.mjs",
+    "verify:admin-snapshot": "node scripts/verify-admin-snapshot.mjs",
+    "verify:admin-sync": "node scripts/verify-admin-sync.mjs",
+    "verify:all": "npm run type-check && npm run verify:sanitizer && npm run verify:admin-logic && npm run verify:admin-rules && npm run verify:admin-sync && npm run verify:admin-snapshot && npm run verify:editorial",
+    "verify:editorial": "node scripts/verify-editorial.mjs",
+    "verify:sanitizer": "node scripts/verify-sanitizer.mjs",
     "wrap:china-map": "node scripts/wrap-china-map.mjs"
   },
   "dependencies": {

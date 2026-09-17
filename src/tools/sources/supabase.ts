@@ -17,22 +17,14 @@
  * 建表后把 TOOL_RESOURCES 里对应的表名填上即可,视图层无需改动。
  * ============================================================== */
 
-export interface SupabaseConfig {
-  url: string;
-  anonKey: string;
-}
+/*
+ * 配置读取已抽到 ./config(供 auth / rest 共用,避免循环 import);
+ * 此处 re-export 保持既有调用方(src/App.vue 等)不受影响。
+ */
+import { readSupabaseConfig } from './config';
 
-/** 从 Vite 环境变量读取配置;缺失返回 null */
-export function readSupabaseConfig(): SupabaseConfig | null {
-  const url = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.trim();
-  const anonKey = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined)?.trim();
-  if (!url || !anonKey) return null;
-  return { url: url.replace(/\/+$/, ''), anonKey };
-}
-
-export function isSupabaseConfigured(): boolean {
-  return readSupabaseConfig() !== null;
-}
+export { readSupabaseConfig, isSupabaseConfigured } from './config';
+export type { SupabaseConfig } from './config';
 
 /** 云端资源声明:一个工具对应一张表(或一个 view) */
 export interface CloudResource {

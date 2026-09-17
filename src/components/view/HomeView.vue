@@ -10,17 +10,21 @@
  * 期刊(周报)只是其中一个工具,不特殊对待。
  */
 import { computed } from 'vue';
-import { TOOL_GROUPS, toolsOf } from '@/tools/catalog';
+import { visibleGroups, toolsOf } from '@/tools/catalog';
 import type { ToolDef, ToolStatus } from '@/tools/catalog';
 import { getToolState, statusVisual } from '@/tools/state';
+import { editorialUnlocked } from '@/tools/editorialAccess';
 import { navigate } from '@/router/hash';
 import { store } from '@/store/analysis';
 
-/** 卡片编号:跨分组的全局序号,报刊式 01–NN */
+/** 对当前访客可见的栏目(隐藏栏目需先解锁暗门) */
+const groups = computed(() => visibleGroups(editorialUnlocked.value));
+
+/** 卡片编号:跨分组的全局序号,报刊式 01–NN(只数可见栏目,避免访客看到断号) */
 const indexMap = computed(() => {
   const map = new Map<string, string>();
   let n = 0;
-  for (const g of TOOL_GROUPS) {
+  for (const g of groups.value) {
     for (const t of toolsOf(g.id)) {
       n += 1;
       map.set(t.code, String(n).padStart(2, '0'));
@@ -90,7 +94,7 @@ function open(code: string): void {
 
     <!-- ══════════ 工具分区 ══════════ -->
     <div class="space-y-11">
-      <section v-for="g in TOOL_GROUPS" :key="g.id">
+      <section v-for="g in groups" :key="g.id">
         <template v-if="groupTools(g.id).length > 0">
           <div class="flex items-end justify-between gap-4 flex-wrap mb-5">
             <div>

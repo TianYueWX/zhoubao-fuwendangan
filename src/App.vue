@@ -19,16 +19,29 @@ import {
   sectionBarTools,
   groupOf,
   findTool,
+  isGroupVisible,
   HOME_CODE,
   type ToolGroupId
 } from '@/tools/catalog';
 import { setSourceState, setToolState } from '@/tools/state';
 import { probeSupabase } from '@/tools/sources/supabase';
+import { bootstrapAuth, isEditorialAdmin } from '@/tools/sources/auth';
+import {
+  editorialUnlocked,
+  loadEditorialUnlock,
+  knock,
+  knockProgress,
+  knockPercent
+} from '@/tools/editorialAccess';
 import { ViewComponents } from '@/components/view';
 
 let stopRouter: (() => void) | null = null;
 
 onMounted(async () => {
+  // 编辑部暗门状态(连点报头刊名解锁)+ 会话恢复,都不阻塞首屏
+  loadEditorialUnlock();
+  void bootstrapAuth();
+
   // 内置卡表(cards_base × card_prints)预加载;结果写入工具状态机
   setSourceState('local', { status: 'loading', message: '卡表加载中' });
   const cardsOk = await loadCardData();
@@ -109,8 +122,21 @@ function firstToolOf(group: ToolGroupId): string {
 
 /* ── 导航(栏目驱动) ── */
 const homeCode = HOME_CODE;
-const groups = computed(() => navGroups());
+/** 隐藏栏目(编辑部)仅在解锁后进入导航;未解锁时对访客完全不存在 */
+const groups = computed(() => navGroups(editorialUnlocked.value));
 const isHome = computed(() => store.currentView === homeCode);
+
+/**
+ * 报头刊名:正常点击回工具台;连续快击 KNOCK_TARGET 次则解锁编辑部并进入。
+ * 未解锁时行为与从前完全一致,不留任何可见痕迹。
+ */
+function onBrandClick(): void {
+  if (knock() === 'unlocked') {
+    navigate({ view: 'editorial' });
+    return;
+  }
+  navigate({ view: homeCode });
+}
 
 /**
  * 当前所在的**一级栏目**。
@@ -135,12 +161,20 @@ const groupNeedsData = computed(() => {
  *   云端内容 / 参考资料 → 该栏目下登记的工具
  * 未载入数据时本地工具仍可进入(页面内给引导),只是样式降级。
  */
-const sectionTools = computed(() =>
-  activeGroup.value
-    ? // 期刊本体与往期已由「本期 / 往期」两个按钮承载,不重复出现在工具位
-      sectionBarTools(activeGroup.value).filter((t) => t.code !== 'journal' && t.code !== 'archive')
-    : []
-);
+const sectionTools = computed(() => {
+  const g = activeGroup.value;
+  if (!g) return [];
+  // 隐藏栏目(编辑部)未解锁时,栏目条一并收起 —— 深链进来的访客只看到门禁页
+  if (!isGroupVisible(g, editorialUnlocked.value)) return [];
+  // 期刊本体与往期已由「本期 / 往期」两个按钮承载,不重复出现在工具位
+  const tools = sectionBarTools(g).filter((t) => t.code !== 'journal' && t.code !== 'archive');
+  // 需登录的栏目:未通过门禁时只留栏目首页(code === 栏目 id),
+  // 否则会列出 5 个点了就撞门禁的死链
+  if (tools.some((t) => t.requiresAuth) && !isEditorialAdmin.value) {
+    return tools.filter((t) => t.code === g);
+  }
+  return tools;
+});
 const showSectionBar = computed(() => activeGroup.value !== null && sectionTools.value.length > 0);
 const isJournalSection = computed(() => activeGroup.value === 'journal');
 
@@ -162,11 +196,11 @@ const issueLabel = computed(() => store.sourceLabel || '未载入数据');
     <!-- ══════════ 报头(sticky) ══════════ -->
     <header class="masthead-solid sticky top-0 z-50 shrink-0">
       <div class="px-4 lg:px-8 h-14 flex items-center gap-3 lg:gap-6">
-        <!-- 左:刊名(点击回工具台) -->
+        <!-- 左:刊名(点击回工具台;连点数次解锁编辑部暗门) -->
         <button
-          class="flex items-baseline gap-3 min-w-0 shrink-0"
+          class="relative flex items-baseline gap-3 min-w-0 shrink-0"
           title="返回工具台"
-          @click="navigate({ view: homeCode })"
+          @click="onBrandClick"
         >
           <h1 class="font-display text-[20px] lg:text-[22px] font-black text-ink truncate">
             符文档案<span class="text-brand mx-0.5">·</span>周报
@@ -174,6 +208,13 @@ const issueLabel = computed(() => store.sourceLabel || '未载入数据');
           <span class="hidden xl:inline font-latin text-[9px] tracking-[0.32em] text-ink-faint uppercase"
             >Riftbound Rune Archive</span
           >
+          <!-- 暗门进度:第 2 次敲击后才出现,一条朱砂细线 -->
+          <span
+            v-if="knockProgress >= 2"
+            class="absolute -bottom-1 left-0 h-[2px] bg-brand transition-all duration-200"
+            :style="{ width: `${knockPercent()}%` }"
+            aria-hidden="true"
+          ></span>
         </button>
 
         <!-- 中:工具导航(全部来自注册表) -->
