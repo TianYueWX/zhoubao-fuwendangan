@@ -77,7 +77,7 @@ Riftbound(符文战场)城市挑战赛赛事数据的纯前端分析工具,按�
 | 批量校勘 | `#/editorial/batch` | 内联编辑、批量禁限/数值 ±N/改系列、差异预览 |
 | 规则校勘 | `#/editorial/rules` | 规则书树形编辑 + 子串检索 + 防环 |
 | 资源与发布 | `#/editorial/resources` | 系列 CRUD、图标库、版本发布标记 |
-| 数据同步 | `#/editorial/sync` | 官方接口拉取 → 差异比对 → 直接写入/SQL/CSV |
+| 数据同步 | `#/editorial/sync` | 官方接口拉取 → 逐条编辑／勾选字段 → 分阶段提交／SQL／CSV |
 
 ### 关于「发布」
 
@@ -96,7 +96,8 @@ Riftbound(符文战场)城市挑战赛赛事数据的纯前端分析工具,按�
 - 前端只用 anon / publishable key,`service_role` 绝不出现在浏览器端
 - 所有写操作经服务端行级安全策略(`is_card_admin`)校验,前端不做权限判定的最终依据
 - 数据同步**只写接口拥有的列**;人工维护列(`keyword` / `advanced_tag` / `deck_limit` / `*_en` /
-  `tts_cdn` 等)与 **`is_banned`**(需显式勾选)不会被覆盖
+  `tts_cdn` 等)、`back_image` 与 `is_banned` 不参与同步；已有基础卡仅更新勘误效果。
+- 单条、批量与导出共用字段审核规则，详见 [同步审核说明](docs/sync-review.md)
 
 ---
 
@@ -108,7 +109,7 @@ npm run dev        # 本地开发
 npm run build      # 类型检查 + 构建到 dist/
 npm run preview    # 预览构建产物
 
-npm run verify:all # 全部验证:类型检查 + 6 套断言
+npm run verify:all # 全部验证:类型检查与各项回归验证
 ```
 
 编辑部需要 `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY`(见 `.env.example`);

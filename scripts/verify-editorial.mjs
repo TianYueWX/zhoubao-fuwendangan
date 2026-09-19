@@ -796,7 +796,7 @@ check('非法系列代码在本地被拦下', localGuard.warned === true, JSON.s
  * 13. P5 数据同步 + P5b 快照闭环
  *
  * 刻意**不触发外部接口拉取**(那会向上游打上百次请求),
- * 改为验证:界面装配、is_banned 默认关闭、以及点一次「导出快照」
+ * 改为验证:界面装配、禁限字段不参与同步、以及点一次「导出快照」
  * 把 loadSnapshotRows → 生成 CSV → 自检 这条闭环对真实库跑通。
  * ══════════════════════════════════════════════════════════════ */
 console.log('\n== 13. P5 数据同步 + P5b 快照闭环 ==');
@@ -822,8 +822,8 @@ check('渲染出数据同步页', syncView.header && syncView.source, JSON.strin
 check('提供 fast / deep 两种模式', syncView.modes === true);
 check('提供拉取入口', syncView.hasFetchBtn === true, JSON.stringify(syncView));
 check(
-  'is_banned 覆盖开关存在且**默认关闭**(搬迁前是静默覆盖)',
-  syncView.banExists === true && syncView.banChecked === false,
+  '同步不提供 is_banned 覆盖入口（仅允许基础卡勘误）',
+  syncView.banExists === false,
   `存在=${syncView.banExists} 已勾选=${syncView.banChecked}`
 );
 check('快照闭环区块存在并给出落盘路径', syncView.snapshotSection && syncView.paths, JSON.stringify(syncView));

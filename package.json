@@ -15,10 +15,12 @@
     "verify:admin-rules": "node scripts/verify-admin-rules.mjs",
     "verify:admin-snapshot": "node scripts/verify-admin-snapshot.mjs",
     "verify:admin-sync": "node scripts/verify-admin-sync.mjs",
-    "verify:all": "npm run type-check && npm run verify:sanitizer && npm run verify:admin-logic && npm run verify:admin-rules && npm run verify:admin-sync && npm run verify:admin-snapshot && npm run verify:editorial",
+    "verify:all": "npm run type-check && npm run verify:sanitizer && npm run verify:admin-logic && npm run verify:admin-rules && npm run verify:admin-sync && npm run verify:sync-review && npm run verify:admin-snapshot && npm run verify:editorial",
     "verify:editorial": "node scripts/verify-editorial.mjs",
     "verify:sanitizer": "node scripts/verify-sanitizer.mjs",
-    "wrap:china-map": "node scripts/wrap-china-map.mjs"
+    "wrap:china-map": "node scripts/wrap-china-map.mjs",
+    "verify:sync-review": "node --experimental-strip-types --import ./scripts/register-hooks.mjs scripts/verify-sync-review.mjs",
+    "verify:sync-review-ui": "node scripts/verify-sync-review-ui.mjs"
   },
   "dependencies": {
     "echarts": "^5.5.1",

@@ -131,7 +131,7 @@ export function buildCardsBaseSql(
 
 export const CARD_PRINT_COLUMNS = [
   'card_no_extend', 'language', 'rarity_name', 'extend_rarity_name',
-  'img_cdn', 'back_image', 'artist', 'series', 'flavor_text_cn', 'is_promo'
+  'img_cdn', 'artist', 'series', 'flavor_text_cn', 'is_promo'
 ] as const
 
 function printValues(r: CardPrintExportRow): string {
@@ -142,7 +142,6 @@ function printValues(r: CardPrintExportRow): string {
     sqlStr(r.rarity_name),
     sqlStr(r.extend_rarity_name),
     sqlStr(r.img_cdn),
-    sqlStr(r.back_image),
     sqlStr(r.artist),
     sqlStr(r.series),
     sqlStr(r.flavor_text_cn),

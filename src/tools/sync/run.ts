@@ -3,8 +3,8 @@
  * 不涉及 Supabase 写入，纯数据获取与转换。
  *
  * 两种模式：
- *  - fast（默认）：仅 2 次列表请求；对「未知系列前缀」的少量卡牌补拉详情
- *    （用于取得 cardSeries / attachEffect），其余直接由列表行构建。
+ *  - fast（默认）：分页拉取列表，对新增基础卡、勘误卡及未知系列补拉详情
+ *    （用于取得 cardSeries / attachEffect），其余直接由列表行构建；印刷属性始终来自对应列表行。
  *  - deep：逐卡拉取详情（1266 次），字段最全，但易触发网关限流；配合本地缓存续跑。
  */
 import {
@@ -13,7 +13,6 @@ import {
   getKeywordConfig,
   mapLimit,
   searchAllCards,
-  searchCards,
   type ApiCardDetail,
   type ApiSearchCard
 } from './riftboundApi'
@@ -22,7 +21,6 @@ import {
   buildCardsBase,
   buildCardsBaseFromSearch,
   buildIcon,
-  buildPrint,
   buildPrintFromSearch,
   extractTokens,
   normalizeCardNo,
@@ -71,6 +69,8 @@ export interface FetchDatasetOptions {
   existingSeriesCodes?: string[]
   /** 卡号前缀 → 系列代码（来自现有 cards_base），用于 fast 模式推断 series_name */
   seriesByPrefix?: Record<string, string>
+  /** 已有基础卡身份，用于补拉新基础卡详情（含装配效果）。 */
+  existingCardKeys?: string[]
   /** 详情缓存（按接口 cardNo），命中则跳过网络请求；会被就地写入以便续跑 */
   detailCache?: Record<string, ApiCardDetail>
   /** fast 模式下允许补拉详情的未知前缀卡牌上限，默认 120 */
@@ -95,7 +95,7 @@ function prefixOf(base: string): string {
 export async function fetchDataset(opts: FetchDatasetOptions = {}): Promise<SyncDataset> {
   const {
     baseUrl, mode = 'fast', concurrency = 3, minGapMs = 150,
-    existingSeriesCodes = [], seriesByPrefix = {}, detailCache,
+    existingSeriesCodes = [], seriesByPrefix = {}, existingCardKeys = [], detailCache,
     maxEnrich = 120, signal, onProgress
   } = opts
   const req = { baseUrl, signal }
@@ -111,14 +111,8 @@ export async function fetchDataset(opts: FetchDatasetOptions = {}): Promise<Sync
   throwIfAborted(signal)
   if (!searchRows.length) throw new Error('接口未返回任何卡牌')
 
-  // ② 禁限标记
-  let banned = new Set<string>()
-  try {
-    const bannedRows = await searchCards({ pageNum: 1, pageSize: 1000, otherDesc: 1 }, req)
-    banned = new Set(bannedRows.map((r) => baseCardNo(normalizeCardNo(r.cardNo).extend)))
-  } catch {
-    /* 禁限接口失败不阻断主流程 */
-  }
+  // 禁限状态由人工维护，本次同步不获取、不写入。
+  const banned = new Set<string>()
   throwIfAborted(signal)
 
   // ③ 详情（deep：全部；fast：仅未知前缀的少量卡牌）
@@ -135,7 +129,9 @@ export async function fetchDataset(opts: FetchDatasetOptions = {}): Promise<Sync
       concurrency,
       async (row) => {
         const cached = detailCache?.[row.cardNo]
-        if (cached) return cached
+        if (cached && !row.errata?.trim() && !cached.errata?.trim()
+          && cached.cardName === row.cardName && cached.subTitle === row.subTitle
+          && (cached.cardEffect || '').trim() === (row.cardEffect || '').trim()) return cached
         const d = await cardDetail(row.cardNo, req)
         if (d && detailCache) detailCache[row.cardNo] = d
         if (!d) missing++
@@ -158,8 +154,14 @@ export async function fetchDataset(opts: FetchDatasetOptions = {}): Promise<Sync
       const p = prefixOf(base)
       return !knownPrefixes.has(p) && !existingSeriesCodes.includes(p)
     })
-    if (unknown.length && unknown.length <= maxEnrich) {
-      await fetchDetails(unknown)
+    const knownCards = new Set(existingCardKeys)
+    const required = searchRows.filter((r) => Boolean(r.errata?.trim()) ||
+      !knownCards.has(JSON.stringify([(r.cardName || '').trim(), (r.subTitle || '').trim()])))
+    const enrich = [...new Map([
+      ...required, ...(unknown.length <= maxEnrich ? unknown : [])
+    ].map((r) => [r.cardNo, r])).values()]
+    if (enrich.length) {
+      await fetchDetails(enrich)
       detailsCount = detailByCardNo.size
       enriched = detailsCount
     }
@@ -180,11 +182,16 @@ export async function fetchDataset(opts: FetchDatasetOptions = {}): Promise<Sync
     const cardRow = d
       ? buildCardsBase(d, banned.has(base))
       : buildCardsBaseFromSearch(row, banned.has(base), seriesName)
-    const prev = byBase.get(base)
-    if (!prev || extend === base) byBase.set(base, cardRow)
+    // 保留同名不同编号/不同勘误的候选，交给审核层去重或提示冲突。
+    byBase.set(JSON.stringify([base, cardRow.card_name_cn, cardRow.sub_title_cn, cardRow.effect_cn]), cardRow)
 
-    const printRow = d ? buildPrint(d) : buildPrintFromSearch(row, seriesName)
-    printMap.set(`${printRow.card_no_extend}\u0000${printRow.language}`, printRow)
+    // 列表的一行就是一个印刷版本；详情的 craftList[0] 不一定对应该版本。
+    const printRow = buildPrintFromSearch(row, seriesName)
+    const key = `${printRow.card_no_extend}\u0000${printRow.language}`
+    const previousPrint = printMap.get(key)
+    if (previousPrint && JSON.stringify(previousPrint) !== JSON.stringify(printRow)) {
+      previousPrint.sync_error = '接口中同一编号和语言存在多个不同版本，请核对来源'
+    } else printMap.set(key, printRow)
 
     for (const t of extractTokens(row.cardEffect)) tokenSet.add(t)
     for (const t of extractTokens(row.errata)) tokenSet.add(t)
