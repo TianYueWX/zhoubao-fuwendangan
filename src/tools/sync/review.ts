@@ -3,6 +3,9 @@ import type { ExistingSnapshot } from '../admin/sync'
 import type { SyncDataset } from './run'
 import { CARDS_BASE_COLUMNS, CARD_PRINT_COLUMNS, toCsv, sqlStr } from './exporters'
 import { normalizeCardNo } from './normalize'
+// Type-only: reviewIndex imports values from this module, so importing it back
+// at runtime would create a cycle. Erased at compile time.
+import type { ReviewIndex } from './reviewIndex'
 
 export type ReviewTable = 'cards_base' | 'card_prints' | 'card_icons' | 'series'
 export type Values = Record<string, unknown>
@@ -56,6 +59,9 @@ export const BOOL_FIELDS = ['is_promo', 'isWhite', 'is_standard', 'is_active']
 const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T
 export const identity = (name: unknown, subtitle: unknown): string =>
   JSON.stringify([String(name ?? '').trim(), String(subtitle ?? '').trim()])
+/** Identity of a draft print row. Deliberately **not** normalized: reviewState compares
+ *  draft identities verbatim, while existing prints match on the normalized number. */
+export const printIdentity = (number: unknown, language: unknown): string => JSON.stringify([number, language])
 export const textValue = (v: unknown): string => String(v ?? '').replace(/\r\n?/g, '\n').trim()
 export function equivalent(a: unknown, b: unknown): boolean {
   if (Array.isArray(a) || Array.isArray(b)) return JSON.stringify(a) === JSON.stringify(b)
@@ -74,10 +80,15 @@ function makeRow(table: ReviewTable, key: string, source: Values, label: string)
 export function createReview(ds: SyncDataset): ReviewRow[] {
   const rows: ReviewRow[] = []
   const groups = new Map<string, Values[]>()
+  const cardByNo = new Map<unknown, Values>()
   for (const card of ds.cards) {
     const key = identity(card.card_name_cn, card.sub_title_cn)
     const group = groups.get(key) ?? []
     group.push(asValues(card)); groups.set(key, group)
+    // First card wins, matching the `find` this replaces (Map compares keys with
+    // SameValueZero, i.e. === for strings). Indexed so that 1500 prints against
+    // 900 cards stays linear instead of 1.35M comparisons.
+    if (!cardByNo.has(card.card_no)) cardByNo.set(card.card_no, asValues(card))
   }
   for (const [key, group] of groups) {
     const errata = group.filter((c) => textValue(c.sync_errata))
@@ -91,7 +102,7 @@ export function createReview(ds: SyncDataset): ReviewRow[] {
     rows.push(r)
   }
   for (const print of ds.prints) {
-    const fallback = ds.cards.find((c) => c.card_no === print.base_card_no)
+    const fallback = cardByNo.get(print.base_card_no)
     const key = identity(print.sync_card_name !== undefined ? print.sync_card_name : fallback?.card_name_cn,
       print.sync_sub_title !== undefined ? print.sync_sub_title : fallback?.sub_title_cn)
     const r = makeRow('card_prints', `print:${print.card_no_extend}:${print.language}`, asValues(print),
@@ -106,48 +117,62 @@ export function createReview(ds: SyncDataset): ReviewRow[] {
   return rows
 }
 
-export function baseCandidates(row: ReviewRow, ex: ExistingSnapshot): Values[] {
+export function baseCandidates(row: ReviewRow, ex: ExistingSnapshot, index?: ReviewIndex): Values[] {
   const key = identity(row.draft.card_name_cn, row.draft.sub_title_cn)
+  if (index) return index.bases.get(key) ?? []
   return ex.cards.filter((c) => identity(c.card_name_cn, c.sub_title_cn) === key).map(asValues)
 }
-export function resolvedBase(row: ReviewRow, ex: ExistingSnapshot): Values | undefined {
-  const candidates = baseCandidates(row, ex)
+export function resolvedBase(row: ReviewRow, ex: ExistingSnapshot, index?: ReviewIndex): Values | undefined {
+  const candidates = baseCandidates(row, ex, index)
   return candidates.length === 1 ? candidates[0] : candidates.find((c) => c.id === row.chosenBaseId)
 }
 
-export function reviewState(row: ReviewRow, rows: ReviewRow[], ex: ExistingSnapshot): ReviewState {
+/** Pass `index` (see reviewIndex.ts) to answer every lookup in O(1). Without it the
+ *  same rules run over the full snapshot, which is O(rows × snapshot) per render. */
+export function reviewState(row: ReviewRow, rows: ReviewRow[], ex: ExistingSnapshot, index?: ReviewIndex): ReviewState {
   let before: Values | undefined
   let reason = row.error
   let parentId: string | undefined
   if (row.table === 'cards_base') {
-    const candidates = baseCandidates(row, ex)
-    before = resolvedBase(row, ex)
+    const candidates = baseCandidates(row, ex, index)
+    before = resolvedBase(row, ex, index)
     if (!textValue(row.draft.card_name_cn)) reason = '卡名不能为空'
     else if (candidates.length > 1 && !before) reason = '同名同副标题有多个基础卡，请选择关联记录'
     else if (!row.variantChosen) reason = '官方存在不同勘误文本，请选择要采用的来源'
     else if ((!before || row.errata) && !row.detailComplete) reason = '详情缺失，无法确认装配效果；请重新拉取详情'
-    else if (!before && ex.cards.some((c) => c.card_no === row.draft.card_no)) reason = '基础编号已被另一张卡占用，请修改新增编号'
-    else if (!before && rows.some((r) => r !== row && r.table === 'cards_base' &&
-      identity(r.draft.card_name_cn, r.draft.sub_title_cn) === identity(row.draft.card_name_cn, row.draft.sub_title_cn))) reason = '另一个草稿使用了相同名字和副标题，请先处理该草稿'
+    else if (!before && (index
+      ? index.baseNumbers.has(row.draft.card_no)
+      : ex.cards.some((c) => c.card_no === row.draft.card_no))) reason = '基础编号已被另一张卡占用，请修改新增编号'
+    else if (!before && (index
+      ? (index.baseCounts.get(identity(row.draft.card_name_cn, row.draft.sub_title_cn)) ?? 0) > 1
+      : rows.some((r) => r !== row && r.table === 'cards_base' &&
+        identity(r.draft.card_name_cn, r.draft.sub_title_cn) === identity(row.draft.card_name_cn, row.draft.sub_title_cn)))) reason = '另一个草稿使用了相同名字和副标题，请先处理该草稿'
   } else if (row.table === 'card_prints') {
     const normalized = normalizeCardNo(String(row.draft.card_no_extend ?? ''))
-    const matches = ex.prints.filter((p) => normalizeCardNo(p.card_no_extend).extend === normalized.extend && p.language === row.draft.language)
+    const matches = index
+      ? index.prints.get(printIdentity(normalized.extend, row.draft.language)) ?? []
+      : ex.prints.filter((p) => normalizeCardNo(p.card_no_extend).extend === normalized.extend && p.language === row.draft.language)
     before = matches[0] ? asValues(matches[0]) : undefined
-    const parent = rows.find((r) => r.key === row.parentKey)
-    const base = parent ? resolvedBase(parent, ex) : undefined
+    const parent = row.parentKey
+      ? (index ? index.rows.get(row.parentKey) : rows.find((r) => r.key === row.parentKey))
+      : undefined
+    const base = parent ? resolvedBase(parent, ex, index) : undefined
     parentId = base?.id as string | undefined
     if (normalized.error || normalized.extend !== row.draft.card_no_extend) reason = '请填写不含语言的有效印刷编号'
     else if (!['SC', 'TC', 'EN', 'JP', 'JA', 'KR', 'KO'].includes(String(row.draft.language))) reason = '无法解析语言'
     else if (matches.length > 1) reason = '库内有多个相同编号和语言的印刷版本，请先处理冲突'
-    else if (!parentId) reason = parent && baseCandidates(parent, ex).length > 1
+    else if (!parentId) reason = parent && baseCandidates(parent, ex, index).length > 1
       ? '请先选择关联的基础卡' : '等待你先创建基础卡，再单独提交印刷版本'
-    else if (rows.some((r) => r !== row && r.table === 'card_prints' &&
-      r.draft.card_no_extend === row.draft.card_no_extend && r.draft.language === row.draft.language)) reason = '另一个草稿使用了相同印刷编号和语言'
+    else if (index
+      ? (index.printCounts.get(printIdentity(row.draft.card_no_extend, row.draft.language)) ?? 0) > 1
+      : rows.some((r) => r !== row && r.table === 'card_prints' &&
+        r.draft.card_no_extend === row.draft.card_no_extend && r.draft.language === row.draft.language)) reason = '另一个草稿使用了相同印刷编号和语言'
   } else if (row.table === 'card_icons') {
-    const found = ex.icons.find((i) => i.name_zh === row.draft.name_zh)
+    const found = index ? index.icons.get(row.draft.name_zh) : ex.icons.find((i) => i.name_zh === row.draft.name_zh)
     before = found ? asValues(found) : undefined
   } else {
-    before = ex.seriesCodes.includes(String(row.draft.code)) ? { code: row.draft.code } : undefined
+    before = (index ? index.series.has(String(row.draft.code)) : ex.seriesCodes.includes(String(row.draft.code)))
+      ? { code: row.draft.code } : undefined
   }
   const fields = [...(before ? UPDATE_FIELDS[row.table] : INSERT_FIELDS[row.table])]
   const changed = before ? fields.filter((f) => equivalent(before?.[f], f === 'card_id' ? parentId : row.draft[f]) === false) : []
@@ -157,8 +182,8 @@ export function reviewState(row: ReviewRow, rows: ReviewRow[], ex: ExistingSnaps
     before, fields, changed, reason, parentId }
 }
 
-export function buildOperation(row: ReviewRow, rows: ReviewRow[], ex: ExistingSnapshot): ReviewOperation | null {
-  const state = reviewState(row, rows, ex)
+export function buildOperation(row: ReviewRow, rows: ReviewRow[], ex: ExistingSnapshot, index?: ReviewIndex): ReviewOperation | null {
+  const state = reviewState(row, rows, ex, index)
   if (state.kind === 'blocked') throw new Error(state.reason)
   if (state.kind === 'same') return null
   const fields = state.kind === 'new' ? state.fields : state.changed.filter((f) => row.selected.includes(f))

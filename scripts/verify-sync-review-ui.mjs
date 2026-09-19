@@ -1,4 +1,5 @@
-/** Browser integration with entirely mocked external APIs. Requires Vite on localhost:5173. */
+/** Browser integration with entirely mocked external APIs. Requires Vite on localhost:5173
+ *  (override with SYNC_REVIEW_URL, e.g. http://localhost:5173 when Vite is IPv6-only). */
 import { spawn } from 'node:child_process';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
@@ -85,7 +86,7 @@ try {
     };
   };
   await cdp('Page.addScriptToEvaluateOnNewDocument', { source: `window.__perfCount=${perf ? 1500 : 0}; (${fixture.toString()})()` });
-  await cdp('Page.navigate', { url: 'http://127.0.0.1:5173/#/editorial/sync' });
+  await cdp('Page.navigate', { url: new URL('/#/editorial/sync', process.env.SYNC_REVIEW_URL ?? 'http://127.0.0.1:5173').href });
   const waitFor = async (expression) => {
     for (let i = 0; i < 100; i++) { if (await evaluate(expression)) return; await sleep(150); }
     throw new Error(`Timed out: ${expression}\n${await evaluate('document.body?.innerText')}`);

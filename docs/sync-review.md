@@ -47,14 +47,28 @@
 
 写入使用 INSERT 或按 ID 的 PATCH，不使用整行 upsert；提交前检查重复身份和所选字段的新值，PATCH 在可用时携带时间戳条件。失败/零行返回不会报成功。没有数据库结构改动。
 
+## 性能
+
+审核状态最初按「每条记录 × 全库」匹配，整库规模下每次点击都会重算全部差异，导致界面卡顿（1500 个印刷版本时打开编辑面板约 16 秒、勾选字段约 35 秒）。现在：
+
+- `reviewIndex.ts` 在快照或身份字段变化时建立查找表，`reviewState`／`buildOperation` 的每个匹配都变成 O(1)。不传索引仍走原来的全量扫描，便于对照。
+- 草稿冲突改用 `baseCounts`／`printCounts` 计数，去掉了逐行 `rows.some`。
+- 阶段角标与「缺失系列」提示改为 computed，不再在模板里对全表反复求值。
+- `createReview` 的印刷→基础卡回退查找改为按编号索引，去掉了 1500 × 900 次比较。
+- 索引键必须与匹配规则一致：库内印刷按规范化编号，草稿印刷按**原始**编号。测试同时断言「索引与扫描结果完全一致」和「索引被清空后结论必须变化」，避免索引被绕过却仍然通过。
+
 ## 验证
 
 ```sh
 npm run verify:sync-review
 npm run verify:admin-sync
 npm run build
-# 另一个终端启动 npm run dev -- --host 127.0.0.1
-node scripts/verify-sync-review-ui.mjs
+# 另一个终端启动 npm run dev
+SYNC_REVIEW_URL=http://localhost:5173 node scripts/verify-sync-review-ui.mjs
+# 整库规模性能门槛（1500 个印刷版本，单次交互必须 < 500 ms）
+SYNC_REVIEW_URL=http://localhost:5173 npm run verify:sync-review-perf
 ```
 
 浏览器检查使用模拟外部 API，不写入真实数据库。覆盖逐字段提交、歧义关联、分步新增、超过 200 条的分页、导出和失败后保留编辑。
+
+注：`verify-editorial.mjs` 需要 `npm run build` 后另开 `npx vite preview --port 4173`。其中访客态／刊名按钮等 8 项失败在本次同步功能改动之前就已存在（与 src 下的公开外壳无关），不计入本功能回归。

@@ -9,11 +9,15 @@ import {
   ARRAY_FIELDS, NUMBER_FIELDS, BOOL_FIELDS, createReview, reviewState, baseCandidates, buildOperation,
   reviewSql, reviewCsv, type ReviewRow, type ReviewTable, type Values, type ReviewOperation
 } from '@/tools/sync/review';
+import { indexExisting, indexDrafts, type ReviewIndex } from '@/tools/sync/reviewIndex';
 
 const props = defineProps<{ dataset: SyncDataset; existing: ExistingSnapshot; loading: boolean }>();
 const emit = defineEmits<{ reload: []; busy: [value: boolean] }>();
 const rows = ref<ReviewRow[]>(createReview(props.dataset));
 const snapshot = ref(props.existing);
+/** Bumped when snapshot contents are mutated in place (acceptResult): a deep-reactive ref
+ *  is not a reliable invalidation signal for the index, so make it explicit. */
+const snapshotRevision = ref(0);
 const tab = ref<ReviewTable>('card_prints');
 const search = ref('');
 const statusFilter = ref('pending');
@@ -40,7 +44,13 @@ const labels: Record<string, string> = {
   storage_type: '存储类型', isWhite: '白色图标', code: '系列代码', name_cn: '中文名称',
   name_en: '英文名称', release_order: '发行顺序', is_standard: '标准系列', is_active: '启用'
 };
-const state = (r: ReviewRow) => reviewState(r, rows.value, snapshot.value);
+// Lookup tables rebuilt per snapshot / identity edit, never per rendered row. Without
+// them every state() call re-scanned all cards and prints, which is O(rows × snapshot)
+// and froze the UI on a full-size library.
+const existingIndex = computed(() => { void snapshotRevision.value; return indexExisting(snapshot.value); });
+const draftIndex = computed(() => indexDrafts(rows.value));
+const index = computed<ReviewIndex>(() => ({ ...existingIndex.value, ...draftIndex.value }));
+const state = (r: ReviewRow) => reviewState(r, rows.value, snapshot.value, index.value);
 const tableRows = computed(() => rows.value.filter((r) => r.table === tab.value));
 const filtered = computed(() => tableRows.value.filter((r) => {
   const s = state(r);
@@ -49,11 +59,21 @@ const filtered = computed(() => tableRows.value.filter((r) => {
 }));
 const pageCount = computed(() => Math.max(1, Math.ceil(filtered.value.length / 30)));
 const visibleRows = computed(() => filtered.value.slice((page.value - 1) * 30, page.value * 30));
-const active = computed(() => rows.value.find((r) => r.key === editorKey.value));
+const active = computed(() => editorKey.value ? draftIndex.value.rows.get(editorKey.value) : undefined);
 const activeState = computed(() => active.value ? state(active.value) : null);
-const parentRow = computed(() => active.value?.table === 'cards_base' ? active.value : rows.value.find((r) => r.key === active.value?.parentKey));
-const candidates = computed(() => parentRow.value ? baseCandidates(parentRow.value, snapshot.value) : []);
+const parentRow = computed(() => active.value?.table === 'cards_base'
+  ? active.value
+  : (active.value?.parentKey ? draftIndex.value.rows.get(active.value.parentKey) : undefined));
+const candidates = computed(() => parentRow.value ? baseCandidates(parentRow.value, snapshot.value, index.value) : []);
 const editorFields = computed(() => activeState.value?.fields.filter((f) => f !== 'card_id') ?? []);
+/** One pass for the stage badges instead of four full filters per render. */
+const stageCounts = computed(() => {
+  const counts: Record<string, number> = {};
+  for (const stage of stages) counts[stage.table] = 0;
+  for (const row of rows.value) if (state(row).kind !== 'same') counts[row.table] = (counts[row.table] ?? 0) + 1;
+  return counts;
+});
+const hasNewSeries = computed(() => rows.value.some((r) => r.table === 'series' && state(r).kind === 'new'));
 watch([tab, search, statusFilter], () => { page.value = 1; });
 watch(pageCount, (count) => { page.value = Math.min(page.value, count); });
 watch(() => props.existing, (ex) => {
@@ -92,7 +112,7 @@ function rowInputError(row: ReviewRow): string {
 function operation(row: ReviewRow): ReviewOperation | null {
   const error = rowInputError(row);
   if (error) throw new Error(error);
-  return buildOperation(row, rows.value, snapshot.value);
+  return buildOperation(row, rows.value, snapshot.value, index.value);
 }
 function ready(row: ReviewRow): boolean {
   try { return !!operation(row); } catch { return false; }
@@ -127,7 +147,7 @@ function openParent(): void {
   tab.value = 'cards_base';
 }
 function returnToPrint(): void {
-  const row = rows.value.find((r) => r.key === returnPrintKey.value);
+  const row = returnPrintKey.value ? draftIndex.value.rows.get(returnPrintKey.value) : undefined;
   if (row) { tab.value = 'card_prints'; void openEditor(row); }
 }
 function acceptResult(row: ReviewRow, result: Values): void {
@@ -138,6 +158,7 @@ function acceptResult(row: ReviewRow, result: Values): void {
     const list = (row.table === 'cards_base' ? ex.cards : row.table === 'card_prints' ? ex.prints : ex.icons) as unknown as Values[];
     const index = list.findIndex((r) => r.id === result.id);
     if (index >= 0) list[index] = result; else list.push(result);
+    snapshotRevision.value++;
   }
   if (row.table === 'cards_base') row.chosenBaseId = String(result.id);
   row.selected = [];
@@ -207,7 +228,7 @@ function exportReviewed(format: 'sql' | 'csv'): void {
       <div class="flex gap-2 flex-wrap mb-4">
         <button v-for="stage in stages" :key="stage.table" class="btn-ghost px-3 py-2 text-xs"
           :class="tab === stage.table ? 'tab-active' : ''" @click="tab = stage.table">
-          {{ stage.label }} · {{ rows.filter(r => r.table === stage.table && state(r).kind !== 'same').length }}
+          {{ stage.label }} · {{ stageCounts[stage.table] }}
         </button>
       </div>
       <div class="flex gap-3 flex-wrap mb-4">
@@ -317,7 +338,7 @@ function exportReviewed(format: 'sql' | 'csv'): void {
         </div>
         <p class="text-xs text-ink-faint mt-3">CSV 新增文件用于导入；update-patches 文件按「记录 ID＋字段＋JSON 值」列出更新补丁，请勿作为整行 CSV 导入。SQL 仅包含已选字段。</p>
         <p v-if="tab === 'card_prints'" class="text-xs text-ink-faint mt-2">尚未创建基础卡的印刷版本不会导出。先执行基础卡阶段，再重读库内现状。</p>
-        <p v-if="tab === 'cards_base' && rows.some(r => r.table === 'series' && state(r).kind === 'new')" class="text-xs text-accent mt-2">有缺失系列，请先在「缺失系列」阶段审核并提交，避免系列外键错误。</p>
+        <p v-if="tab === 'cards_base' && hasNewSeries" class="text-xs text-accent mt-2">有缺失系列，请先在「缺失系列」阶段审核并提交，避免系列外键错误。</p>
       </div>
     </fieldset>
     <p v-if="busy" role="status" class="text-sm text-brand mt-4">提交中… {{ progress }}</p>

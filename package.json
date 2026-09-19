@@ -20,7 +20,8 @@
     "verify:sanitizer": "node scripts/verify-sanitizer.mjs",
     "wrap:china-map": "node scripts/wrap-china-map.mjs",
     "verify:sync-review": "node --experimental-strip-types --import ./scripts/register-hooks.mjs scripts/verify-sync-review.mjs",
-    "verify:sync-review-ui": "node scripts/verify-sync-review-ui.mjs"
+    "verify:sync-review-ui": "node scripts/verify-sync-review-ui.mjs",
+    "verify:sync-review-perf": "node scripts/verify-sync-review-ui.mjs --perf --assert-fast"
   },
   "dependencies": {
     "echarts": "^5.5.1",

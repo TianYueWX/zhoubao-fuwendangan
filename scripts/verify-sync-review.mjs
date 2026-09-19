@@ -1,7 +1,7 @@
 /** Offline regression checks: no real database writes or credentials needed. */
 import assert from 'node:assert/strict';
 import { normalizeCardNo, buildCardsBase, buildPrintFromSearch } from '../src/tools/sync/normalize.ts';
-import { createReview, reviewState, buildOperation, reviewSql, reviewCsv, equivalent } from '../src/tools/sync/review.ts';
+import { createReview, reviewState, buildOperation, reviewSql, reviewCsv, equivalent, identity, printIdentity } from '../src/tools/sync/review.ts';
 import { executeOperation } from '../src/tools/sync/write.ts';
 import { indexExisting, indexDrafts } from '../src/tools/sync/reviewIndex.ts';
 import { fetchDataset } from '../src/tools/sync/run.ts';
@@ -90,27 +90,96 @@ test('库内点号编号能匹配，新语言不会覆盖 SC 版本', () => {
 });
 test('索引与逐行扫描的匹配、冲突、字段勾选结果完全一致', () => {
   const corrected = buildCardsBase({ ...detail, errata: '新勘误' }, false);
-  for (const ex of [existing(), existing([oldBase], [oldPrint]), existing([oldBase, {...oldBase,id:'base-2'}], [oldPrint])]) {
+  const scenarios = [
+    existing(),
+    existing([oldBase], [oldPrint]),
+    existing([oldBase, { ...oldBase, id: 'base-2' }], [oldPrint]),
+    existing([oldBase], [oldPrint, { ...oldPrint, id: 'print-2' }]),
+    existing([oldBase], [{ ...oldPrint, card_no_extend: 'ARC·001a' }])
+  ];
+  let compared = 0;
+  for (const ex of scenarios) {
     const rows = createReview(dataset([corrected]));
-    const index = {...indexExisting(ex), ...indexDrafts(rows)};
+    const index = { ...indexExisting(ex), ...indexDrafts(rows) };
     for (const row of rows) {
-      assert.deepEqual(reviewState(row, rows, ex, index), reviewState(row, rows, ex));
+      assert.deepEqual(reviewState(row, rows, ex, index), reviewState(row, rows, ex), `索引状态应与扫描一致：${row.key}`);
+      compared++;
       if (reviewState(row, rows, ex).kind !== 'blocked') {
         row.selected = ['artist', 'effect_cn'];
-        assert.deepEqual(buildOperation(row, rows, ex, index), buildOperation(row, rows, ex));
+        assert.deepEqual(buildOperation(row, rows, ex, index), buildOperation(row, rows, ex), `索引操作应与扫描一致：${row.key}`);
       }
     }
   }
+  assert.ok(compared >= 10, `必须真的比较过足够多的记录，否则此测试会空跑（实际 ${compared}）`);
 });
-test('索引保留重复候选，并在身份编辑后正确重建', () => {
-  const rows = createReview(dataset()); const ex = existing([oldBase, {...oldBase,id:'base-2'}], [oldPrint]);
-  let index = {...indexExisting(ex), ...indexDrafts(rows)};
-  assert.equal([...index.bases.values()][0].length, 2);
-  rows[0].chosenBaseId = 'base-2';
-  assert.equal(reviewState(rows[1], rows, ex, index).parentId, 'base-2');
-  rows[1].draft.card_no_extend = 'ARC-099';
-  index = {...indexExisting(ex), ...indexDrafts(rows)};
-  assert.equal(reviewState(rows[1], rows, ex, index).kind, 'new');
+test('索引确实参与判断：篡改索引必须改变结论', () => {
+  // Guards the test above from silently passing because both paths run the same code.
+  const rows = createReview(dataset()); const ex = existing([oldBase], [oldPrint]);
+  const honest = { ...indexExisting(ex), ...indexDrafts(rows) };
+  const scanned = reviewState(rows[1], rows, ex);
+  assert.deepEqual(reviewState(rows[1], rows, ex, honest), scanned);
+  assert.equal(scanned.kind, 'update');
+  assert.equal(scanned.parentId, 'base-1');
+  const emptied = { ...honest, bases: new Map(), prints: new Map(), baseNumbers: new Set(), icons: new Map(), series: new Set(), rows: new Map(), baseCounts: new Map(), printCounts: new Map() };
+  const mutated = reviewState(rows[1], rows, ex, emptied);
+  assert.notDeepEqual(mutated, scanned, '索引被清空后结果必须变化，否则索引根本没被使用');
+  assert.equal(mutated.kind, 'blocked');
+  assert.equal(mutated.parentId, undefined);
+  assert.equal(reviewState(rows[0], rows, ex, emptied).kind, 'new');
+});
+test('索引覆盖草稿冲突、编号占用与 series 主键', () => {
+  const withIndex = (rows, ex) => ({ rows, ex, index: { ...indexExisting(ex), ...indexDrafts(rows) } });
+  // 同名同副标题的两个草稿必须互相阻止（走 baseCounts）。createReview 会把同身份的官方卡
+  // 归并成一行，所以这里模拟用户在编辑面板里把两条草稿改成同名。
+  const twinRows = createReview(dataset([base, { ...base, card_no: 'ALT-001', card_name_cn: '另一张' }], []));
+  assert.equal(twinRows.filter((r) => r.table === 'cards_base').length, 2);
+  twinRows[1].draft.card_name_cn = base.card_name_cn;
+  twinRows[1].draft.sub_title_cn = base.sub_title_cn;
+  const twin = withIndex(twinRows, existing());
+  assert.equal(twin.index.baseCounts.get(identity(base.card_name_cn, base.sub_title_cn)), 2);
+  assert.equal(reviewState(twin.rows[0], twin.rows, twin.ex, twin.index).reason, '另一个草稿使用了相同名字和副标题，请先处理该草稿');
+  assert.equal(reviewState(twin.rows[1], twin.rows, twin.ex, twin.index).reason, '另一个草稿使用了相同名字和副标题，请先处理该草稿');
+  // 相同原始印刷编号＋语言的两个草稿必须互相阻止（走 printCounts；父卡需先能解析，否则先报等待基础卡）。
+  const dup = withIndex(createReview(dataset([base], [print, { ...print, card_no_extend: 'ARC-001a' }])), existing([oldBase], []));
+  assert.equal(dup.index.printCounts.get(printIdentity('ARC-001a', 'SC')), 2);
+  assert.equal(reviewState(dup.rows[1], dup.rows, dup.ex, dup.index).reason, '另一个草稿使用了相同印刷编号和语言');
+  assert.equal(reviewState(dup.rows[2], dup.rows, dup.ex, dup.index).reason, '另一个草稿使用了相同印刷编号和语言');
+  // baseNumbers 阻止新增时占用已存在的 card_no。
+  const occupied = withIndex(createReview(dataset()), existing([{ ...oldBase, card_no: base.card_no, card_name_cn: '其他卡' }]));
+  assert.ok(occupied.index.baseNumbers.has(base.card_no));
+  assert.equal(reviewState(occupied.rows[0], occupied.rows, occupied.ex, occupied.index).reason, '基础编号已被另一张卡占用，请修改新增编号');
+  // series 走 Set，icons 走首个匹配（与 find 一致）。
+  const seriesRows = createReview({ cards: [], prints: [], icons: [], seriesPresets: [{ code: 'ARC', name_cn: '起源' }] });
+  const seriesIndex = { ...indexExisting(existing()), ...indexDrafts(seriesRows) };
+  assert.equal(reviewState(seriesRows[0], seriesRows, existing(), seriesIndex).kind, 'same');
+  const iconRows = createReview({ cards: [], prints: [], icons: [{ name_zh: '急速', url: 'new.png', storage_type: 'cdn', isWhite: false }], seriesPresets: [] });
+  const iconEx = { cards: [], prints: [], icons: [{ id: 'i1', name_zh: '急速', url: 'old.png' }, { id: 'i2', name_zh: '急速', url: 'other.png' }], seriesCodes: [], seriesByPrefix: {} };
+  const iconIndex = { ...indexExisting(iconEx), ...indexDrafts(iconRows) };
+  assert.equal(iconIndex.icons.get('急速').id, 'i1', '重复图标必须取第一条，与 find 一致');
+  assert.equal(reviewState(iconRows[0], iconRows, iconEx, iconIndex).before.id, 'i1');
+  assert.equal(reviewState(iconRows[0], iconRows, iconEx, iconIndex).kind, 'update');
+});
+test('整库规模下索引保持线性：2400 条记录的状态计算不超时', () => {
+  const cards = Array.from({ length: 900 }, (_, i) => ({ ...base, card_no: `BASE-${String(i + 1).padStart(3, '0')}`, card_name_cn: `性能卡${i}`, sub_title_cn: null }));
+  const prints = Array.from({ length: 1500 }, (_, i) => ({ ...print, card_no_extend: `ARC-${String(i + 1).padStart(4, '0')}` }));
+  const ds = { cards, prints, icons: [], seriesPresets: [] };
+  const rows = createReview(ds);
+  assert.equal(rows.length, 2400);
+  const ex = {
+    cards: cards.map((c, i) => ({ ...c, id: `base-${i}` })),
+    prints: prints.map((p, i) => ({ ...p, id: `print-${i}`, card_id: `base-${i % 900}` })),
+    icons: [], seriesCodes: ['ARC'], seriesByPrefix: { ARC: 'ARC' }
+  };
+  const index = { ...indexExisting(ex), ...indexDrafts(rows) };
+  const start = performance.now();
+  for (let pass = 0; pass < 3; pass++) for (const row of rows) reviewState(row, rows, ex, index);
+  const ms = performance.now() - start;
+  assert.ok(ms < 2000, `索引路径应远快于全量扫描：2400 条 ×3 用时 ${Math.round(ms)} ms`);
+  // 同一批数据在没有索引时必须明显更慢，证明索引确实省掉了扫描。
+  const scanStart = performance.now();
+  for (const row of rows.slice(0, 60)) reviewState(row, rows, ex);
+  const scanMs = performance.now() - scanStart;
+  assert.ok(scanMs > ms / 20, `无索引的扫描路径应当明显更慢（索引 ${Math.round(ms)} ms / 60 条扫描 ${Math.round(scanMs)} ms）`);
 });
 let chosenOp;
 test('编辑值被单条、批量与 SQL/CSV 导出共用，未选字段不存在', () => {
