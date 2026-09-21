@@ -148,7 +148,7 @@ function onWeekChange(e: Event): void {
 
 <template>
   <div class="min-h-screen flex flex-col">
-    <header v-if="!isHome" class="masthead-solid sticky top-0 z-50 shrink-0">
+    <header v-if="!isHome && store.currentView !== 'chain'" class="masthead-solid sticky top-0 z-50 shrink-0">
       <div class="px-4 lg:px-8 h-14 flex items-center">
         <button class="text-sm text-ink-muted hover:text-brand transition-colors"
           @click="navigate({ view: homeCode })">

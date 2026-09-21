@@ -75,6 +75,30 @@ onUnmounted(() => {
           <span class="entry-arrow" aria-hidden="true">↗</span>
         </button>
       </div>
+
+      <!--
+        小工具入口条
+        ─────────────────────────────────────────────────────────
+        与上面的大卡片分工不同:大卡片是「栏目」(周报 / 规则 / 卡牌),
+        这里放不成栏目的单点小工具。第一个是结算链推演,后续小工具
+        继续往这一排加即可,不影响大卡片布局。
+      -->
+      <div class="home-shortcuts" aria-label="小工具">
+        <span class="shortcuts-label">小工具</span>
+        <button
+          type="button"
+          class="shortcut-btn"
+          title="结算链推演 · 双人对局结算链推演板"
+          @click="navigate({ view: 'chain' })"
+        >
+          <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+            <path d="M4 3v4a3 3 0 0 0 3 3h6a3 3 0 0 1 3 3v4" stroke-width="1.5" stroke-linecap="round"/>
+            <circle cx="4" cy="3" r="1.6" stroke-width="1.4"/>
+            <rect x="13.8" y="13.8" width="3.4" height="3.4" rx=".8" stroke-width="1.4"/>
+          </svg>
+          结算链推演
+        </button>
+      </div>
     </div>
     <div class="home-notice" role="status" aria-live="polite" aria-atomic="true">
       <span v-if="notice">{{ notice }}</span>
@@ -169,6 +193,54 @@ onUnmounted(() => {
 .entry-label { font-size: clamp(17px, 1.7vw, 22px); font-weight: 700; align-self: center; }
 .entry-arrow { color: var(--color-brand); font-size: 23px; line-height: 1; align-self: center; }
 .entry-status { color: var(--color-text-subtle); font-size: 10px; align-self: center; white-space: nowrap; }
+
+/* ── 小工具入口条 ──
+ * 大卡片下方的一排紧凑按钮。收录不成栏目的单点工具,
+ * 保持首页的呼吸感,新增小工具只需在这里再加一个按钮。 */
+.home-shortcuts {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: clamp(18px, 3vh, 30px);
+}
+.shortcuts-label {
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--color-text-subtle);
+  padding-right: 4px;
+  border-right: 1px solid var(--color-panel-border);
+  margin-right: 2px;
+  line-height: 1.6;
+}
+.shortcut-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 18px;
+  border: 1px solid var(--color-card-border);
+  border-radius: 999px;
+  background: var(--color-card-bg);
+  color: var(--color-text-primary);
+  font-size: 13.5px;
+  font-weight: 600;
+  transition: border-color 180ms, color 180ms, transform 180ms, box-shadow 180ms;
+}
+.shortcut-btn svg {
+  width: 17px;
+  height: 17px;
+  stroke: var(--color-text-subtle);
+  transition: stroke 180ms;
+}
+.shortcut-btn:hover {
+  border-color: var(--color-brand-faint);
+  color: var(--color-brand);
+  transform: translateY(-2px);
+  box-shadow: 0 10px 22px -16px var(--color-shadow);
+}
+.shortcut-btn:hover svg { stroke: var(--color-brand); }
 .home-notice { position: absolute; bottom: max(36px, env(safe-area-inset-bottom)); left: 0; right: 0; text-align: center; pointer-events: none; }
 .home-notice span { display: inline-block; padding: 10px 24px; border: 1px solid var(--color-brand-faint); border-radius: 12px; background: var(--color-card-bg); color: var(--color-brand); font-size: 14px; }
 @media (max-width: 900px) {

@@ -19,6 +19,7 @@ import HeroLegendView from './HeroLegendView.vue';
 import CardsView from './CardsView.vue';
 import RegionView from './RegionView.vue';
 import DecksView from './DecksView.vue';
+import ChainBoardView from './ChainBoardView.vue';
 import ToolPlaceholder from './ToolPlaceholder.vue';
 import EditorialHub from '../admin/EditorialHub.vue';
 import AdminCardEditor from '../admin/AdminCardEditor.vue';
@@ -56,6 +57,9 @@ export const ViewComponents: Record<string, unknown> = {
   rules: placeholder,
   carddex: placeholder,
 
+  /* 小工具:结算链推演(卡池来自内置卡表,无需数据包) */
+  chain: ChainBoardView,
+
   /* 编辑部(隐藏栏目:连点报头刊名解锁 + 管理员门禁) */
   editorial: EditorialHub,
   'editorial-cards': AdminCardEditor,
@@ -76,6 +80,7 @@ export {
   CardsView,
   RegionView,
   DecksView,
+  ChainBoardView,
   ToolPlaceholder,
   EditorialHub,
   AdminCardEditor,

@@ -221,6 +221,17 @@ export const TOOLS: readonly ToolDef[] = Object.freeze([
     source: 'static',
     badge: '资料'
   },
+  {
+    code: 'chain',
+    short: '结算链',
+    label: '结算链推演',
+    desc: '双人对局结算链推演板:六区拖拽、快照历史、多盘位保存与分享',
+    group: 'reference',
+    source: 'static',
+    badge: '小工具',
+    // 卡池来自随站点预加载的内置卡表,因此不依赖数据包
+    needsData: false
+  },
 
   /* ── 编辑部(隐藏栏目:连点报头刊名解锁,且必须管理员登录) ──
    * editorial 是栏目首页(hub),其余 5 个工具各自独立成页。

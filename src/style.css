@@ -339,3 +339,33 @@ table,
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ════════════ 结算链推演 · 拖拽状态 ════════════
+ * 拖拽层(useChainDnd)只负责挂/摘这些类,视觉全在 CSS 里。
+ * 卡片走 HTML5 原生拖拽,所以浏览器自带拖影;
+ * 这里补的是「光标」与「落点高亮」两类反馈。 */
+.chain-dragging-active,
+.chain-dragging-active * {
+  cursor: grabbing !important;
+}
+/* 正在被拖走的那张卡:留在原位做淡出提示 */
+.chain-card.chain-dragging {
+  opacity: 0.4;
+}
+/* 落点区域高亮 */
+.chain-zone.chain-drop-active {
+  border-color: var(--color-brand);
+  background: var(--color-brand-soft);
+}
+/* 拖回卡池 = 移出棋盘 */
+.chain-pool.chain-pool-drop-active {
+  border-color: var(--color-brand);
+  box-shadow: 0 0 0 2px var(--color-brand-soft);
+}
+/* 触屏兜底的拖影 */
+.chain-touch-ghost {
+  border: 1px solid var(--color-brand);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 12px 28px -14px var(--color-shadow);
+}
