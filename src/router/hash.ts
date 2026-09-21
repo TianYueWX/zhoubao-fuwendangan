@@ -37,7 +37,11 @@ export interface Route {
 }
 
 export function parseHash(hash: string): Route {
-  const raw = (hash || '').replace(/^#\/?/, '').replace(/\/+$/, '');
+  // 查询串不参与路由:#/chain?s=… 仍然落在结算链上。
+  // 不剥掉的话 head 会变成 'chain?s=…',被判成未知工具而回落到工具台 ——
+  // 分享链接的接收方就永远打不开那条盘。
+  const withoutQuery = (hash || '').replace(/^#\/?/, '').split('?')[0] ?? '';
+  const raw = withoutQuery.replace(/\/+$/, '');
   if (!raw) return { view: HOME_CODE };
   const [head = '', tail] = raw.split('/');
 
@@ -126,7 +130,13 @@ export function navigate(route: Route, replace = false): void {
 /** 把当前 store 状态回写到地址栏(不触发 hashchange 副作用) */
 export function syncUrl(): void {
   const hash = routeToHash(currentRoute());
-  if (window.location.hash !== hash) window.history.replaceState(null, '', hash);
+  const current = window.location.hash;
+  const qIndex = current.indexOf('?');
+  // 同一条路由上的查询串要留着:结算链的分享参数 #/chain?s=… 还没被视图读走,
+  // 这里顺手规范化掉的话,接收方就再也拿不到盘了。换路由则照旧丢弃。
+  const keep = qIndex >= 0 && current.slice(0, qIndex) === hash ? current.slice(qIndex) : '';
+  const next = hash + keep;
+  if (current !== next) window.history.replaceState(null, '', next);
 }
 
 /** 启动路由:解析当前 hash 并监听变化。返回卸载函数 */
