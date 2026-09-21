@@ -1,2 +1,7 @@
 allowBuilds:
   esbuild: false
+
+# 本仓库的 node_modules 由项目内 store 安装(.pnpm-store/,见 .gitignore),
+# 而 pnpm 默认去 ~/.local/share/pnpm/store 找,两边对不上会直接报
+# ERR_PNPM_UNEXPECTED_STORE —— 连 pnpm add 都跑不起来。这里把 store 固定到项目内。
+storeDir: .pnpm-store
