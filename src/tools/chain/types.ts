@@ -144,9 +144,11 @@ export interface ChainPlay {
    *   未保存判定需要拿「当前编辑中的棋盘」与「上次保存的棋盘」逐字段比对。
    *   有了它,任何操作(拖拽/删除/改名/改显示模式)都会自动被识别为改动,
    *   无需在每个操作里手动 setDirty(true),也就不会漏标。
-   */
+  */
   savedBoard: ChainBoard | null;
   board: ChainBoard;
+  /** 最近一次保存到本机的手动快照历史 */
+  history: ChainSnapshot[];
 }
 
 /** 盘位内的快照条目(上游的 chain_history 单条) */

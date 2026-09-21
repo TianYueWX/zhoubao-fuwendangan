@@ -503,8 +503,9 @@ async function loadSharedFromHash(): Promise<void> {
     notify('分享链接已损坏或版本不兼容,无法解析', true);
     return;
   }
-  importBoardAsNewPlay('分享的推演', decoded, true);
-  notify('已打开分享的推演(临时盘,点「保存」才会留在本机)');
+  importBoardAsNewPlay('分享的推演', decoded.board, true, decoded.history);
+  const historyHint = decoded.history.length > 0 ? `,含 ${decoded.history.length} 个快照` : '';
+  notify(`已打开分享的推演${historyHint}(临时盘,点「保存」才会留在本机)`);
 
   // 清掉地址栏里的长参数,避免刷新时重复导入;盘已进内存,不影响使用
   const cleanHash = hash.slice(0, qIndex);
@@ -763,7 +764,14 @@ function modeOf(area: ChainAreaKey): CardDisplayMode {
           @import-json="onPickImportFile"
         />
 
-    <ChainShareDialog v-if="shareOpen" :url="shareUrl" :error="shareError" @close="shareOpen = false" @export-json="onExportJson" />
+    <ChainShareDialog
+      v-if="shareOpen"
+      :url="shareUrl"
+      :error="shareError"
+      :history-count="chainStore.working.history.length"
+      @close="shareOpen = false"
+      @export-json="onExportJson"
+    />
 
     <!-- 浮层 -->
     <ChainCardOverlay
@@ -780,6 +788,7 @@ function modeOf(area: ChainAreaKey): CardDisplayMode {
       :mode-of="modeOf"
       :actor="actor"
       :image-of="imageOf"
+      :history="chainStore.working.history"
       @close="presenting = false"
       @preview="onPreview"
       @toggle-player="onTogglePlayer"

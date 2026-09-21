@@ -9,10 +9,15 @@
  *
  * 实现上是把真实的 ChainZone 组件用同样的顺序再排一遍,
  * 因此显示模式(文本/图案/两者)、玩家染色、卡图与主棋盘完全一致;
- * 差别只在于:去掉管理界面、把卡片放大、区域不再接受编辑操作。
+ * 差别只在于:去掉管理界面、区域不再接受编辑操作。
  */
-import { onMounted, onUnmounted, ref } from 'vue';
-import { AREA_ORDER, type CardDisplayMode, type ChainAreaKey, type ChainCard } from '@/tools/chain/types';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
+import {
+  type CardDisplayMode,
+  type ChainAreaKey,
+  type ChainCard,
+  type ChainSnapshot
+} from '@/tools/chain/types';
 import { chainStore } from '@/tools/chain/store';
 import ChainZone from './ChainZone.vue';
 
@@ -21,6 +26,7 @@ const props = defineProps<{
   modeOf: (area: ChainAreaKey) => CardDisplayMode;
   actor: 1 | 2;
   imageOf: (cardId: string) => string;
+  history: readonly ChainSnapshot[];
 }>();
 
 const emit = defineEmits<{
@@ -30,6 +36,35 @@ const emit = defineEmits<{
 }>();
 
 const isFullscreen = ref(false);
+/** history.length is a sentinel for the live board shown when presentation opens. */
+const stepIndex = ref(props.history.length);
+
+const activeSnapshot = computed(() =>
+  stepIndex.value >= 0 && stepIndex.value < props.history.length
+    ? props.history[stepIndex.value]
+    : undefined
+);
+const displayActor = computed(() => activeSnapshot.value?.actor ?? props.actor);
+const canStepBack = computed(() => props.history.length > 0 && stepIndex.value > 0);
+const canStepForward = computed(() =>
+  stepIndex.value >= 0 && stepIndex.value < props.history.length
+);
+const stepLabel = computed(() => {
+  const snapshot = activeSnapshot.value;
+  if (!snapshot) {
+    return props.history.length > 0
+      ? `当前棋盘 · ${props.history.length} 个快照`
+      : '当前棋盘 · 暂无快照';
+  }
+  return `${stepIndex.value + 1} / ${props.history.length} · ${snapshot.action}`;
+});
+
+watch(
+  () => props.history.length,
+  (length) => {
+    if (stepIndex.value < 0 || stepIndex.value > length) stepIndex.value = length;
+  }
+);
 
 /** 演示模式下的排版:与主棋盘同序,结算链与结算中并排 */
 const layoutRows: ChainAreaKey[][] = [
@@ -42,7 +77,44 @@ function onKeydown(e: KeyboardEvent): void {
   if (e.key === 'Escape') {
     e.preventDefault();
     emit('close');
+    return;
   }
+
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'r') {
+    e.preventDefault();
+    resetSteps();
+    return;
+  }
+
+  if (!e.ctrlKey && !e.metaKey && !e.altKey) {
+    if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      stepBack();
+    } else if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      stepForward();
+    }
+  }
+}
+
+function stepBack(): void {
+  if (canStepBack.value) stepIndex.value -= 1;
+}
+
+function stepForward(): void {
+  if (canStepForward.value) stepIndex.value += 1;
+}
+
+function resetSteps(): void {
+  if (props.history.length > 0) stepIndex.value = 0;
+}
+
+function presentationCardsOf(area: ChainAreaKey): readonly ChainCard[] {
+  return activeSnapshot.value?.board.areas[area].cards ?? props.cardsOf(area);
+}
+
+function presentationModeOf(area: ChainAreaKey): CardDisplayMode {
+  return activeSnapshot.value?.board.areas[area].mode ?? props.modeOf(area);
 }
 
 function onFullscreenChange(): void {
@@ -80,12 +152,37 @@ function noop(): void {
       <div class="present-title">
         <h2>结算链推演</h2>
         <span class="present-play">{{ chainStore.plays.find((p) => p.id === chainStore.currentId)?.name }}</span>
-        <span class="present-actor" :class="`p${actor}`">
-          当前行动:玩家 {{ actor }}
+        <span class="present-actor" :class="`p${displayActor}`">
+          当前行动:玩家 {{ displayActor }}
         </span>
       </div>
       <div class="present-tools">
-        <span class="present-hint">按 Esc 退出</span>
+        <div class="present-stepper" role="group" aria-label="快照播放控制">
+          <button
+            type="button"
+            class="step-button"
+            data-action="previous-step"
+            :disabled="!canStepBack"
+            title="上一步（←）"
+            aria-label="显示上一个快照"
+            @click="stepBack"
+          >
+            ←
+          </button>
+          <span class="present-step-label" aria-live="polite">{{ stepLabel }}</span>
+          <button
+            type="button"
+            class="step-button"
+            data-action="next-step"
+            :disabled="!canStepForward"
+            title="下一步（→）"
+            aria-label="显示下一个快照"
+            @click="stepForward"
+          >
+            →
+          </button>
+        </div>
+        <span class="present-hint"><kbd>Ctrl</kbd>+<kbd>R</kbd> 回到开头 · Esc 退出</span>
         <button type="button" @click="toggleFullscreen">
           {{ isFullscreen ? '退出全屏' : '全屏' }}
         </button>
@@ -99,9 +196,9 @@ function noop(): void {
           v-for="area in row"
           :key="area"
           :area="area"
-          :cards="cardsOf(area)"
-          :mode="modeOf(area)"
-          :actor="actor"
+          :cards="presentationCardsOf(area)"
+          :mode="presentationModeOf(area)"
+          :actor="displayActor"
           :image-of="imageOf"
           :capacity-hint="0"
           read-only
@@ -151,6 +248,25 @@ function noop(): void {
 
 .present-tools { display: flex; align-items: center; gap: 9px; }
 .present-hint { font-size: 10.5px; color: var(--color-text-subtle); }
+.present-hint kbd {
+  font: inherit;
+  color: var(--color-text-muted);
+}
+.present-stepper {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.present-step-label {
+  min-width: 132px;
+  max-width: 240px;
+  overflow: hidden;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .present-tools button {
   font-size: 12px;
   padding: 4px 13px;
@@ -160,6 +276,20 @@ function noop(): void {
   background: var(--color-card-bg);
 }
 .present-tools button:hover { border-color: var(--color-brand); color: var(--color-brand); }
+.present-tools button:disabled {
+  cursor: not-allowed;
+  opacity: 0.38;
+}
+.present-tools button:disabled:hover {
+  border-color: var(--color-panel-border);
+  color: var(--color-text-muted);
+}
+.present-tools button.step-button {
+  width: 32px;
+  padding-inline: 0;
+  font-size: 16px;
+  line-height: 1;
+}
 .present-tools button.primary {
   border-color: var(--color-brand-faint);
   background: var(--color-brand-soft);
@@ -180,10 +310,16 @@ function noop(): void {
 .present-row.row-1 { grid-template-columns: minmax(0, 1fr); }
 .present-row.row-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 
-/* 演示模式:卡片放大,卡面更清楚 */
-.present-board :deep(.chain-card) { width: 300px; }
-.present-board :deep(.zone-chain .chain-card) { width: 280px; }
-.present-board :deep(.card-name) { font-size: 14px; }
-.present-board :deep(.chain-card-text) { font-size: 12.5px; }
+.present-board :deep(.chain-card) {
+  flex: 0 0 80px;
+  width: 80px !important;
+  height: 132px;
+  align-self: flex-start;
+}
+.present-board :deep(.chain-card.mode-text) {
+  align-items: flex-start;
+  padding: 24px 5px 5px;
+}
+.present-board :deep(.chain-card .card-body) { overflow: hidden; }
 .present-board :deep(.zone-checkbox) { display: none; }
 </style>

@@ -453,9 +453,17 @@ await evalJs(
 await sleep(300);
 const snapAfter = await evalJs(`window.__chainStore.working.history.length`);
 check('快照条数 +1', snapAfter === snapBefore + 1, `${snapBefore} → ${snapAfter}`);
+const firstSnapshotCards = await evalJs(
+  `Object.values(window.__chainStore.working.history[0].board.areas).reduce((n, area) => n + area.cards.length, 0)`
+);
+r = await drag('.pool-list .pool-item:nth-child(4)', '[data-drop-area="trash"]');
+check('第二个快照前增加一步棋盘变化', r === 'ok');
 await cdp('Input.dispatchKeyEvent', { type: 'keyDown', key: 's', code: 'KeyS', windowsVirtualKeyCode: 83, modifiers: 2 });
 await cdp('Input.dispatchKeyEvent', { type: 'keyUp', key: 's', code: 'KeyS', windowsVirtualKeyCode: 83, modifiers: 0 });
 check('Ctrl+S 新增一条快照', await evalJs(`window.__chainStore.working.history.length`) === snapAfter + 1);
+const secondSnapshotCards = await evalJs(
+  `Object.values(window.__chainStore.working.history[1].board.areas).reduce((n, area) => n + area.cards.length, 0)`
+);
 
 
 console.log('\n== 6b. 悬浮快照窗口 ==');
@@ -478,6 +486,9 @@ await evalJs(`document.querySelector('.hp-close').click()`);
 
 console.log('\n== 7. 演示模式(整块推演台)==');
 const realCards = await count('main .chain-card');
+const realChainCardWidth = await evalJs(
+  `document.querySelector('main [data-chain-area="chain"] .chain-card')?.getBoundingClientRect().width ?? 0`
+);
 await evalJs(
   `[...document.querySelectorAll('.tb-btn')].find(x => x.textContent.trim() === '演示')?.click()`
 );
@@ -490,8 +501,55 @@ check(
   `${await count('.present-overlay .chain-card')} / ${realCards}`
 );
 check(
+  '演示模式使用更小的固定卡牌尺寸',
+  await evalJs(`(() => {
+    const cards = [...document.querySelectorAll('.present-overlay .chain-card')];
+    return cards.length > 0 && cards.every(card => {
+      const rect = card.getBoundingClientRect();
+      return Math.abs(rect.width - 80) < 1 && Math.abs(rect.height - 132) < 1;
+    });
+  })()`) && realChainCardWidth > 80,
+  `演示 80×132px / 原宽 ${realChainCardWidth}px`
+);
+check(
   '演示模式不显示管理操作',
   !(await evalJs(`!!document.querySelector('.present-overlay .tb-btn, .present-overlay .zone-tools')`))
+);
+check(
+  '演示模式显示前后快照按钮',
+  (await count('.present-stepper .step-button')) === 2
+);
+check(
+  '演示模式默认显示当前棋盘',
+  (await evalJs(`document.querySelector('.present-step-label')?.textContent.trim().startsWith('当前棋盘')`)) === true
+);
+await evalJs(`document.querySelector('[data-action="previous-step"]')?.click()`);
+await sleep(120);
+check(
+  '左按钮从当前棋盘进入最新快照',
+  (await evalJs(`document.querySelector('.present-step-label')?.textContent.trim().startsWith('2 / 2')`)) === true &&
+    (await count('.present-overlay .chain-card')) === secondSnapshotCards
+);
+await cdp('Input.dispatchKeyEvent', { type: 'keyDown', key: 'r', code: 'KeyR', windowsVirtualKeyCode: 82, modifiers: 2 });
+await cdp('Input.dispatchKeyEvent', { type: 'keyUp', key: 'r', code: 'KeyR', windowsVirtualKeyCode: 82, modifiers: 0 });
+await sleep(120);
+check(
+  'Ctrl+R 回到第一个快照',
+  (await evalJs(`document.querySelector('.present-step-label')?.textContent.trim().startsWith('1 / 2')`)) === true &&
+    (await count('.present-overlay .chain-card')) === firstSnapshotCards
+);
+await evalJs(`document.querySelector('[data-action="next-step"]')?.click()`);
+await sleep(120);
+check(
+  '右按钮显示下一个快照',
+  (await evalJs(`document.querySelector('.present-step-label')?.textContent.trim().startsWith('2 / 2')`)) === true &&
+    (await count('.present-overlay .chain-card')) === secondSnapshotCards
+);
+await evalJs(`document.querySelector('[data-action="previous-step"]')?.click()`);
+await sleep(120);
+check(
+  '左按钮显示上一个快照',
+  (await evalJs(`document.querySelector('.present-step-label')?.textContent.trim().startsWith('1 / 2')`)) === true
 );
 await shots('03-presentation');
 
@@ -556,6 +614,18 @@ check(
     return obj.version === 1 && Array.isArray(obj.plays) && obj.plays.length >= 1;
   })()`)
 );
+const savedHistoryBeforeSwitch = await evalJs(`window.__chainStore.working.history.length`);
+check(
+  '保存把快照历史写入 localStorage',
+  await evalJs(`(() => {
+    const raw = localStorage.getItem('rune.chain.v1');
+    if (!raw) return false;
+    const obj = JSON.parse(raw);
+    const play = obj.plays.find(p => p.id === obj.currentId);
+    return Array.isArray(play?.history) && play.history.length === ${savedHistoryBeforeSwitch};
+  })()`),
+  `${savedHistoryBeforeSwitch} 条`
+);
 
 const cardsBeforeNew = await count('.chain-card');
 // 上一步若留下未保存状态,新建会先弹拦截框;这里统一走「保存并继续」
@@ -582,6 +652,11 @@ check(
   '切回第一个盘位后卡片恢复',
   (await count('.chain-card')) === cardsBeforeNew,
   `${await count('.chain-card')} / ${cardsBeforeNew}`
+);
+check(
+  '切回盘位后快照历史恢复',
+  (await evalJs(`window.__chainStore.working.history.length`)) === savedHistoryBeforeSwitch,
+  `${await evalJs(`window.__chainStore.working.history.length`)} / ${savedHistoryBeforeSwitch}`
 );
 
 /* ════════════ 10. 导出与分享 ════════════ */
@@ -619,7 +694,8 @@ const before = await evalJs(`(function () {
   var st = window.__chainStore;
   var cur = null;
   for (var i = 0; i < st.plays.length; i++) { if (st.plays[i].id === st.currentId) cur = st.plays[i]; }
-  return { plays: st.plays.length, cards: document.querySelectorAll('.chain-card').length, name: cur ? cur.name : '' };
+  return { plays: st.plays.length, cards: document.querySelectorAll('.chain-card').length,
+    history: st.working.history.length, name: cur ? cur.name : '' };
 })()`);
 
 // 必须真的重新加载文档:只改 hash 属于同文档导航,App 根本不会重新挂载,
@@ -637,13 +713,16 @@ await waitFor(
 await sleep(400);
 const after = await evalJs(`(function () {
   var st = window.__chainStore;
-  if (!st) return { plays: 0, cards: 0, name: '' };
+  if (!st) return { plays: 0, cards: 0, history: 0, name: '' };
   var cur = null;
   for (var i = 0; i < st.plays.length; i++) { if (st.plays[i].id === st.currentId) cur = st.plays[i]; }
-  return { plays: st.plays.length, cards: document.querySelectorAll('.chain-card').length, name: cur ? cur.name : '' };
+  return { plays: st.plays.length, cards: document.querySelectorAll('.chain-card').length,
+    history: st.working.history.length, name: cur ? cur.name : '' };
 })()`);
 check('盘位数量一致', after.plays === before.plays, `${before.plays} → ${after.plays}`);
 check('卡片数量一致', after.cards === before.cards, `${before.cards} → ${after.cards}`);
+check('刷新后快照历史仍存在', after.history === before.history && after.history === savedHistoryBeforeSwitch,
+  `${before.history} → ${after.history}`);
 check('盘名一致', after.name === before.name, `${before.name} → ${after.name}`);
 check('深链下六区仍齐全', (await count('[data-chain-area]')) === 6);
 check('深链下卡池仍就绪', await waitFor(`document.querySelectorAll('.pool-list .pool-item').length > 0`, 40));
@@ -667,6 +746,10 @@ const boardCardCount = () =>
     return n;
   })()`);
 
+const shareSourceHistory = await evalJs(`window.__chainStore.working.history.length`);
+check('分享前保留已保存的快照历史', shareSourceHistory === savedHistoryBeforeSwitch,
+  `${shareSourceHistory} 条`);
+
 const shareSource = await evalJs(`(function () {
   var areas = window.__chainStore.working.board.areas;
   for (var k in areas) {
@@ -682,6 +765,8 @@ await evalJs(`[...document.querySelectorAll('.tb-btn')].find(x => x.textContent.
 await waitFor(`!!document.querySelector('#chain-share-link')`);
 const shareLink = await evalJs(`document.querySelector('#chain-share-link')?.value ?? ''`);
 check('分享链接为压缩格式', shareLink.includes('#/chain?s=z'), `长度 ${shareLink.length} 字符`);
+check('分享弹窗标明快照数量',
+  (await evalJs(`document.querySelector('.share-dialog')?.textContent ?? ''`)).includes(`${shareSourceHistory} 个历史快照`));
 await evalJs(`document.querySelector('[aria-label="关闭分享"]').click()`);
 await sleep(150);
 
@@ -699,6 +784,11 @@ check('落地后地址栏清掉长参数(避免刷新重复导入)',
   !(await evalJs(`window.location.hash`)).includes('?s='), await evalJs(`window.location.hash`));
 const recvCount = await boardCardCount();
 check('接收端卡片数与分享方一致', recvCount === shareSourceCount, `${shareSourceCount} → ${recvCount}`);
+const recvHistory = await evalJs(`window.__chainStore.working.history.length`);
+check('接收端恢复全部快照历史', recvHistory === shareSourceHistory,
+  `${shareSourceHistory} → ${recvHistory}`);
+check('接收端快照均含完整六区棋盘',
+  await evalJs(`window.__chainStore.working.history.every(s => Object.keys(s.board.areas).length === 6)`));
 const received = await evalJs(`(function () {
   var areas = window.__chainStore.working.board.areas;
   for (var k in areas) {

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
 import QRCode from 'qrcode';
-const props = defineProps<{ url: string; error: string }>();
+const props = defineProps<{ url: string; error: string; historyCount: number }>();
 const emit = defineEmits<{ (e: 'close'): void; (e: 'export-json'): void }>();
 const qr = ref('');
 const qrError = ref('');
@@ -23,17 +23,17 @@ async function copy(): Promise<void> {
   <div class="share-mask" @click.self="emit('close')">
     <section class="share-dialog" role="dialog" aria-modal="true" aria-labelledby="chain-share-title">
       <header><h3 id="chain-share-title">分享当前棋盘</h3><button ref="closeButton" aria-label="关闭分享" @click="emit('close')">×</button></header>
-      <p>分享当前棋盘；包含快照历史请使用导出 JSON。</p>
+      <p>分享当前棋盘与 {{ historyCount }} 个历史快照。</p>
       <template v-if="url">
         <label for="chain-share-link">分享链接</label>
         <textarea id="chain-share-link" ref="linkField" :value="url" readonly rows="3" />
         <button class="share-copy" @click="copy">复制链接</button>
-        <img v-if="qr" class="share-qr" :src="qr" alt="当前棋盘的分享二维码" />
+        <img v-if="qr" class="share-qr" :src="qr" alt="当前棋盘与快照历史的分享二维码" />
         <p v-else>{{ qrError || '正在生成二维码…' }}</p>
       </template>
       <p v-if="error" role="alert">{{ error }}</p>
       <p role="status">{{ message }}</p>
-      <button @click="emit('export-json')">导出 JSON（含快照）</button>
+      <button @click="emit('export-json')">导出 JSON（备用）</button>
     </section>
   </div>
 </template>

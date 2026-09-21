@@ -134,7 +134,10 @@ export const dirty = computed<boolean>(() => {
   const play = currentPlay.value;
   if (!play) return false;
   if (!play.savedBoard) return countCards(play.board) > 0;
-  return JSON.stringify(play.board) !== JSON.stringify(play.savedBoard);
+  return (
+    JSON.stringify(play.board) !== JSON.stringify(play.savedBoard) ||
+    JSON.stringify(state.working.history) !== JSON.stringify(play.history)
+  );
 });
 
 /** 模板层友好命名 */
@@ -151,6 +154,19 @@ export const canRedo = computed<boolean>(() => state.undoIndex >= 0 && state.und
 
 /* ──────────────────────── localStorage ──────────────────────── */
 
+function cloneSnapshots(history: readonly ChainSnapshot[]): ChainSnapshot[] {
+  return history.map((snapshot) => ({ ...snapshot, board: cloneBoard(snapshot.board) }));
+}
+
+function loadPlayIntoWorking(play: ChainPlay): void {
+  state.working.board = cloneBoard(play.board);
+  state.working.history = cloneSnapshots(play.history);
+  state.working.historyIndex = -1;
+  state.working.actor = 1;
+  state.undoHistory = [];
+  state.undoIndex = -1;
+}
+
 function snapshotForPersist(): ChainPersisted {
   return {
     version: 1,
@@ -162,7 +178,8 @@ function snapshotForPersist(): ChainPersisted {
         savedAt: p.savedAt,
         // 已保存副本落盘无意义且占空间,读回时按 board 重建
         savedBoard: null,
-        board: p.board
+        board: p.board,
+        history: cloneSnapshots(p.history)
       })
     ),
     currentId: state.currentId,
@@ -227,7 +244,7 @@ export function initChainStore(): void {
   }
 
   const play = currentPlay.value;
-  if (play) state.working.board = cloneBoard(play.board);
+  if (play) loadPlayIntoWorking(play);
   state.ready = true;
 }
 
@@ -248,12 +265,7 @@ export function switchPlay(id: string): void {
   const target = state.plays.find((p) => p.id === id);
   if (!target) return;
   state.currentId = id;
-  state.working.board = cloneBoard(target.board);
-  state.working.history = [];
-  state.working.historyIndex = -1;
-  state.working.actor = 1;
-  state.undoHistory = [];
-  state.undoIndex = -1;
+  loadPlayIntoWorking(target);
   state.sharedTemp = false;
   notify(`已切换到「${target.name}」`);
 }
@@ -272,14 +284,17 @@ export function createPlay(name?: string): string {
 export function duplicatePlay(id = state.currentId): string {
   const src = state.plays.find((p) => p.id === id);
   if (!src) return '';
-  const board = cloneBoard(state.working.board);
+  const isCurrent = id === state.currentId;
+  const board = cloneBoard(isCurrent ? state.working.board : src.board);
+  const history = cloneSnapshots(isCurrent ? state.working.history : src.history);
   const copy: ChainPlay = {
     id: makeId('play'),
     name: uniqueName(`${src.name} 副本`),
     createdAt: Date.now(),
     savedAt: Date.now(),
     savedBoard: board,
-    board: cloneBoard(board)
+    board: cloneBoard(board),
+    history
   };
   state.plays.push(copy);
   persist();
@@ -297,7 +312,7 @@ export function renamePlay(id: string, name: string): void {
 }
 
 /**
- * 保存当前盘位:把编辑中的棋盘与盘名写进盘位,并同步 savedBoard。
+ * 保存当前盘位:把编辑中的棋盘、快照历史与盘名写进盘位,并同步 savedBoard。
  * 这是唯一会「消除未保存状态」的动作(放弃改动除外)。
  */
 export function savePlay(): boolean {
@@ -306,6 +321,7 @@ export function savePlay(): boolean {
   // 盘名在编辑期可能被改成空或与他人重名,统一收口
   play.name = uniqueName(play.name.trim() || '未命名推演');
   play.board = cloneBoard(state.working.board);
+  play.history = cloneSnapshots(state.working.history);
   play.savedBoard = cloneBoard(state.working.board);
   play.savedAt = Date.now();
   const ok = persist();
@@ -323,7 +339,7 @@ export function discardChanges(): void {
   const restore = cloneBoard(play.savedBoard ?? play.board);
   state.working.board = restore;
   play.board = cloneBoard(restore);
-  state.working.history = [];
+  state.working.history = cloneSnapshots(play.history);
   state.working.historyIndex = -1;
   state.undoHistory = [];
   state.undoIndex = -1;
@@ -341,18 +357,14 @@ export function deletePlay(id: string): void {
     const play = pristinePlay('第一局推演');
     state.plays.push(play);
     state.currentId = play.id;
-    state.working.board = cloneBoard(play.board);
+    loadPlayIntoWorking(play);
   } else if (wasCurrent) {
     const fallback = state.plays[Math.max(0, idx - 1)] ?? state.plays[0];
     if (fallback) {
       state.currentId = fallback.id;
-      state.working.board = cloneBoard(fallback.board);
+      loadPlayIntoWorking(fallback);
     }
   }
-  state.working.history = [];
-  state.working.historyIndex = -1;
-  state.undoHistory = [];
-  state.undoIndex = -1;
   persist();
   notify(`已删除「${removed?.name ?? '盘位'}」`);
 }
@@ -530,18 +542,20 @@ export function mergeCustomPools(
  */
 export function importBoardAsNewPlay(name: string, board: ChainBoard, shared = false, history: readonly ChainSnapshot[] = []): string {
   const copied = cloneBoard(board);
+  const copiedHistory = cloneSnapshots(history);
   const play: ChainPlay = {
     id: makeId('play'),
     name: uniqueName(name.trim() || '导入的推演'),
     createdAt: Date.now(),
     savedAt: shared ? null : Date.now(),
     savedBoard: copied,
-    board: cloneBoard(copied)
+    board: cloneBoard(copied),
+    history: cloneSnapshots(copiedHistory)
   };
   state.plays.push(play);
   state.currentId = play.id;
   state.working.board = cloneBoard(copied);
-  state.working.history = history.map(snap => ({ ...snap, board: cloneBoard(snap.board) }));
+  state.working.history = copiedHistory;
   state.working.historyIndex = -1;
   state.undoHistory = [];
   state.undoIndex = -1;
@@ -565,7 +579,7 @@ export interface ShareLinkResult {
  * 那比直接告诉用户「请改用导出文件」更糟。
  */
 export async function buildShareLink(): Promise<ShareLinkResult> {
-  const encoded = await encodeShare(state.working.board);
+  const encoded = await encodeShare(state.working.board, state.working.history);
   const url = `${window.location.origin}${window.location.pathname}#/chain?${SHARE_PARAM}=${encoded}`;
   if (url.length > SHARE_MAX_LENGTH) {
     return {

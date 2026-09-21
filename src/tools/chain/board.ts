@@ -78,7 +78,8 @@ export function newPlay(name: string): ChainPlay {
     createdAt: Date.now(),
     savedAt: null,
     savedBoard: null,
-    board: emptyBoard()
+    board: emptyBoard(),
+    history: []
   };
 }
 
@@ -499,7 +500,8 @@ function validatePlay(raw: unknown, index: number): ChainPlay | null {
     // 落盘时 savedBoard 被剥掉;读回后由 store 用 board 重建,
     // 于是「刚打开时一定是干净的」。
     savedBoard: null,
-    board
+    board,
+    history: validateSnapshots(raw.history)
   };
 }
 
@@ -655,14 +657,13 @@ export function parseImport(text: string): ImportResult {
 const SHARE_ZIP_PREFIX = 'z';
 
 /**
- * 棋盘 → 分享载荷 JSON。
+ * 棋盘 → 分享载荷对象。
  *
  * 省掉**非自定义卡**的效果正文:正文动辄上百字,是链接体积的大头,
  * 而接收端可以用编号在内置卡表里原样还原(见 ChainBoardView 的池内回填)。
  * 自定义卡不在卡表里,正文只能自己带着。
- * 历史是过程数据,不进链接。
  */
-function buildSharePayload(board: ChainBoard): string {
+function boardForShare(board: ChainBoard): ChainBoard {
   const areas: Record<string, unknown> = {};
   for (const key of AREA_ORDER) {
     const area = board.areas[key];
@@ -671,7 +672,20 @@ function buildSharePayload(board: ChainBoard): string {
       cards: area.cards.map((card) => (card.custom ? card : { ...card, text: '' }))
     };
   }
-  return JSON.stringify({ areas, updatedAt: board.updatedAt });
+  return { areas, updatedAt: board.updatedAt } as ChainBoard;
+}
+
+function buildSharePayload(board: ChainBoard, history: readonly ChainSnapshot[]): string {
+  return JSON.stringify({
+    v: 2,
+    board: boardForShare(board),
+    history: history.map((snapshot) => ({
+      actor: snapshot.actor,
+      action: snapshot.action,
+      ts: snapshot.ts,
+      board: boardForShare(snapshot.board)
+    }))
+  });
 }
 
 /**
@@ -681,14 +695,22 @@ function buildSharePayload(board: ChainBoard): string {
  * 结果就是「二维码永远生成不出来」。环境不支持 CompressionStream 时退回
  * 不压缩,链接照样能用,只是更长。
  */
-export async function encodeShare(board: ChainBoard): Promise<string> {
-  const json = buildSharePayload(board);
+export async function encodeShare(
+  board: ChainBoard,
+  history: readonly ChainSnapshot[] = []
+): Promise<string> {
+  const json = buildSharePayload(board, history);
   const zipped = await deflateRaw(json);
   return zipped ? SHARE_ZIP_PREFIX + base64UrlEncodeBytes(zipped) : base64UrlEncode(json);
 }
 
-/** URL 字符串 → 棋盘。任何异常都返回 null,由调用方提示「链接已损坏」 */
-export async function decodeShare(encoded: string): Promise<ChainBoard | null> {
+export interface DecodedShare {
+  board: ChainBoard;
+  history: ChainSnapshot[];
+}
+
+/** URL 字符串 → 当前棋盘与快照。旧版只含裸棋盘的链接继续兼容。 */
+export async function decodeShare(encoded: string): Promise<DecodedShare | null> {
   let json: string | null;
   if (encoded.startsWith(SHARE_ZIP_PREFIX)) {
     const bytes = base64UrlDecodeBytes(encoded.slice(SHARE_ZIP_PREFIX.length));
@@ -698,7 +720,13 @@ export async function decodeShare(encoded: string): Promise<ChainBoard | null> {
   }
   if (json === null) return null;
   try {
-    return validateBoard(JSON.parse(json));
+    const raw: unknown = JSON.parse(json);
+    if (isRecord(raw) && isRecord(raw.board)) {
+      const board = validateBoard(raw.board);
+      return board ? { board, history: validateSnapshots(raw.history) } : null;
+    }
+    const board = validateBoard(raw);
+    return board ? { board, history: [] } : null;
   } catch {
     return null;
   }

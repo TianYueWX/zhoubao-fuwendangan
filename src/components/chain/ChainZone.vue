@@ -253,7 +253,7 @@ function onRename(uid: string, name: string): void {
   margin-top: 8px;
   min-height: 84px;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   gap: 6px;
   padding: 6px;
   border: 1px dashed transparent;
