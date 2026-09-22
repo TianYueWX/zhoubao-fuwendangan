@@ -49,6 +49,12 @@ export interface CardPrint {
   print_order: number | null;
   is_default: boolean;
   is_promo: boolean;
+  /** 留空(null)表示继承基础卡 cards_base.series_name */
+  series: string | null;
+  /** 留空(null)表示继承基础卡 cards_base.flavor_text_cn */
+  flavor_text_cn: string | null;
+  /** 留空(null)表示继承基础卡 cards_base.flavor_text_en */
+  flavor_text_en: string | null;
 }
 
 /** 新建但尚未落库的印刷版本行(id 为空) */

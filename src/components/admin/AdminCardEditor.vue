@@ -280,9 +280,18 @@ function addPrintRow(): void {
       back_image: null,
       print_order: prints.value.length + 1,
       is_default: false,
-      is_promo: false
+      is_promo: false,
+      series: null,
+      flavor_text_cn: null,
+      flavor_text_en: null
     }
   ];
+}
+
+/** 系列代码 → 中文名(用于「继承」选项的展示) */
+function seriesLabel(code: string | null | undefined): string {
+  if (!code) return '';
+  return seriesOptions.value.find((s) => s.code === code)?.name_cn || code;
 }
 
 function dropDraftRow(row: PrintRow): void {
@@ -788,15 +797,18 @@ onMounted(async () => {
               </SectionHeading>
 
               <div class="border border-card-border rounded-xl overflow-x-auto">
-                <table class="w-full text-sm min-w-[980px]">
+                <table class="w-full text-sm min-w-[1440px]">
                   <thead class="sticky-thead text-[11px] text-ink-faint">
                     <tr class="border-b border-card-border">
                       <th class="text-left font-normal px-2.5 py-2 w-[130px]">扩展编号</th>
                       <th class="text-left font-normal px-2.5 py-2 w-[100px]">稀有度</th>
                       <th class="text-left font-normal px-2.5 py-2 w-[110px]">扩展稀有度</th>
+                      <th class="text-left font-normal px-2.5 py-2 w-[130px]">系列</th>
                       <th class="text-left font-normal px-2.5 py-2 w-[80px]">语言</th>
                       <th class="text-left font-normal px-2.5 py-2 w-[110px]">画师</th>
                       <th class="text-left font-normal px-2.5 py-2 min-w-[160px]">图片 CDN</th>
+                      <th class="text-left font-normal px-2.5 py-2 min-w-[180px]">中文风味</th>
+                      <th class="text-left font-normal px-2.5 py-2 min-w-[180px]">英文风味</th>
                       <th class="text-right font-normal px-2.5 py-2 w-[70px]">排序</th>
                       <th class="text-center font-normal px-2.5 py-2 w-[60px]">默认</th>
                       <th class="text-center font-normal px-2.5 py-2 w-[60px]">Promo</th>
@@ -819,6 +831,20 @@ onMounted(async () => {
                         <input v-model="row.extend_rarity_name" class="filter-select w-full" placeholder="异画/超编" />
                       </td>
                       <td class="px-2.5 py-1.5">
+                        <select
+                          v-model="row.series"
+                          class="filter-select w-full"
+                          :title="row.series ? `覆盖：${seriesLabel(row.series)}` : '继承基础卡系列'"
+                        >
+                          <option :value="null">
+                            继承 · {{ seriesLabel(form?.series_name) || '—' }}
+                          </option>
+                          <option v-for="s in seriesOptions" :key="s.code" :value="s.code">
+                            {{ s.name_cn || s.code }}
+                          </option>
+                        </select>
+                      </td>
+                      <td class="px-2.5 py-1.5">
                         <select v-model="row.language" class="filter-select w-full">
                           <option value="SC">SC</option>
                           <option value="EN">EN</option>
@@ -829,6 +855,22 @@ onMounted(async () => {
                       </td>
                       <td class="px-2.5 py-1.5">
                         <input v-model="row.img_cdn" class="filter-select w-full" :title="row.img_cdn ?? ''" />
+                      </td>
+                      <td class="px-2.5 py-1.5">
+                        <input
+                          v-model="row.flavor_text_cn"
+                          class="filter-select w-full"
+                          :placeholder="`继承：${form?.flavor_text_cn || '—'}`"
+                          :title="row.flavor_text_cn || `继承基础卡：${form?.flavor_text_cn || '—'}`"
+                        />
+                      </td>
+                      <td class="px-2.5 py-1.5">
+                        <input
+                          v-model="row.flavor_text_en"
+                          class="filter-select w-full"
+                          :placeholder="`继承：${form?.flavor_text_en || '—'}`"
+                          :title="row.flavor_text_en || `继承基础卡：${form?.flavor_text_en || '—'}`"
+                        />
                       </td>
                       <td class="px-2.5 py-1.5">
                         <input v-model.number="row.print_order" type="number" class="filter-select w-full text-right tabular-nums" />
@@ -866,7 +908,7 @@ onMounted(async () => {
                       </td>
                     </tr>
                     <tr v-if="!prints.length && !printsLoading">
-                      <td colspan="10" class="px-3 py-6 text-center text-xs text-ink-faint">
+                      <td colspan="13" class="px-3 py-6 text-center text-xs text-ink-faint">
                         该卡牌暂无印刷版本
                       </td>
                     </tr>

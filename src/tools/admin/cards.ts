@@ -27,6 +27,12 @@ export const CARD_LIST_COLUMNS =
 const NUMERIC_CARD_FIELDS = ['energy', 'return_energy', 'power'] as const;
 const NUMERIC_PRINT_FIELDS = ['print_order'] as const;
 
+/**
+ * 可继承文本列:印刷版本留空表示继承基础卡。
+ * 空串与 null 都归一成 null,避免「空串覆盖」这种库内不存在的语义。
+ */
+const INHERITABLE_PRINT_FIELDS = ['series', 'flavor_text_cn', 'flavor_text_en'] as const;
+
 /** 把整型字段里的 '' / NaN / undefined 归一成 null */
 function coerceNumericNulls(
   patch: Record<string, unknown>,
@@ -36,6 +42,21 @@ function coerceNumericNulls(
     if (!(f in patch)) continue;
     const v = patch[f];
     if (v === '' || v === undefined || (typeof v === 'number' && Number.isNaN(v))) {
+      patch[f] = null;
+    }
+  }
+  return patch;
+}
+
+/** 把可继承文本字段里的 '' / undefined / 纯空白归一成 null(=继承基础卡) */
+function coerceInheritNulls(
+  patch: Record<string, unknown>,
+  fields: readonly string[]
+): Record<string, unknown> {
+  for (const f of fields) {
+    if (!(f in patch)) continue;
+    const v = patch[f];
+    if (v === undefined || (typeof v === 'string' && !v.trim())) {
       patch[f] = null;
     }
   }
@@ -148,7 +169,7 @@ export async function listPrints(cardId: string): Promise<CardPrint[]> {
 
 /** 印刷版本的「接口拥有列」,与同步模块的边界一致 */
 function printPatch(row: PrintPayload): Record<string, unknown> {
-  return coerceNumericNulls(
+  const patch = coerceNumericNulls(
     {
       card_no_extend: row.card_no_extend,
       rarity_name: row.rarity_name,
@@ -160,10 +181,14 @@ function printPatch(row: PrintPayload): Record<string, unknown> {
       back_image: row.back_image,
       print_order: row.print_order,
       is_default: row.is_default,
-      is_promo: row.is_promo
+      is_promo: row.is_promo,
+      series: row.series,
+      flavor_text_cn: row.flavor_text_cn,
+      flavor_text_en: row.flavor_text_en
     },
     NUMERIC_PRINT_FIELDS
   );
+  return coerceInheritNulls(patch, INHERITABLE_PRINT_FIELDS);
 }
 
 export async function insertPrint(
