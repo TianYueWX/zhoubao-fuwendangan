@@ -1,20 +1,29 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
-import { store, runStoredAnalysis, loadCardData, applyGlobalFilters, weekBuckets } from '@/store/analysis';
-import { navigate, startRouter, syncUrl } from '@/router/hash';
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import {
+  store,
+  runStoredAnalysis,
+  loadCardData,
+  applyGlobalFilters,
+  weekBuckets,
+} from "@/store/analysis";
+import { navigate, startRouter, syncUrl } from "@/router/hash";
 import {
   sectionBarTools,
   groupOf,
   findTool,
   isGroupVisible,
   HOME_CODE,
-  type ToolGroupId
-} from '@/tools/catalog';
-import { setSourceState, setToolState } from '@/tools/state';
-import { probeSupabase } from '@/tools/sources/supabase';
-import { bootstrapAuth, isEditorialAdmin } from '@/tools/sources/auth';
-import { editorialUnlocked, loadEditorialUnlock } from '@/tools/editorialAccess';
-import { ViewComponents } from '@/components/view';
+  type ToolGroupId,
+} from "@/tools/catalog";
+import { setSourceState, setToolState } from "@/tools/state";
+import { probeSupabase } from "@/tools/sources/supabase";
+import { bootstrapAuth, isEditorialAdmin } from "@/tools/sources/auth";
+import {
+  editorialUnlocked,
+  loadEditorialUnlock,
+} from "@/tools/editorialAccess";
+import { ViewComponents } from "@/components/view";
 
 let stopRouter: (() => void) | null = null;
 
@@ -25,48 +34,53 @@ onMounted(async () => {
   stopRouter = startRouter();
 
   // 内置卡表(cards_base × card_prints)预加载;结果写入工具状态机
-  setSourceState('local', { status: 'loading', message: '卡表加载中' });
+  setSourceState("local", { status: "loading", message: "卡表加载中" });
   const cardsOk = await loadCardData();
-  setSourceState('local', {
-    status: cardsOk ? 'ready' : 'error',
-    message: cardsOk ? '卡表已就绪' : '卡表加载失败'
+  setSourceState("local", {
+    status: cardsOk ? "ready" : "error",
+    message: cardsOk ? "卡表已就绪" : "卡表加载失败",
   });
-  setToolState('import', { status: cardsOk ? 'ready' : 'error' });
+  setToolState("import", { status: cardsOk ? "ready" : "error" });
 
-  window.addEventListener('scroll', onScroll, { passive: true });
+  window.addEventListener("scroll", onScroll, { passive: true });
 
   // 云端数据源探测(未配置 → unconfigured,不是错误;不阻塞首屏)
   void probeSupabase().then((r) => {
     if (!r.configured) {
-      setSourceState('supabase', { status: 'unconfigured', message: '未配置云端连接' });
+      setSourceState("supabase", {
+        status: "unconfigured",
+        message: "未配置云端连接",
+      });
       return;
     }
-    setSourceState('supabase', {
-      status: r.ok ? 'ready' : 'error',
-      message: r.ok ? `已连接(${r.latencyMs}ms)` : `连接失败:${r.error}`
+    setSourceState("supabase", {
+      status: r.ok ? "ready" : "error",
+      message: r.ok ? `已连接(${r.latencyMs}ms)` : `连接失败:${r.error}`,
     });
   });
 });
 onUnmounted(() => {
   stopRouter?.();
-  window.removeEventListener('scroll', onScroll);
+  window.removeEventListener("scroll", onScroll);
 });
 
 /** 数据包变化 → 刷新本地工具状态(卡片徽章即时反映) */
 watch(
   () => [store.packages.length, store.activePackageId] as const,
   () => {
-    setToolState('journal', {
-      status: store.hasPackages ? 'ready' : 'empty',
+    setToolState("journal", {
+      status: store.hasPackages ? "ready" : "empty",
       count: store.packages.length,
-      message: store.hasPackages ? `已载入 ${store.packages.length} 期` : '尚无数据包'
+      message: store.hasPackages
+        ? `已载入 ${store.packages.length} 期`
+        : "尚无数据包",
     });
-    setSourceState('local', {
-      status: store.cardBase ? 'ready' : 'idle',
-      message: store.hasPackages ? `活动包:${store.sourceLabel}` : '等待数据包'
+    setSourceState("local", {
+      status: store.cardBase ? "ready" : "idle",
+      message: store.hasPackages ? `活动包:${store.sourceLabel}` : "等待数据包",
     });
   },
-  { immediate: true }
+  { immediate: true },
 );
 
 /* ── 视图 ⇄ URL 同步(下钻直接改 store.currentView,这里统一回写 hash) ── */
@@ -75,7 +89,7 @@ watch(
   () => {
     syncUrl();
     window.scrollTo({ top: 0 });
-  }
+  },
 );
 
 /* ── 回到顶部 FAB ── */
@@ -84,20 +98,26 @@ function onScroll(): void {
   showTop.value = window.scrollY > 400;
 }
 function scrollToTop(): void {
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+  window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
 /* ── 视图分发 ── */
 const activeViewComponent = computed(
-  () => ViewComponents[store.currentView] ?? ViewComponents[HOME_CODE] ?? ViewComponents.journal
+  () =>
+    ViewComponents[store.currentView] ??
+    ViewComponents[HOME_CODE] ??
+    ViewComponents.journal,
 );
 
 /** 占位/云端工具需要 code 作为 prop(其余视图忽略) */
-const PLACEHOLDER_CODES = ['blog', 'qa', 'rules', 'carddex'];
-const needsCodeProp = computed(() => PLACEHOLDER_CODES.includes(store.currentView));
+const PLACEHOLDER_CODES = ["blog", "qa", "rules"];
+const needsCodeProp = computed(() =>
+  PLACEHOLDER_CODES.includes(store.currentView),
+);
 
 const homeCode = HOME_CODE;
 const isHome = computed(() => store.currentView === homeCode);
+const isCarddex = computed(() => store.currentView === "carddex");
 
 /**
  * 当前所在的**一级栏目**。
@@ -106,7 +126,7 @@ const isHome = computed(() => store.currentView === homeCode);
 const activeGroup = computed<ToolGroupId | null>(() => {
   const v = store.currentView;
   if (v === HOME_CODE) return null; // 工具台不属于任何栏目
-  if (v === 'archive' || v === 'issue') return 'journal';
+  if (v === "archive" || v === "issue") return "journal";
   return findTool(v)?.group ?? null;
 });
 
@@ -122,7 +142,9 @@ const sectionTools = computed(() => {
   // 隐藏栏目(编辑部)未解锁时,栏目条一并收起 —— 深链进来的访客只看到门禁页
   if (!isGroupVisible(g, editorialUnlocked.value)) return [];
   // 期刊本体与往期已由「本期 / 往期」两个按钮承载,不重复出现在工具位
-  const tools = sectionBarTools(g).filter((t) => t.code !== 'journal' && t.code !== 'archive');
+  const tools = sectionBarTools(g).filter(
+    (t) => t.code !== "journal" && t.code !== "archive",
+  );
   // 需登录的栏目:未通过门禁时只留栏目首页(code === 栏目 id),
   // 否则会列出 5 个点了就撞门禁的死链
   if (tools.some((t) => t.requiresAuth) && !isEditorialAdmin.value) {
@@ -130,8 +152,10 @@ const sectionTools = computed(() => {
   }
   return tools;
 });
-const showSectionBar = computed(() => activeGroup.value !== null && sectionTools.value.length > 0);
-const isJournalSection = computed(() => activeGroup.value === 'journal');
+const showSectionBar = computed(
+  () => activeGroup.value !== null && sectionTools.value.length > 0,
+);
+const isJournalSection = computed(() => activeGroup.value === "journal");
 
 /* ── 期刊次级条:周次 + 样本数 ── */
 const weeks = computed(() => weekBuckets());
@@ -142,18 +166,28 @@ const sampleCount = computed(() => {
 function onWeekChange(e: Event): void {
   store.filterWeek = (e.target as HTMLSelectElement).value;
 }
-
-
 </script>
 
 <template>
-  <div class="min-h-screen flex flex-col">
-    <header v-if="!isHome && store.currentView !== 'chain'" class="masthead-solid sticky top-0 z-50 shrink-0">
-      <div class="px-4 lg:px-8 h-14 flex items-center">
-        <button class="text-sm text-ink-muted hover:text-brand transition-colors"
-          @click="navigate({ view: homeCode })">
+  <div
+    class="flex flex-col"
+    :class="isCarddex ? 'h-screen overflow-hidden' : 'min-h-screen'"
+  >
+    <header
+      v-if="!isHome && store.currentView !== 'chain'"
+      class="masthead-solid sticky top-0 z-50 shrink-0"
+    >
+      <div class="px-4 lg:px-8 h-14 flex items-center justify-between gap-3">
+        <button
+          class="text-sm text-ink-muted hover:text-brand transition-colors"
+          @click="navigate({ view: homeCode })"
+        >
           <span aria-hidden="true">←</span> 返回首页
         </button>
+        <div
+          id="global-page-actions"
+          class="min-w-0 flex items-center justify-end"
+        ></div>
       </div>
 
       <!-- 栏目内二级导航条(栏目驱动) -->
@@ -162,7 +196,9 @@ function onWeekChange(e: Event): void {
         class="px-4 lg:px-8 h-12 flex items-center gap-3 lg:gap-4 border-t border-panel-border"
         :aria-label="`${groupOf(activeGroup ?? 'journal').label}导航`"
       >
-        <div class="flex-1 min-w-0 flex items-center gap-4 lg:gap-5 overflow-x-auto">
+        <div
+          class="flex-1 min-w-0 flex items-center gap-4 lg:gap-5 overflow-x-auto"
+        >
           <!-- 期刊栏目:正文入口(本期 / 往期) -->
           <template v-if="isJournalSection">
             <button
@@ -199,7 +235,10 @@ function onWeekChange(e: Event): void {
                 aria-hidden="true"
               ></span>
             </button>
-            <span class="w-px h-4 bg-panel-border shrink-0" aria-hidden="true"></span>
+            <span
+              class="w-px h-4 bg-panel-border shrink-0"
+              aria-hidden="true"
+            ></span>
           </template>
 
           <!-- 栏目内工具(期刊栏目下即数据管理与 5 个分析工具) -->
@@ -212,10 +251,14 @@ function onWeekChange(e: Event): void {
                 ? 'text-brand font-semibold'
                 : t.needsData && !store.hasPackages && t.source === 'local'
                   ? 'text-ink-faint/60 hover:text-brand'
-                  : 'text-ink-muted hover:text-brand'
+                  : 'text-ink-muted hover:text-brand',
             ]"
             :data-code="t.code"
-            :title="t.needsData && !store.hasPackages ? `${t.label} · 需先载入数据包` : t.label"
+            :title="
+              t.needsData && !store.hasPackages
+                ? `${t.label} · 需先载入数据包`
+                : t.label
+            "
             @click="navigate({ view: t.code })"
           >
             {{ t.short ?? t.label }}
@@ -228,9 +271,17 @@ function onWeekChange(e: Event): void {
         </div>
 
         <!-- 范围(仅活动包存在时;期刊栏目专用) -->
-        <div v-if="isJournalSection && store.result" class="flex items-center gap-2.5 shrink-0">
-          <label class="flex items-center gap-1.5" :title="weeks.length <= 1 ? '当前数据包仅含单周' : ''">
-            <span class="hidden md:inline text-[11px] text-ink-faint">周次</span>
+        <div
+          v-if="isJournalSection && store.result"
+          class="flex items-center gap-2.5 shrink-0"
+        >
+          <label
+            class="flex items-center gap-1.5"
+            :title="weeks.length <= 1 ? '当前数据包仅含单周' : ''"
+          >
+            <span class="hidden md:inline text-[11px] text-ink-faint"
+              >周次</span
+            >
             <select
               :value="store.filterWeek"
               class="filter-select !py-1 text-xs max-w-[130px]"
@@ -238,11 +289,16 @@ function onWeekChange(e: Event): void {
               @change="onWeekChange"
             >
               <option value="">全部周</option>
-              <option v-for="w in weeks" :key="w.label" :value="w.label">{{ w.label }}</option>
+              <option v-for="w in weeks" :key="w.label" :value="w.label">
+                {{ w.label }}
+              </option>
             </select>
           </label>
-          <span class="hidden lg:inline text-[11px] text-ink-faint tabular-nums whitespace-nowrap">
-            样本 <b class="text-ink-muted">{{ sampleCount }}</b>/{{ store.result.totalDecks }}
+          <span
+            class="hidden lg:inline text-[11px] text-ink-faint tabular-nums whitespace-nowrap"
+          >
+            样本 <b class="text-ink-muted">{{ sampleCount }}</b
+            >/{{ store.result.totalDecks }}
           </span>
           <button
             v-if="store.isReady && store.draftPending"
@@ -250,7 +306,7 @@ function onWeekChange(e: Event): void {
             :disabled="store.isAnalyzing"
             @click="runStoredAnalysis()"
           >
-            {{ store.isAnalyzing ? '分析中…' : '分析新数据包' }}
+            {{ store.isAnalyzing ? "分析中…" : "分析新数据包" }}
           </button>
         </div>
       </nav>
@@ -259,22 +315,38 @@ function onWeekChange(e: Event): void {
     </header>
 
     <!-- ══════════ 内容区 ══════════ -->
-    <main :class="isHome ? 'w-full' : 'flex-1 w-full max-w-[1720px] mx-auto px-4 lg:px-8 py-8'">
-      <component :is="activeViewComponent" v-bind="needsCodeProp ? { code: store.currentView } : {}" />
+    <main
+      :class="
+        isHome
+          ? 'w-full'
+          : isCarddex
+            ? 'flex-1 min-h-0 w-full max-w-[1720px] mx-auto px-4 lg:px-8 py-4 overflow-hidden'
+            : 'flex-1 w-full max-w-[1720px] mx-auto px-4 lg:px-8 py-8'
+      "
+    >
+      <component
+        :is="activeViewComponent"
+        v-bind="needsCodeProp ? { code: store.currentView } : {}"
+      />
     </main>
 
     <!-- ══════════ 页脚 ══════════ -->
-    <footer v-if="!isHome" class="px-4 lg:px-8 pb-8 max-w-[1720px] mx-auto w-full">
+    <footer
+      v-if="!isHome && !isCarddex"
+      class="px-4 lg:px-8 pb-8 max-w-[1720px] mx-auto w-full"
+    >
       <div class="rune-rule mb-5"></div>
       <div class="text-center text-[11px] text-ink-faint space-y-1">
-        <p class="font-display">符文档案 · 周报 — Riftbound 城市挑战赛赛事 Meta 情报</p>
+        <p class="font-display">
+          符文档案 · 周报 — Riftbound 城市挑战赛赛事 Meta 情报
+        </p>
         <p>数据仅供竞技参考 · Riot Games 与本工具无关</p>
       </div>
     </footer>
 
     <!-- 回到顶部 FAB -->
     <button
-      v-if="!isHome && showTop"
+      v-if="!isHome && store.currentView !== 'carddex' && showTop"
       class="fixed bottom-6 right-6 z-50 w-11 h-11 rounded-full bg-brand text-brand-ink shadow-lg flex items-center justify-center text-lg leading-none transition-transform hover:scale-110 fade-in"
       aria-label="回到顶部"
       title="回到顶部"

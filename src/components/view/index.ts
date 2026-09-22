@@ -9,24 +9,25 @@
  * 导航、首页工具台、路由、状态徽章都会自动跟上。
  * ================================================================ */
 
-import HomeView from './HomeView.vue';
-import JournalView from './JournalView.vue';
-import ArchiveView from './ArchiveView.vue';
-import IssueView from './IssueView.vue';
-import ImportView from './ImportView.vue';
-import OverviewView from './OverviewView.vue';
-import HeroLegendView from './HeroLegendView.vue';
-import CardsView from './CardsView.vue';
-import RegionView from './RegionView.vue';
-import DecksView from './DecksView.vue';
-import ChainBoardView from './ChainBoardView.vue';
-import ToolPlaceholder from './ToolPlaceholder.vue';
-import EditorialHub from '../admin/EditorialHub.vue';
-import AdminCardEditor from '../admin/AdminCardEditor.vue';
-import AdminBatchOps from '../admin/AdminBatchOps.vue';
-import AdminRulesEditor from '../admin/AdminRulesEditor.vue';
-import AdminResources from '../admin/AdminResources.vue';
-import AdminSync from '../admin/AdminSync.vue';
+import HomeView from "./HomeView.vue";
+import JournalView from "./JournalView.vue";
+import ArchiveView from "./ArchiveView.vue";
+import IssueView from "./IssueView.vue";
+import ImportView from "./ImportView.vue";
+import OverviewView from "./OverviewView.vue";
+import HeroLegendView from "./HeroLegendView.vue";
+import CardsView from "./CardsView.vue";
+import CarddexView from "./CarddexView.vue";
+import RegionView from "./RegionView.vue";
+import DecksView from "./DecksView.vue";
+import ChainBoardView from "./ChainBoardView.vue";
+import ToolPlaceholder from "./ToolPlaceholder.vue";
+import EditorialHub from "../admin/EditorialHub.vue";
+import AdminCardEditor from "../admin/AdminCardEditor.vue";
+import AdminBatchOps from "../admin/AdminBatchOps.vue";
+import AdminRulesEditor from "../admin/AdminRulesEditor.vue";
+import AdminResources from "../admin/AdminResources.vue";
+import AdminSync from "../admin/AdminSync.vue";
 
 /** 需要 props.code 的占位视图(云端/资料类工具的架构位) */
 const placeholder = ToolPlaceholder;
@@ -55,18 +56,18 @@ export const ViewComponents: Record<string, unknown> = {
 
   /* 静态资料(随站点发布) */
   rules: placeholder,
-  carddex: placeholder,
+  carddex: CarddexView,
 
   /* 小工具:结算链推演(卡池来自内置卡表,无需数据包) */
   chain: ChainBoardView,
 
   /* 编辑部(隐藏栏目:连点报头刊名解锁 + 管理员门禁) */
   editorial: EditorialHub,
-  'editorial-cards': AdminCardEditor,
-  'editorial-batch': AdminBatchOps,
-  'editorial-rules': AdminRulesEditor,
-  'editorial-resources': AdminResources,
-  'editorial-sync': AdminSync
+  "editorial-cards": AdminCardEditor,
+  "editorial-batch": AdminBatchOps,
+  "editorial-rules": AdminRulesEditor,
+  "editorial-resources": AdminResources,
+  "editorial-sync": AdminSync,
 };
 
 export {
@@ -78,6 +79,7 @@ export {
   OverviewView,
   HeroLegendView,
   CardsView,
+  CarddexView,
   RegionView,
   DecksView,
   ChainBoardView,
@@ -87,5 +89,5 @@ export {
   AdminBatchOps,
   AdminRulesEditor,
   AdminResources,
-  AdminSync
+  AdminSync,
 };
