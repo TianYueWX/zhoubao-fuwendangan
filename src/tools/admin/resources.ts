@@ -68,15 +68,31 @@ export async function deleteSeries(code: string): Promise<Series[]> {
   return restDelete<Series>('series', [{ column: 'code', op: 'eq', value: code }]);
 }
 
-/** 统计:有多少卡牌引用了某个系列代码(删除前提示用) */
-export async function countCardsInSeries(code: string): Promise<number | null> {
-  const { total } = await restSelect('cards_base', {
-    columns: 'id',
-    filters: [{ column: 'series_name', op: 'eq', value: code }],
-    limit: 1,
-    count: true
-  });
-  return total;
+/**
+ * 统计:有多少印刷版本归属某个系列(删除前提示用)。
+ * 口径 = 有效系列:印刷版本自身 series 等于代码,或 series 留空而继承的基础卡
+ * cards_base.series_name 等于代码。两者互斥,直接相加。
+ */
+export async function countPrintsInSeries(code: string): Promise<number | null> {
+  const [explicit, inherited] = await Promise.all([
+    restSelect('card_prints', {
+      columns: 'id',
+      filters: [{ column: 'series', op: 'eq', value: code }],
+      limit: 1,
+      count: true
+    }),
+    restSelect('card_prints', {
+      columns: 'id,cards_base!inner(series_name)',
+      filters: [
+        { column: 'series', op: 'is', value: null },
+        { column: 'cards_base.series_name', op: 'eq', value: code }
+      ],
+      limit: 1,
+      count: true
+    })
+  ]);
+  if (explicit.total === null || inherited.total === null) return null;
+  return explicit.total + inherited.total;
 }
 
 /* ──────────────────────── 图标库 ──────────────────────── */

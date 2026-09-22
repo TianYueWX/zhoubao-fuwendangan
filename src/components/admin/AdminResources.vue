@@ -3,7 +3,7 @@
  * AdminResources.vue · 资源与发布(P4)
  *
  * 对应后台「方案 D · 辅助资源管理面板」,三页签:
- *   ① 系列管理   series   —— CRUD + 内联开关 + 封面预览 + 引用卡牌数
+ *   ① 系列管理   series   —— CRUD + 内联开关 + 封面预览 + 引用印刷数
  *   ② 图标库     card_icons —— 网格 + 内联编辑面板
  *   ③ 版本发布   version  —— 逐行触碰 / 一键发布全部
  *
@@ -21,7 +21,7 @@ import { navigate } from '@/router/hash';
 import { errorText, notifyError, notifyOk, notifyWarn } from '@/tools/admin/notice';
 import { formatTime } from '@/tools/admin/text';
 import {
-  countCardsInSeries,
+  countPrintsInSeries,
   deleteIcon,
   deleteSeries,
   insertIcon,
@@ -59,7 +59,7 @@ const tab = ref<TabId>('series');
 
 const seriesList = ref<Series[]>([]);
 const seriesLoading = ref(false);
-/** 每个系列被多少张卡引用 —— 删除前必须让编务知道 */
+/** 每个系列被多少印刷版本引用 —— 删除前必须让编务知道 */
 const seriesUsage = reactive<Record<string, number>>({});
 
 const seriesOpen = ref(false);
@@ -79,11 +79,11 @@ async function loadSeries(): Promise<void> {
   seriesLoading.value = true;
   try {
     seriesList.value = await listSeries();
-    // 引用计数:7 个系列各一次轻量 count 查询
+    // 引用计数:每个系列两次轻量 count 查询(显式 series + 继承基础卡系列)
     await Promise.all(
       seriesList.value.map(async (s) => {
         try {
-          seriesUsage[s.code] = (await countCardsInSeries(s.code)) ?? 0;
+          seriesUsage[s.code] = (await countPrintsInSeries(s.code)) ?? 0;
         } catch {
           seriesUsage[s.code] = -1; // -1 = 未取到,界面显示 —
         }
@@ -397,7 +397,7 @@ onMounted(async () => {
         <SectionHeading
           eyebrow="其一 · 系列"
           :title="`系列管理（${seriesList.length}）`"
-          note="保存显式带 updated_at;「引用卡牌」列为引用该代码的卡牌数 —— 删除系列不会改动卡牌,只会让它们失去系列归属"
+          note="保存显式带 updated_at;「引用印刷」列为归属该代码的印刷版本数(含继承基础卡系列)—— 删除系列不会改动卡牌,只会让它们失去系列归属"
         >
           <template #actions>
             <button class="btn-ghost px-3 py-1.5 text-xs" :disabled="seriesLoading" @click="loadSeries">
@@ -468,7 +468,7 @@ onMounted(async () => {
                 <th class="text-right font-normal px-2.5 py-2 w-[80px]">顺序</th>
                 <th class="text-center font-normal px-2.5 py-2 w-[70px]">标准</th>
                 <th class="text-center font-normal px-2.5 py-2 w-[70px]">活跃</th>
-                <th class="text-right font-normal px-2.5 py-2 w-[90px]">引用卡牌</th>
+                <th class="text-right font-normal px-2.5 py-2 w-[90px]">引用印刷</th>
                 <th class="text-left font-normal px-2.5 py-2 min-w-[180px]">各类计数</th>
                 <th class="text-center font-normal px-2.5 py-2 w-[80px]">封面</th>
                 <th class="text-right font-normal px-2.5 py-2 w-[140px]">操作</th>
@@ -525,7 +525,7 @@ onMounted(async () => {
                       :label="`删除`"
                       :confirm-label="
                         seriesUsage[s.code]
-                          ? `确认删除(${seriesUsage[s.code]} 张卡将失去系列)`
+                          ? `确认删除(${seriesUsage[s.code]} 个印刷版本将失去系列)`
                           : '确认删除'
                       "
                       :disabled="seriesDeleting === s.code"
