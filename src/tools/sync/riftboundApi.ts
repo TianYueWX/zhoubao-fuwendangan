@@ -145,11 +145,22 @@ export interface SearchCardParams {
   extendRarityList?: string[]
 }
 
+export interface RetryInfo {
+  path: string
+  status?: number
+  /** 即将进行的第几次重试（1 起） */
+  attempt: number
+  maxAttempts: number
+  waitMs: number
+}
+
 export interface RequestOptions {
   baseUrl?: string
   signal?: AbortSignal
   /** 同一轮同步共享的请求前置节流器。 */
   beforeRequest?: () => Promise<void>
+  /** 触发退避重试前的回调，用于界面显示「重试中」。 */
+  onRetry?: (info: RetryInfo) => void
 }
 
 // 5xx 与网关限流：包含 Cloudflare 的 520–526（尤其 524 源站超时）。
@@ -218,7 +229,9 @@ async function request<T>(
   } catch (e: any) {
     if (e?.name === 'AbortError') throw e
     if (attempt < MAX_RETRIES) {
-      await sleep(400 * 2 ** attempt + Math.random() * 300, opts.signal)
+      const waitMs = Math.round(400 * 2 ** attempt + Math.random() * 300)
+      opts.onRetry?.({ path, attempt: attempt + 1, maxAttempts: MAX_RETRIES, waitMs })
+      await sleep(waitMs, opts.signal)
       return request<T>(path, init, opts, attempt + 1)
     }
     throw e
@@ -228,7 +241,9 @@ async function request<T>(
     if (attempt < MAX_RETRIES) {
       const backoff = 600 * 2 ** attempt + Math.random() * 400
       const retryAfter = parseRetryAfterMs(res.headers.get('retry-after')) ?? 0
-      await sleep(Math.max(backoff, retryAfter), opts.signal)
+      const waitMs = Math.round(Math.max(backoff, retryAfter))
+      opts.onRetry?.({ path, status: res.status, attempt: attempt + 1, maxAttempts: MAX_RETRIES, waitMs })
+      await sleep(waitMs, opts.signal)
       return request<T>(path, init, opts, attempt + 1)
     }
     throw new Error(`接口限流或不可用 HTTP ${res.status}（${path}），已重试 ${MAX_RETRIES} 次`)
@@ -329,7 +344,7 @@ export async function getCardCommonQaList(
 
 /** 分页拉取全部卡牌问答（直到某页不足一页） */
 export async function searchAllCommonQa(
-  opts: RequestOptions & { pageSize?: number; onPage?: (page: number, got: number) => void } = {}
+  opts: RequestOptions & { pageSize?: number; onPage?: (page: number, got: number, total: number) => void } = {}
 ): Promise<ApiCommonQa[]> {
   // 官方玩家端实际请求使用 30；不假设服务端会尊重更大的 pageSize，
   // 否则若服务端强制上限 30，第一页就会被误判为最后一页。
@@ -338,7 +353,7 @@ export async function searchAllCommonQa(
   for (let page = 1; page <= 200; page++) {
     const rows = await getCardCommonQaList({ pageNum: page, pageSize, searchContent: '' }, opts)
     out.push(...rows)
-    opts.onPage?.(page, rows.length)
+    opts.onPage?.(page, rows.length, out.length)
     if (rows.length < pageSize) break
   }
   return out

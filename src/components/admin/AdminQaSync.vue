@@ -16,13 +16,12 @@ import {
   type QaPlan,
   type QaReviewRow
 } from '@/tools/sync/qa';
-import { createRequestPacer, searchAllCommonQa } from '@/tools/sync/riftboundApi';
+import { createRequestPacer, searchAllCommonQa, type RetryInfo } from '@/tools/sync/riftboundApi';
 
 const props = defineProps<{ apiBase: string }>();
 const emit = defineEmits<{ busy: [value: boolean] }>();
 
 const fetching = ref(false);
-const fetchLabel = ref('');
 const fetchError = ref('');
 const rows = ref<QaReviewRow[]>([]);
 const existing = ref<QaExisting | null>(null);
@@ -84,15 +83,21 @@ async function loadExistingRows(force = false): Promise<boolean> {
   }
 }
 
+interface QaFetchProgress {
+  label: string;
+  done: number;
+  total: number;
+  retry: RetryInfo | null;
+}
+
 interface QaFetchOptions {
   signal: AbortSignal;
   fetchedCards?: ReadonlyMap<string, string>;
-  onProgress?: (label: string) => void;
+  onProgress?: (p: QaFetchProgress) => void;
 }
 
 function reset(): void {
   fetchError.value = '';
-  fetchLabel.value = '';
   rows.value = [];
   errors.value = {};
   inputErrors.value = {};
@@ -120,19 +125,23 @@ async function runFetch(options: QaFetchOptions): Promise<{ total: number; newCo
     const pendingCardNos = new Set([...fetchedCardNames.value.keys()].filter((n) => !ex.cardNos.has(n)));
     const nameByNo = new Map(ex.nameByNo);
     for (const [cardNo, name] of fetchedCardNames.value) if (!nameByNo.has(cardNo)) nameByNo.set(cardNo, name);
+    let total = 0;
+    let label = '拉取问答…';
+    const emit = (retry: RetryInfo | null): void => options.onProgress?.({ label, done: total, total: 0, retry });
     const items = await searchAllCommonQa({
       baseUrl: props.apiBase,
       signal: options.signal,
       beforeRequest: createRequestPacer(150, 150, options.signal),
-      onPage: (page, got) => {
-        fetchLabel.value = `拉取问答第 ${page} 页（${got} 条）`;
-        options.onProgress?.(fetchLabel.value);
-      }
+      onPage: (page, _got, accumulated) => {
+        label = `拉取问答…第 ${page} 页（累计 ${accumulated} 条）`;
+        total = accumulated;
+        emit(null);
+      },
+      onRetry: (info) => emit(info)
     });
     if (!items.length) throw new Error('接口未返回任何问答');
     const incoming: QaIncoming[] = items.map((item) => buildQaIncoming(item, ex.cardNos, nameByNo, pendingCardNos));
     rows.value = createQaReview(incoming, ex.entries, linksMap(ex));
-    fetchLabel.value = '';
     const s = summary.value;
     return s;
   } catch (e) {
@@ -304,7 +313,6 @@ defineExpose({ runFetch, reset, hasUnsavedReview });
       <button v-if="rows.length" class="btn-ghost px-3 py-1.5 text-xs" :disabled="fetching || busy" @click="loadExistingRows(true)">
         {{ existingLoading ? '读取中…' : '重读库内现状' }}
       </button>
-      <span v-if="fetching && fetchLabel" class="text-[11px] text-ink-faint">{{ fetchLabel }}</span>
       <span v-if="rows.length" class="text-[11px] text-ink-muted tabular-nums">
         共 {{ summary.total }} · 新增 {{ summary.newCount }} · 更新 {{ summary.updateCount }} · 无变更 {{ summary.sameCount }}
       </span>
@@ -318,7 +326,7 @@ defineExpose({ runFetch, reset, hasUnsavedReview });
     <div v-if="summary.unmatched.length" class="mt-4 pl-3 border-l-2 border-accent">
       <p class="text-[12px] text-ink-muted">
         以下 {{ summary.unmatched.length }} 个卡号不在 cards_base，已跳过关联:
-        <span class="font-mono">{{ summary.unmatched.join('、') }}</span>
+        <span class="font-mono">{{ summary.unmatched.map((n) => n.replace(/·/g, '-')).join('、') }}</span>
       </p>
     </div>
 

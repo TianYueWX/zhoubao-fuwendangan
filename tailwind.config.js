@@ -85,12 +85,17 @@ export default {
         ]
       },
       animation: {
-        'fade-in': 'fadeIn 0.4s ease-out'
+        'fade-in': 'fadeIn 0.4s ease-out',
+        indeterminate: 'indeterminate 1.1s ease-in-out infinite'
       },
       keyframes: {
         fadeIn: {
           '0%': { opacity: '0', transform: 'translateY(10px)' },
           '100%': { opacity: '1', transform: 'translateY(0)' }
+        },
+        indeterminate: {
+          '0%': { transform: 'translateX(-150%)' },
+          '100%': { transform: 'translateX(350%)' }
         }
       }
     }

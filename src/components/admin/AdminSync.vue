@@ -9,8 +9,8 @@ import SectionHeading from '../SectionHeading.vue';
 import { errorText, notifyError, notifyOk, notifyWarn } from '@/tools/admin/notice';
 import { loadExisting, loadSnapshotRows, type ExistingSnapshot } from '@/tools/admin/sync';
 import { isSupabaseConfigured } from '@/tools/sources/config';
-import { RIFTBOUND_API_BASE, type ApiCardDetail } from '@/tools/sync/riftboundApi';
-import { fetchDataset, type SyncDataset, type SyncPhase } from '@/tools/sync/run';
+import { RIFTBOUND_API_BASE, type ApiCardDetail, type RetryInfo } from '@/tools/sync/riftboundApi';
+import { fetchDataset, type SyncDataset } from '@/tools/sync/run';
 import { cacheCount, clearDetailCache, loadDetailCache } from '@/tools/sync/cache';
 import { downloadText } from '@/tools/sync/exporters';
 import {
@@ -29,10 +29,6 @@ const mode = ref<'fast' | 'deep'>('fast');
 const pullCards = ref(false);
 const pullQa = ref(false);
 const fetching = ref(false);
-const phase = ref<SyncPhase>('idle');
-const phaseLabel = ref('');
-const progressDone = ref(0);
-const progressTotal = ref(0);
 const fetchError = ref('');
 const dataset = ref<SyncDataset | null>(null);
 const confirmDiscard = ref(false);
@@ -44,7 +40,7 @@ const qaSync = ref<{
   runFetch: (options: {
     signal: AbortSignal;
     fetchedCards?: ReadonlyMap<string, string>;
-    onProgress?: (label: string) => void;
+    onProgress?: (p: { label: string; done: number; total: number; retry: RetryInfo | null }) => void;
   }) => Promise<{ total: number; newCount: number; updateCount: number; sameCount: number }>;
   reset: () => void;
   hasUnsavedReview: () => boolean;
@@ -52,22 +48,36 @@ const qaSync = ref<{
 
 type PullTask = 'cards' | 'qa';
 type PullStatus = 'idle' | 'queued' | 'running' | 'success' | 'error' | 'cancelled';
-const taskState = reactive<Record<PullTask, { status: PullStatus; detail: string }>>({
-  cards: { status: 'idle', detail: '' },
-  qa: { status: 'idle', detail: '' }
+interface TaskProgress {
+  status: PullStatus;
+  detail: string;
+  label: string;
+  done: number;
+  total: number;
+  retry: RetryInfo | null;
+}
+function emptyTask(status: PullStatus = 'idle'): TaskProgress {
+  return { status, detail: '', label: '', done: 0, total: 0, retry: null };
+}
+const taskProgress = reactive<Record<PullTask, TaskProgress>>({
+  cards: emptyTask(),
+  qa: emptyTask()
 });
 const hasSelection = computed(() => pullCards.value || pullQa.value);
 const statusLabel: Record<PullStatus, string> = {
   idle: '尚未运行', queued: '等待中', running: '拉取中', success: '已完成', error: '失败', cancelled: '已取消'
 };
 
+function statusClass(status: PullStatus): string {
+  return status === 'error' ? 'text-delta-down' : status === 'success' ? 'text-delta-up' : 'text-ink-faint';
+}
+
 const detailCache: Record<string, ApiCardDetail> = loadDetailCache();
 const cacheSize = ref(cacheCount(detailCache));
 
-const progressPercent = computed(() => {
-  if (!progressTotal.value) return fetching.value ? 30 : 0;
-  return Math.min(100, Math.round((progressDone.value / progressTotal.value) * 100));
-});
+function percent(p: TaskProgress): number {
+  return p.total ? Math.min(100, Math.round((p.done / p.total) * 100)) : 0;
+}
 
 /* ══════════════════ 差异 ══════════════════ */
 
@@ -99,12 +109,8 @@ function resetRunState(): void {
   dataset.value = null;
   qaSync.value?.reset();
   fetchError.value = '';
-  phase.value = 'idle';
-  phaseLabel.value = '';
-  progressDone.value = 0;
-  progressTotal.value = 0;
-  taskState.cards = { status: pullCards.value ? 'queued' : 'idle', detail: '' };
-  taskState.qa = { status: pullQa.value ? 'queued' : 'idle', detail: '' };
+  taskProgress.cards = emptyTask(pullCards.value ? 'queued' : 'idle');
+  taskProgress.qa = emptyTask(pullQa.value ? 'queued' : 'idle');
   clearCache(false);
 }
 
@@ -120,11 +126,13 @@ async function runCardFetch(signal: AbortSignal): Promise<SyncDataset> {
     detailCache,
     signal,
     onProgress: (p) => {
-      phase.value = p.phase;
-      phaseLabel.value = p.label;
-      progressDone.value = p.done;
-      progressTotal.value = p.total;
-      taskState.cards.detail = p.label;
+      taskProgress.cards.label = p.label;
+      taskProgress.cards.done = p.done;
+      taskProgress.cards.total = p.total;
+      taskProgress.cards.retry = null;
+    },
+    onRetry: (info) => {
+      taskProgress.cards.retry = info;
     }
   });
 }
@@ -150,56 +158,65 @@ async function startFetch(): Promise<void> {
 
   try {
     if (pullCards.value) {
-      taskState.cards = { status: 'running', detail: '准备读取卡牌数据' };
+      taskProgress.cards.status = 'running';
+      taskProgress.cards.retry = null;
       try {
         const ds = await runCardFetch(signal);
         dataset.value = ds;
         fetchedCards = new Map(ds.cards.map((card) => [card.card_no, card.card_name_cn ?? card.card_no]));
-        taskState.cards = {
-          status: 'success',
-          detail: `${incomingIdentityCount.value} 个基础卡身份 · ${ds.prints.length} 个印刷版本 · ${ds.icons.length} 个图标`
-        };
+        taskProgress.cards.status = 'success';
+        taskProgress.cards.detail = `${incomingIdentityCount.value} 个基础卡身份 · ${ds.prints.length} 个印刷版本 · ${ds.icons.length} 个图标`;
       } catch (e) {
         if (isAbortError(e)) throw e;
         fetchError.value = errorText(e);
-        taskState.cards = { status: 'error', detail: fetchError.value };
+        taskProgress.cards.status = 'error';
+        taskProgress.cards.detail = fetchError.value;
         notifyError(`卡牌与关键词图标拉取失败:${fetchError.value}`, pullQa.value ? '将继续拉取 QA' : undefined);
+      } finally {
+        taskProgress.cards.retry = null;
       }
     }
 
     if (pullQa.value) {
       if (signal.aborted) throw new DOMException('已取消', 'AbortError');
-      taskState.qa = { status: 'running', detail: '准备读取 QA' };
+      taskProgress.qa.status = 'running';
+      taskProgress.qa.retry = null;
       try {
         if (!qaSync.value) throw new Error('QA 审核组件尚未就绪');
         const result = await qaSync.value.runFetch({
           signal,
           fetchedCards,
-          onProgress: (label) => { taskState.qa.detail = label; }
+          onProgress: (p) => {
+            taskProgress.qa.label = p.label;
+            taskProgress.qa.done = p.done;
+            taskProgress.qa.total = p.total;
+            taskProgress.qa.retry = p.retry;
+          }
         });
-        taskState.qa = {
-          status: 'success',
-          detail: `${result.total} 条 · 新增 ${result.newCount} · 更新 ${result.updateCount} · 无变更 ${result.sameCount}`
-        };
+        taskProgress.qa.status = 'success';
+        taskProgress.qa.detail = `${result.total} 条 · 新增 ${result.newCount} · 更新 ${result.updateCount} · 无变更 ${result.sameCount}`;
       } catch (e) {
         if (isAbortError(e)) throw e;
         const message = errorText(e);
-        taskState.qa = { status: 'error', detail: message };
+        taskProgress.qa.status = 'error';
+        taskProgress.qa.detail = message;
         notifyError(`QA 拉取失败:${message}`);
+      } finally {
+        taskProgress.qa.retry = null;
       }
     }
 
-    const successes = [taskState.cards, taskState.qa].filter((task) => task.status === 'success').length;
-    const failures = [taskState.cards, taskState.qa].filter((task) => task.status === 'error').length;
+    const successes = [taskProgress.cards, taskProgress.qa].filter((task) => task.status === 'success').length;
+    const failures = [taskProgress.cards, taskProgress.qa].filter((task) => task.status === 'error').length;
     if (successes) notifyOk(`本轮拉取完成:${successes} 项成功${failures ? `，${failures} 项失败` : ''}`);
   } catch (e) {
     if (isAbortError(e)) {
       for (const key of ['cards', 'qa'] as const) {
-        if (taskState[key].status === 'running' || taskState[key].status === 'queued') {
-          taskState[key] = { status: 'cancelled', detail: '用户取消了整轮拉取' };
+        if (taskProgress[key].status === 'running' || taskProgress[key].status === 'queued') {
+          taskProgress[key] = emptyTask('cancelled');
+          taskProgress[key].detail = '用户取消了整轮拉取';
         }
       }
-      phase.value = 'idle';
       notifyWarn('已取消整轮拉取');
     } else {
       notifyError(`拉取失败:${errorText(e)}`);
@@ -365,22 +382,33 @@ onMounted(async () => {
           <div v-for="item in ([{ key: 'cards', label: '卡牌与关键词图标' }, { key: 'qa', label: 'QA' }] as const)" :key="item.key" class="rounded-lg border border-card-border p-3">
             <div class="flex items-center justify-between gap-3">
               <span class="text-xs font-semibold">{{ item.label }}</span>
-              <span class="text-[11px]" :class="taskState[item.key].status === 'error' ? 'text-delta-down' : taskState[item.key].status === 'success' ? 'text-delta-up' : 'text-ink-faint'">
-                {{ statusLabel[taskState[item.key].status] }}
+              <span class="text-[11px]" :class="statusClass(taskProgress[item.key].status)">
+                {{ statusLabel[taskProgress[item.key].status] }}
               </span>
             </div>
-            <p v-if="taskState[item.key].detail" class="text-[11px] text-ink-faint mt-1.5 leading-relaxed">{{ taskState[item.key].detail }}</p>
-          </div>
-        </div>
+            <p v-if="taskProgress[item.key].detail" class="text-[11px] text-ink-faint mt-1.5 leading-relaxed">{{ taskProgress[item.key].detail }}</p>
 
-        <div v-if="fetching && taskState.cards.status === 'running'" class="mt-5">
-          <p class="text-[13px] text-ink-muted mb-2">{{ phaseLabel }}</p>
-          <div class="h-3 rounded-full bg-panel-bg border border-card-border overflow-hidden">
-            <div class="h-full bg-brand transition-all duration-200" :style="{ width: `${progressPercent}%` }"></div>
+            <template v-if="taskProgress[item.key].status === 'running'">
+              <div
+                class="mt-2 h-2 rounded-full bg-panel-bg border border-card-border overflow-hidden"
+                role="progressbar"
+                :aria-label="`${item.label} 拉取进度`"
+                :aria-valuemin="0"
+                :aria-valuemax="100"
+                :aria-valuenow="taskProgress[item.key].total ? percent(taskProgress[item.key]) : undefined"
+              >
+                <div v-if="taskProgress[item.key].total" class="h-full bg-brand transition-all duration-200" :style="{ width: `${percent(taskProgress[item.key])}%` }"></div>
+                <div v-else class="h-full w-2/5 bg-brand animate-indeterminate motion-reduce:animate-none"></div>
+              </div>
+              <p class="text-[11px] text-ink-faint mt-1.5 tabular-nums" aria-live="polite">
+                {{ taskProgress[item.key].label }}
+                <span v-if="taskProgress[item.key].total"> · {{ taskProgress[item.key].done }} / {{ taskProgress[item.key].total }}</span>
+              </p>
+              <p v-if="taskProgress[item.key].retry" class="text-[11px] text-accent mt-1" role="status">
+                接口抖动，重试 {{ taskProgress[item.key].retry?.attempt }} / {{ taskProgress[item.key].retry?.maxAttempts }}…
+              </p>
+            </template>
           </div>
-          <p v-if="progressTotal" class="text-[11px] text-ink-faint mt-1.5 text-right tabular-nums">
-            {{ progressDone }} / {{ progressTotal }}
-          </p>
         </div>
 
         <p v-if="fetchError" class="mt-4 text-[13px] text-delta-down leading-relaxed pl-3 border-l-2 border-brand">

@@ -88,6 +88,29 @@ export function normalizeQaCardNo(raw: string): string {
   return baseCardNo(normalizeCardNo(raw).extend)
 }
 
+/**
+ * 官方 QA 接口的编号补零不一致（同一批里 OGN·055/298 与 OGN·55/298 并存），
+ * 而 cards_base 统一补零。先精确匹配，不中再按「同前缀 / 同字母 / 同数字值 / 同后缀」
+ * 在库内查找，从而兼容任意位宽，不写死 3 位。
+ */
+export function resolveQaCardNo(no: string, known: ReadonlySet<string>): string | null {
+  if (!no) return null
+  if (known.has(no)) return no
+  const m = no.match(/^([A-Z0-9]+-)([A-Z]?)(\d+)([a-z]*)$/)
+  if (!m) return null
+  const prefix = m[1]!
+  const letter = m[2]!
+  const value = Number(m[3]!)
+  const suffix = m[4]!
+  for (const candidate of known) {
+    const c = candidate.match(/^([A-Z0-9]+-)([A-Z]?)(\d+)([a-z]*)$/)
+    if (c && c[1] === prefix && c[2] === letter && Number(c[3]) === value && c[4] === suffix) {
+      return candidate
+    }
+  }
+  return null
+}
+
 export function buildQaIncoming(
   item: ApiCommonQa,
   cardNos: ReadonlySet<string>,
@@ -104,12 +127,14 @@ export function buildQaIncoming(
   for (const raw of raws) {
     card_no_raw.push(raw)
     const no = normalizeQaCardNo(raw)
-    if (no && (cardNos.has(no) || pendingCardNos.has(no))) {
-      if (!seen.has(no)) {
-        seen.add(no)
-        card_no_list.push(no)
-        card_name_list.push(nameByNo.get(no) ?? no)
-        if (!cardNos.has(no)) pending_card_no_list.push(no)
+    const known = resolveQaCardNo(no, cardNos)
+    const resolved = known ?? resolveQaCardNo(no, pendingCardNos)
+    if (resolved) {
+      if (!seen.has(resolved)) {
+        seen.add(resolved)
+        card_no_list.push(resolved)
+        card_name_list.push(nameByNo.get(resolved) ?? resolved)
+        if (!known) pending_card_no_list.push(resolved)
       }
     } else {
       unmatched.push(raw)

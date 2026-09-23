@@ -12,7 +12,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
-  buildQaIncoming, buildQaPlan, createQaReview, normalizeQaCardNo, qaState, segmentQaText, summarizeQa
+  buildQaIncoming, buildQaPlan, createQaReview, normalizeQaCardNo, qaState, resolveQaCardNo, segmentQaText, summarizeQa
 } from '../src/tools/sync/qa.ts';
 import { getCardCommonQaList, qaApiBase, RIFTBOUND_API_BASE } from '../src/tools/sync/riftboundApi.ts';
 import { fetchUpstream, onRequestPost } from '../functions/api/riftbound/cardCommonQa/getCardCommonQaList.ts';
@@ -60,6 +60,29 @@ test('cardName 与 cardNo 不等长也不影响（令牌无名仍可关联）', 
   const inc = buildQaIncoming(item({ id: 102, cardNo: ['OGN·096/298', 'UNL-T06'], cardName: ['警觉的哨兵'] }), cardNos, nameByNo);
   assert.deepEqual(inc.card_no_list, ['OGN-096', 'UNL-T06']);
   assert.deepEqual(inc.card_name_list, ['警觉的哨兵', '映像']);
+});
+
+test('接口未补零的编号按库内补零匹配（OGN·55/298 → OGN-055）', () => {
+  const lib = new Set(['OGN-055', 'OGN-079']);
+  const inc = buildQaIncoming(item({ cardNo: ['OGN·55/298', 'OGN·79/298'] }), lib, new Map());
+  assert.deepEqual(inc.card_no_list, ['OGN-055', 'OGN-079']);
+  assert.deepEqual(inc.unmatched, []);
+});
+
+test('补零匹配同样作用于本轮待提交的新卡', () => {
+  const pending = new Set(['OGN-079']);
+  const inc = buildQaIncoming(item({ cardNo: ['OGN·79/298'] }), new Set(), new Map(), pending);
+  assert.deepEqual(inc.card_no_list, ['OGN-079']);
+  assert.deepEqual(inc.pending_card_no_list, ['OGN-079']);
+  assert.deepEqual(inc.unmatched, []);
+});
+
+test('resolveQaCardNo 精确优先、位宽兼容、不可解析返回 null', () => {
+  const lib = new Set(['OGN-055']);
+  assert.equal(resolveQaCardNo('OGN-055', lib), 'OGN-055');
+  assert.equal(resolveQaCardNo('OGN-55', lib), 'OGN-055');
+  assert.equal(resolveQaCardNo('OGN-999', lib), null);
+  assert.equal(resolveQaCardNo('', lib), null);
 });
 
 test('本轮新卡保留关联意图并标记等待提交', () => {
@@ -260,18 +283,23 @@ await asyncTest('Pages Function 在上游持续不可用时返回 504 而非挂�
   }
 });
 
-await asyncTest('客户端把 524 视为可重试并最终成功', async () => {
+await asyncTest('客户端把 524 视为可重试并上报 onRetry', async () => {
   const originalFetch = globalThis.fetch;
   let calls = 0;
+  const seen = [];
   globalThis.fetch = async () => {
     calls++;
     if (calls === 1) return new Response('', { status: 524 });
     return Response.json({ code: 0, message: '操作成功', result: [] });
   };
   try {
-    const rows = await getCardCommonQaList({}, { baseUrl: 'https://example.com/xcx' });
+    const rows = await getCardCommonQaList({}, { baseUrl: 'https://example.com/xcx', onRetry: (info) => seen.push(info) });
     assert.equal(calls, 2);
     assert.deepEqual(rows, []);
+    assert.equal(seen.length, 1);
+    assert.equal(seen[0].status, 524);
+    assert.equal(seen[0].attempt, 1);
+    assert.equal(seen[0].maxAttempts, 6);
   } finally {
     globalThis.fetch = originalFetch;
   }

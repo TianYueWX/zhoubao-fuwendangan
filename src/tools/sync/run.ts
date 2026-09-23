@@ -15,7 +15,8 @@ import {
   mapLimit,
   searchAllCards,
   type ApiCardDetail,
-  type ApiSearchCard
+  type ApiSearchCard,
+  type RetryInfo
 } from './riftboundApi'
 import {
   baseCardNo,
@@ -85,6 +86,8 @@ export interface FetchDatasetOptions {
   maxEnrich?: number
   signal?: AbortSignal
   onProgress?: (p: SyncProgress) => void
+  /** 触发退避重试前的回调，用于界面显示「重试中」。 */
+  onRetry?: (info: RetryInfo) => void
 }
 
 const SERIES_RELEASE_ORDER: Record<string, number> = {
@@ -109,12 +112,13 @@ export async function fetchDataset(opts: FetchDatasetOptions = {}): Promise<Sync
   const {
     baseUrl,
     existingSeriesCodes = [], seriesByPrefix = {}, existingCardKeys = [], detailCache,
-    maxEnrich = 120, signal, onProgress
+    maxEnrich = 120, signal, onProgress, onRetry
   } = opts
   const req = {
     baseUrl,
     signal,
-    beforeRequest: createRequestPacer(minGapMs, maxGapMs, signal)
+    beforeRequest: createRequestPacer(minGapMs, maxGapMs, signal),
+    onRetry
   }
   const report = (phase: SyncPhase, label: string, done = 0, total = 0) =>
     onProgress?.({ phase, label, done, total })
