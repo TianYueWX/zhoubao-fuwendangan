@@ -1,4 +1,5 @@
 import { restSelectAll } from "@/tools/sources/rest";
+import { buildQaByCardNo } from "./qa";
 import type {
   CardBase,
   CardPrint,
@@ -112,11 +113,20 @@ export function chooseDefaultPrint(
 }
 
 export async function loadCarddexData(): Promise<CarddexData> {
-  const [baseRows, printRows, iconRows] = await Promise.all([
-    restSelectAll<Row>("cards_base", { order: "card_no.asc" }),
-    restSelectAll<Row>("card_prints", { order: "card_no_extend.asc" }),
-    restSelectAll<Row>("card_icons", { order: "name_zh.asc" }).catch(() => []),
-  ]);
+  const [baseRows, printRows, iconRows, qaEntryRows, qaLinkRows] =
+    await Promise.all([
+      restSelectAll<Row>("cards_base", { order: "card_no.asc" }),
+      restSelectAll<Row>("card_prints", { order: "card_no_extend.asc" }),
+      restSelectAll<Row>("card_icons", { order: "name_zh.asc" }).catch(() => []),
+      restSelectAll<Row>("qa_entries", {
+        columns: "id,source_id,question,answer,question_en,answer_en",
+        order: "id.asc",
+      }).catch(() => []),
+      restSelectAll<Row>("qa_entry_cards", {
+        columns: "qa_id,card_no,position",
+        order: "qa_id.asc",
+      }).catch(() => []),
+    ]);
   const printsByCard = new Map<string, CardPrint[]>();
   for (const raw of printRows) {
     const p = printFromRow(raw);
@@ -136,5 +146,6 @@ export async function loadCarddexData(): Promise<CarddexData> {
       isWhite: bool(r.isWhite ?? r.is_white),
     }))
     .filter((i) => i.name && /^https?:\/\//i.test(i.url));
-  return { records, icons };
+  const qaByCardNo = buildQaByCardNo(qaEntryRows, qaLinkRows);
+  return { records, icons, qaByCardNo };
 }

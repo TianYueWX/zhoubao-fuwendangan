@@ -27,6 +27,7 @@ const TARGETS: Record<string, string> = {
   'editorial-cards': 'cards_base · card_prints',
   'editorial-batch': 'cards_base',
   'editorial-rules': 'rules',
+  'editorial-qa': 'qa_entries · qa_entry_cards',
   'editorial-resources': 'series · card_icons · version',
   'editorial-sync': '全表 · 官方接口 → Supabase'
 };

@@ -36,6 +36,7 @@ import type {
   ActiveFilter,
   CardIcon,
   CardPrint,
+  CardQa,
   CardRecord,
   CarddexQueryState,
   DisplayCard,
@@ -53,6 +54,7 @@ const loading = ref(true);
 const error = ref("");
 const records = ref<CardRecord[]>([]);
 const icons = ref<CardIcon[]>([]);
+const qaByCardNo = ref<Map<string, CardQa[]>>(new Map());
 const query = reactive<CarddexQueryState>(loadQuery(clone(DEFAULT_QUERY)));
 const ui = reactive(loadUi());
 const searchInput = ref(query.search);
@@ -149,6 +151,11 @@ const detailRecord = computed(() =>
   detailItem.value
     ? (recordById.value.get(detailItem.value.base.id) ?? null)
     : null,
+);
+const detailQa = computed(() =>
+  detailItem.value
+    ? (qaByCardNo.value.get(detailItem.value.base.cardNo) ?? [])
+    : [],
 );
 const viewerItem = computed(() => {
   if (!viewerKey.value) return null;
@@ -409,6 +416,7 @@ async function load(): Promise<void> {
     const data = await loadCarddexData();
     records.value = data.records;
     icons.value = data.icons;
+    qaByCardNo.value = data.qaByCardNo;
     const b = numericBounds(data.records);
     for (const k of ["energy", "returnEnergy", "power"] as const) {
       if (query.numeric[k].max === 99) query.numeric[k] = { ...b[k] };
@@ -681,6 +689,7 @@ onBeforeUnmount(() => {
       :record="detailRecord"
       :locale="ui.locale"
       :icons="icons"
+      :qa="detailQa"
       :is-pinned="isPinned"
       :can-prev="currentDetailIndex > 0"
       :can-next="

@@ -26,6 +26,7 @@ import EditorialHub from "../admin/EditorialHub.vue";
 import AdminCardEditor from "../admin/AdminCardEditor.vue";
 import AdminBatchOps from "../admin/AdminBatchOps.vue";
 import AdminRulesEditor from "../admin/AdminRulesEditor.vue";
+import AdminQaEditor from "../admin/AdminQaEditor.vue";
 import AdminResources from "../admin/AdminResources.vue";
 import AdminSync from "../admin/AdminSync.vue";
 
@@ -66,6 +67,7 @@ export const ViewComponents: Record<string, unknown> = {
   "editorial-cards": AdminCardEditor,
   "editorial-batch": AdminBatchOps,
   "editorial-rules": AdminRulesEditor,
+  "editorial-qa": AdminQaEditor,
   "editorial-resources": AdminResources,
   "editorial-sync": AdminSync,
 };
@@ -88,6 +90,7 @@ export {
   AdminCardEditor,
   AdminBatchOps,
   AdminRulesEditor,
+  AdminQaEditor,
   AdminResources,
   AdminSync,
 };

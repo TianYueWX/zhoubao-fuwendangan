@@ -2,8 +2,8 @@
  * QA 同步的数据层：读库内现状 + 执行审核后的写入计划。
  * 写入走 sources/rest.ts（用户 JWT，命中 RLS 的 is_card_admin 策略）。
  */
-import { restDelete, restInsert, restSelect, restUpdate } from '../sources/rest'
-import type { QaDbEntry, QaPlan } from '../sync/qa'
+import { restDelete, restInsert, restSelect, restUpdate, touchVersion } from '../sources/rest'
+import { planQaInsert, planQaUpdate, type QaDbEntry, type QaPlan } from '../sync/qa'
 
 export interface QaLinkRow {
   qa_id: string
@@ -20,7 +20,7 @@ export interface QaExisting {
   nameByNo: Map<string, string>
 }
 
-const QA_ENTRY_COLUMNS = 'id,source_id,question,answer,question_en,answer_en'
+const QA_ENTRY_COLUMNS = 'id,source,source_id,question,answer,question_en,answer_en'
 const QA_LINK_COLUMNS = 'qa_id,card_no,position'
 
 async function selectAllPaged<T>(table: string, columns: string, order: string, pageSize = 1000): Promise<T[]> {
@@ -97,4 +97,40 @@ export async function applyQaPlan(plan: QaPlan): Promise<QaApplyResult> {
     if (rows.length !== plan.linkAdds.length) throw new Error('QA 关联写入不完整(卡号可能不存在或权限不足)')
   }
   return { entry }
+}
+
+/** 编辑器提交的正文补丁。 */
+export interface QaEntryPatch {
+  question: string
+  answer: string
+  question_en: string | null
+  answer_en: string | null
+}
+
+/** 保存已有 QA：正文 + 关联卡增删，复用 applyQaPlan 的落库校验。 */
+export async function saveQaEntry(
+  id: string,
+  patch: QaEntryPatch,
+  desiredLinks: readonly string[],
+  currentLinks: readonly string[]
+): Promise<QaDbEntry> {
+  const { entry } = await applyQaPlan(planQaUpdate(id, { ...patch }, desiredLinks, currentLinks))
+  return entry
+}
+
+/** 手动新增 QA（source=manual），并建立关联。 */
+export async function createQaEntry(patch: QaEntryPatch, desiredLinks: readonly string[]): Promise<QaDbEntry> {
+  const { entry } = await applyQaPlan(planQaInsert({ ...patch }, desiredLinks))
+  return entry
+}
+
+/** 删除 QA 条目（qa_entry_cards 由外键 on delete cascade 一并清理）。 */
+export async function deleteQaEntry(id: string): Promise<void> {
+  const rows = await restDelete<QaDbEntry>('qa_entries', [{ column: 'id', op: 'eq', value: id }])
+  if (!rows.length) throw new Error('删除失败:记录不存在或权限不足')
+}
+
+/** 触碰 version.name='qa'，通知客户端刷新问答缓存。 */
+export function publishQa(): Promise<void> {
+  return touchVersion('qa')
 }

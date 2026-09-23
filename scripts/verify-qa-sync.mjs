@@ -12,7 +12,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
-  buildQaIncoming, buildQaPlan, createQaReview, normalizeQaCardNo, qaState, resolveQaCardNo, segmentQaText, summarizeQa
+  buildQaIncoming, buildQaPlan, createQaReview, normalizeQaCardNo, planQaInsert, planQaUpdate, qaState, resolveQaCardNo, segmentQaText, summarizeQa
 } from '../src/tools/sync/qa.ts';
 import { getCardCommonQaList, qaApiBase, RIFTBOUND_API_BASE } from '../src/tools/sync/riftboundApi.ts';
 import { fetchUpstream, onRequestPost } from '../functions/api/riftbound/cardCommonQa/getCardCommonQaList.ts';
@@ -83,6 +83,24 @@ test('resolveQaCardNo 精确优先、位宽兼容、不可解析返回 null', ()
   assert.equal(resolveQaCardNo('OGN-55', lib), 'OGN-055');
   assert.equal(resolveQaCardNo('OGN-999', lib), null);
   assert.equal(resolveQaCardNo('', lib), null);
+});
+
+test('planQaUpdate：更新正文并计算关联增删与位置', () => {
+  const plan = planQaUpdate('q1', { question: 'Q：新', answer: 'A：新' }, ['OGN-055', 'UNL-T06'], ['UNL-074']);
+  assert.equal(plan.entry.kind, 'update');
+  assert.equal(plan.entry.id, 'q1');
+  assert.deepEqual(plan.entry.payload, { question: 'Q：新', answer: 'A：新' });
+  assert.deepEqual(plan.linkAdds, [{ card_no: 'OGN-055', position: 0 }, { card_no: 'UNL-T06', position: 1 }]);
+  assert.deepEqual(plan.linkRemoves, ['UNL-074']);
+});
+
+test('planQaInsert：manual 载荷 + 关联按序', () => {
+  const plan = planQaInsert({ question: 'Q：', answer: 'A：' }, ['OGN-055', 'OGN-079']);
+  assert.equal(plan.entry.kind, 'insert');
+  assert.equal(plan.entry.payload.source, 'manual');
+  assert.equal(plan.entry.payload.source_id, null);
+  assert.deepEqual(plan.linkAdds, [{ card_no: 'OGN-055', position: 0 }, { card_no: 'OGN-079', position: 1 }]);
+  assert.deepEqual(plan.linkRemoves, []);
 });
 
 test('本轮新卡保留关联意图并标记等待提交', () => {

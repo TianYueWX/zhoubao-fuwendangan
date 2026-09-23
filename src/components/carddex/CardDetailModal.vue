@@ -2,9 +2,11 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import CarddexImage from "./CarddexImage.vue";
 import { printKey } from "./data";
+import { segmentQaText } from "@/tools/sync/qa";
 import type {
   CardIcon,
   CardPrint,
+  CardQa,
   CardRecord,
   CarddexLocale,
   DisplayCard,
@@ -15,6 +17,7 @@ const props = defineProps<{
   record: CardRecord | null;
   locale: CarddexLocale;
   icons: CardIcon[];
+  qa: CardQa[];
   isPinned: (p: CardPrint) => boolean;
   canPrev: boolean;
   canNext: boolean;
@@ -27,6 +30,8 @@ const emit = defineEmits<{
   viewer: [print: CardPrint];
 }>();
 const selectedKey = ref("");
+const panel = ref<"info" | "qa">("info");
+const expandedQa = ref<Set<string>>(new Set());
 const selected = computed(
   () =>
     props.record?.prints.find((p) => printKey(p) === selectedKey.value) ??
@@ -90,9 +95,27 @@ watch(
   () => props.item?.key,
   () => {
     selectedKey.value = props.item?.print ? printKey(props.item.print) : "";
+    panel.value = "info";
+    expandedQa.value = new Set();
   },
   { immediate: true },
 );
+
+function togglePanel(): void {
+  panel.value = panel.value === "qa" ? "info" : "qa";
+}
+function qaQuestion(q: CardQa): string {
+  return props.locale === "en" && q.questionEn ? q.questionEn : q.question;
+}
+function qaAnswer(q: CardQa): string {
+  return props.locale === "en" && q.answerEn ? q.answerEn : q.answer;
+}
+function toggleQa(id: string): void {
+  const next = new Set(expandedQa.value);
+  if (next.has(id)) next.delete(id);
+  else next.add(id);
+  expandedQa.value = next;
+}
 
 function esc(s: string): string {
   return s.replace(
@@ -144,8 +167,10 @@ function rich(raw: string): string {
 function onKey(e: KeyboardEvent): void {
   if (!props.item) return;
   if (e.key === "Escape") emit("close");
-  else if (e.key === "ArrowLeft" && props.canPrev) emit("prev");
-  else if (e.key === "ArrowRight" && props.canNext) emit("next");
+  else if (e.key === "ArrowLeft" && props.canPrev && panel.value === "info")
+    emit("prev");
+  else if (e.key === "ArrowRight" && props.canNext && panel.value === "info")
+    emit("next");
 }
 onMounted(() => window.addEventListener("keydown", onKey));
 onBeforeUnmount(() => window.removeEventListener("keydown", onKey));
@@ -172,14 +197,35 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey));
               ? item.base.nameCn
               : item.base.nameEn || item.base.nameCn
           }}</strong>
-          <button
-            v-if="selected"
-            type="button"
-            :class="{ pinned: isPinned(selected) }"
-            @click="emit('pin', selected)"
-          >
-            ◆
-          </button>
+          <div class="detail-mobile-actions">
+            <button
+              v-if="qa.length"
+              type="button"
+              class="qa-toggle"
+              :class="{ active: panel === 'qa' }"
+              :aria-pressed="panel === 'qa'"
+              @click="togglePanel"
+            >
+              <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+                <path
+                  d="M2 3.1h12v7.1H6.4L3.1 13.5v-3.3H2z"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.3"
+                  stroke-linejoin="round"
+                />
+              </svg>
+              <span class="qa-badge">{{ qa.length }}</span>
+            </button>
+            <button
+              v-if="selected"
+              type="button"
+              :class="{ pinned: isPinned(selected) }"
+              @click="emit('pin', selected)"
+            >
+              ◆
+            </button>
+          </div>
         </header>
 
         <div class="detail-art-column">
@@ -240,7 +286,27 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey));
 
         <div class="detail-info">
           <div class="detail-actions">
-            <button type="button" :disabled="!canPrev" @click="emit('prev')">
+            <button
+              v-if="qa.length"
+              type="button"
+              class="qa-toggle"
+              :class="{ active: panel === 'qa' }"
+              :title="locale === 'zh' ? '常见问答' : 'Card Q&A'"
+              :aria-pressed="panel === 'qa'"
+              @click="togglePanel"
+            >
+              <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+                <path
+                  d="M2 3.1h12v7.1H6.4L3.1 13.5v-3.3H2z"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.3"
+                  stroke-linejoin="round"
+                />
+              </svg>
+              <span class="qa-badge">{{ qa.length }}</span>
+            </button>
+            <button type="button" :disabled="!canPrev || panel === 'qa'" @click="emit('prev')">
               ← {{ locale === "zh" ? "上一张" : "Previous" }}
             </button>
             <button
@@ -258,13 +324,14 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey));
                   : "点击标记"
               }}
             </button>
-            <button type="button" :disabled="!canNext" @click="emit('next')">
+            <button type="button" :disabled="!canNext || panel === 'qa'" @click="emit('next')">
               {{ locale === "zh" ? "下一张" : "Next" }} →
             </button>
             <button class="close" type="button" @click="emit('close')">
               ✕
             </button>
           </div>
+          <template v-if="panel === 'info'">
           <div class="detail-summary">
             <div class="detail-heading">
               <div class="detail-title">
@@ -387,6 +454,53 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey));
               >{{ selected.language }} · {{ selected.cardNo }}</span
             >
           </footer>
+          </template>
+
+          <section v-else class="qa-panel">
+            <header class="qa-panel-head">
+              <h4>{{ locale === "zh" ? "常见问答" : "Card Q&A" }}</h4>
+              <span>{{ qa.length }}</span>
+            </header>
+            <ul class="qa-list">
+              <li
+                v-for="q in qa"
+                :key="q.id"
+                class="qa-item"
+                :class="{ open: expandedQa.has(q.id) }"
+              >
+                <button
+                  type="button"
+                  class="qa-question"
+                  :aria-expanded="expandedQa.has(q.id)"
+                  @click="toggleQa(q.id)"
+                >
+                  <span class="qa-qtext">
+                    <template
+                      v-for="(seg, i) in segmentQaText(qaQuestion(q))"
+                      :key="i"
+                    >
+                      <strong v-if="seg.bold">{{ seg.text }}</strong>
+                      <template v-else>{{ seg.text }}</template>
+                    </template>
+                  </span>
+                  <span class="qa-chevron" aria-hidden="true">{{
+                    expandedQa.has(q.id) ? "▾" : "▸"
+                  }}</span>
+                </button>
+                <div v-if="expandedQa.has(q.id)" class="qa-answer">
+                  <p class="qa-atext">
+                    <template
+                      v-for="(seg, i) in segmentQaText(qaAnswer(q))"
+                      :key="i"
+                    >
+                      <strong v-if="seg.bold">{{ seg.text }}</strong>
+                      <template v-else>{{ seg.text }}</template>
+                    </template>
+                  </p>
+                </div>
+              </li>
+            </ul>
+          </section>
         </div>
       </section>
     </div>
@@ -722,7 +836,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey));
     z-index: 5;
     height: 54px;
     display: grid;
-    grid-template-columns: 42px 1fr 42px;
+    grid-template-columns: 42px 1fr auto;
     align-items: center;
     gap: 8px;
     padding: 0 10px;
@@ -771,5 +885,122 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey));
   .stats dd {
     font-size: 17px;
   }
+}
+.detail-actions .qa-toggle,
+.detail-mobile-head .qa-toggle {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.detail-actions .qa-toggle.active,
+.detail-mobile-head .qa-toggle.active {
+  color: var(--color-brand);
+  border-color: var(--color-brand);
+  background: var(--color-brand-soft);
+}
+.qa-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 3px;
+  border-radius: 999px;
+  background: var(--color-brand);
+  color: var(--color-brand-ink);
+  font-size: 9px;
+  line-height: 15px;
+  font-weight: 700;
+  text-align: center;
+}
+.detail-mobile-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.qa-panel {
+  padding-top: 4px;
+}
+.qa-panel-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.qa-panel-head h4 {
+  color: var(--color-brand);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+}
+.qa-panel-head span {
+  color: var(--color-text-subtle);
+  font-size: 11px;
+}
+.qa-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.qa-item {
+  border: 1px solid var(--color-card-border);
+  border-radius: 10px;
+  overflow: hidden;
+  transition: border-color 0.15s;
+}
+.qa-item.open {
+  border-color: var(--color-brand);
+}
+.qa-question {
+  width: 100%;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 11px 12px;
+  text-align: left;
+  color: var(--color-text-primary);
+  font-size: 13.5px;
+  line-height: 1.7;
+}
+.qa-question:hover {
+  color: var(--color-brand);
+}
+.qa-qtext {
+  flex: 1;
+  min-width: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.qa-qtext strong {
+  color: var(--color-brand);
+  font-weight: 800;
+}
+.qa-chevron {
+  flex: 0 0 auto;
+  margin-top: 3px;
+  color: var(--color-text-subtle);
+  font-size: 11px;
+}
+.qa-answer {
+  padding: 0 12px 12px;
+}
+.qa-answer::before {
+  content: "";
+  display: block;
+  height: 1px;
+  margin-bottom: 10px;
+  background: var(--color-panel-border);
+}
+.qa-atext {
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--color-text-muted);
+  font-size: 13px;
+  line-height: 1.8;
+}
+.qa-atext strong {
+  color: var(--color-brand);
+  font-weight: 800;
 }
 </style>

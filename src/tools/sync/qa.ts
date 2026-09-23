@@ -35,6 +35,8 @@ export interface QaIncoming {
 
 export interface QaDbEntry {
   id: string
+  /** 数据来源渠道（xcx / manual / import…），编辑器展示用 */
+  source?: string
   source_id: string | null
   question: string
   answer: string
@@ -254,6 +256,39 @@ export function buildQaPlan(row: QaReviewRow): QaPlan | null {
     entry: { kind: 'update', id: row.before!.id, payload },
     linkAdds: adds.map((card_no) => ({ card_no, position: positionOf(card_no) })),
     linkRemoves: removes
+  }
+}
+
+/** 编辑部直接编辑已有 QA 的写入计划：字段 + 关联增删（position 按目标顺序）。 */
+export function planQaUpdate(
+  id: string,
+  patch: Record<string, unknown>,
+  desiredLinks: readonly string[],
+  currentLinks: readonly string[]
+): QaPlan {
+  const wanted = [...new Set(desiredLinks)]
+  const current = new Set(currentLinks)
+  const positionOf = (cardNo: string) => wanted.indexOf(cardNo)
+  return {
+    entry: { kind: 'update', id, payload: { ...patch } },
+    linkAdds: wanted.filter((n) => !current.has(n)).map((card_no) => ({ card_no, position: positionOf(card_no) })),
+    linkRemoves: currentLinks.filter((n) => !wanted.includes(n))
+  }
+}
+
+/** 编辑部手动新增 QA 的写入计划：source=manual、无上游 source_id。 */
+export function planQaInsert(
+  patch: Record<string, unknown>,
+  desiredLinks: readonly string[]
+): QaPlan {
+  const wanted = [...new Set(desiredLinks)]
+  return {
+    entry: {
+      kind: 'insert',
+      payload: { source: 'manual', source_id: null, ...patch }
+    },
+    linkAdds: wanted.map((card_no, position) => ({ card_no, position })),
+    linkRemoves: []
   }
 }
 

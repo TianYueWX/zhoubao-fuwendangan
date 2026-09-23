@@ -8,7 +8,7 @@
  *   ③ 未登录/非管理员 → EditorialGate 门禁页
  *   ④ 已通过          → 凭据操作挂入全站 header + 插槽内容
  *
- * 5 个编辑部工具全部套这层,权限逻辑只写一遍。
+ * 6 个编辑部工具全部套这层,权限逻辑只写一遍。
  */
 import { computed, onMounted, ref } from 'vue';
 import { authState, isEditorialAdmin, signOut } from '@/tools/sources/auth';

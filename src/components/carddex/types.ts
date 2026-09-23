@@ -123,7 +123,21 @@ export interface CardIcon {
   isWhite: boolean;
 }
 
+/** 与某张卡关联的一条问答（来自 qa_entries + qa_entry_cards）。 */
+export interface CardQa {
+  id: string;
+  sourceId: string | null;
+  question: string;
+  answer: string;
+  questionEn: string;
+  answerEn: string;
+  /** qa_entry_cards.position，越小越靠前 */
+  position: number;
+}
+
 export interface CarddexData {
   records: CardRecord[];
   icons: CardIcon[];
+  /** cards_base.card_no → 该卡关联的问答（按 position 升序） */
+  qaByCardNo: Map<string, CardQa[]>;
 }
