@@ -152,7 +152,8 @@ export interface RequestOptions {
   beforeRequest?: () => Promise<void>
 }
 
-const RETRYABLE = new Set([403, 408, 429, 500, 502, 503, 504])
+// 5xx 与网关限流：包含 Cloudflare 的 520–526（尤其 524 源站超时）。
+const RETRYABLE = new Set([403, 408, 429, 500, 502, 503, 504, 520, 522, 523, 524, 525, 526])
 const MAX_RETRIES = 6
 
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {

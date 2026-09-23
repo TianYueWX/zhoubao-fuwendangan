@@ -14,8 +14,8 @@ import { readFileSync } from 'node:fs';
 import {
   buildQaIncoming, buildQaPlan, createQaReview, normalizeQaCardNo, qaState, segmentQaText, summarizeQa
 } from '../src/tools/sync/qa.ts';
-import { qaApiBase, RIFTBOUND_API_BASE } from '../src/tools/sync/riftboundApi.ts';
-import { onRequestPost } from '../functions/api/riftbound/cardCommonQa/getCardCommonQaList.ts';
+import { getCardCommonQaList, qaApiBase, RIFTBOUND_API_BASE } from '../src/tools/sync/riftboundApi.ts';
+import { fetchUpstream, onRequestPost } from '../functions/api/riftbound/cardCommonQa/getCardCommonQaList.ts';
 
 let passed = 0;
 function test(label, fn) {
@@ -206,6 +206,75 @@ await asyncTest('Pages Function 在转发前拒绝超出范围的分页请求', 
     })
   });
   assert.equal(response.status, 400);
+});
+
+await asyncTest('上游超时时 fetchUpstream 抛出且已挂上中止信号', async () => {
+  const originalFetch = globalThis.fetch;
+  let sawSignal = false;
+  globalThis.fetch = async (_url, init) => {
+    sawSignal = init.signal instanceof AbortSignal;
+    throw new DOMException('The operation was aborted due to timeout', 'TimeoutError');
+  };
+  try {
+    await assert.rejects(
+      fetchUpstream({ pageNum: 1, pageSize: 30, searchContent: '' }, 1000, 1),
+      (e) => e?.name === 'TimeoutError'
+    );
+    assert.equal(sawSignal, true);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+await asyncTest('上游首次失败后 fetchUpstream 会重试并成功', async () => {
+  const originalFetch = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = async () => {
+    calls++;
+    if (calls === 1) throw new DOMException('timeout', 'TimeoutError');
+    return Response.json({ code: 0, message: '操作成功', result: [] });
+  };
+  try {
+    const result = await fetchUpstream({ pageNum: 1, pageSize: 30, searchContent: '' }, 1000, 2);
+    assert.equal(result.status, 200);
+    assert.equal(calls, 2);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+await asyncTest('Pages Function 在上游持续不可用时返回 504 而非挂死', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => { throw new DOMException('timeout', 'TimeoutError'); };
+  try {
+    const response = await onRequestPost({
+      request: new Request('https://site.example/api/riftbound/cardCommonQa/getCardCommonQaList', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pageNum: 1, pageSize: 30, searchContent: '' })
+      })
+    });
+    assert.equal(response.status, 504);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+await asyncTest('客户端把 524 视为可重试并最终成功', async () => {
+  const originalFetch = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = async () => {
+    calls++;
+    if (calls === 1) return new Response('', { status: 524 });
+    return Response.json({ code: 0, message: '操作成功', result: [] });
+  };
+  try {
+    const rows = await getCardCommonQaList({}, { baseUrl: 'https://example.com/xcx' });
+    assert.equal(calls, 2);
+    assert.deepEqual(rows, []);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 console.log(`\n${passed} passed`);
