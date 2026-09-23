@@ -18,7 +18,6 @@ import { computed, onMounted, ref, watch } from 'vue';
 import EditorialShell from './EditorialShell.vue';
 import SectionHeading from '../SectionHeading.vue';
 import AdminConfirmButton from './AdminConfirmButton.vue';
-import { navigate } from '@/router/hash';
 import { errorText, notifyError, notifyOk, notifyWarn } from '@/tools/admin/notice';
 import { truncate } from '@/tools/admin/text';
 import { insertRule, listAllRules, publishRules, updateRule, deleteRule } from '@/tools/admin/rules';
@@ -295,20 +294,9 @@ onMounted(loadRules);
     <div class="max-w-[1720px] mx-auto">
       <!-- ══════════ 刊头 ══════════ -->
       <header class="mb-7">
-        <div class="flex items-center justify-between gap-4 flex-wrap text-[11px] text-ink-faint">
-          <button class="hover:text-brand transition-colors" @click="navigate({ view: 'editorial' })">
-            ← 返回编辑部
-          </button>
-          <span class="font-latin tracking-[0.22em] uppercase">Editorial Desk</span>
-        </div>
-        <p class="eyebrow mt-7">编辑部 · 校勘</p>
-        <h1 class="font-display font-black text-ink leading-tight mt-3 text-[28px] lg:text-[38px]">
+        <h1 class="font-display font-black text-ink leading-tight text-[28px] lg:text-[38px]">
           规则校勘
         </h1>
-        <p class="standfirst mt-4 text-[15px]">
-          规则书以 <code class="font-mono text-[13px]">parent_number</code> 自关联成树。
-          保存并发布会触碰 <code class="font-mono text-[13px]">version.rules</code>,通知客户端刷新规则书缓存。
-        </p>
         <div class="hairline mt-7"></div>
       </header>
 
@@ -319,7 +307,7 @@ onMounted(loadRules);
       <!-- ══════════ 步骤一:选择规则书 ══════════ -->
       <section v-else-if="selectedBook === null">
         <SectionHeading
-          eyebrow="其一 · 选书"
+          plain
           title="选择规则书"
           :note="`共 ${allRules.length} 条规则,分属 ${books.length} 本`"
         />
@@ -354,6 +342,7 @@ onMounted(loadRules);
         <!-- ───── 左:树 / 检索 ───── -->
         <aside class="xl:pr-8">
           <SectionHeading
+            plain
             small
             :title="selectedBook === '' ? '全部规则书' : selectedBook"
             :note="`${scopedRules.length} 条`"
@@ -485,7 +474,7 @@ onMounted(loadRules);
               </div>
             </div>
 
-            <SectionHeading small eyebrow="条目字段" title="规则条目" />
+            <SectionHeading plain small title="规则条目" />
 
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
               <label class="block">
@@ -548,7 +537,7 @@ onMounted(loadRules);
 
             <div class="hairline my-6"></div>
 
-            <SectionHeading small eyebrow="条文" title="中英文本" />
+            <SectionHeading plain small title="中英文本" />
             <label class="block">
               <span class="text-[11px] tracking-[0.14em] text-ink-faint">中文文本</span>
               <textarea

@@ -212,14 +212,19 @@ function exportReviewed(format: 'sql' | 'csv'): void {
     notifyOk(`已导出当前阶段 ${ops.length} 条操作`);
   } catch (e) { notifyError('导出失败', errorText(e)); }
 }
+
+function hasUnsavedReview(): boolean {
+  return rows.value.some((row) => state(row).kind !== 'same');
+}
+
+defineExpose({ hasUnsavedReview });
 </script>
 
 <template>
   <section class="mb-10">
     <div class="flex justify-between gap-4 items-start mb-4">
       <div>
-        <p class="eyebrow">其二 · 审核与提交</p>
-        <h2 class="font-display text-xl font-bold mt-2">逐条审核同步差异</h2>
+        <h2 class="font-display text-xl font-bold">逐条审核同步差异</h2>
         <p class="text-xs text-ink-muted mt-2">更新字段默认不勾选。缺少基础卡时，先创建基础卡，再单独提交印刷版本。</p>
       </div>
       <button class="btn-ghost px-3 py-2 text-xs" :disabled="busy || loading" @click="emit('reload')">{{ loading ? '读取中…' : '重读库内现状' }}</button>
@@ -274,7 +279,7 @@ function exportReviewed(format: 'sql' | 'csv'): void {
 
       <div v-if="active && activeState" ref="editorPanel" class="card p-4 sm:p-6 mt-5 scroll-mt-20" data-testid="sync-editor">
         <div class="flex justify-between items-start gap-4">
-          <div><p class="eyebrow">单条编辑 · {{ statusName(active) }}</p><h3 class="text-lg font-bold mt-2">{{ active.label }}</h3></div>
+          <h3 class="text-lg font-bold">{{ active.label }} <span class="text-xs font-normal text-ink-faint">· {{ statusName(active) }}</span></h3>
           <button class="btn-ghost px-3 py-1 text-xs" @click="editorKey = ''">收起</button>
         </div>
         <div v-if="parentRow" class="my-4 p-3 border border-card-border rounded-lg text-xs">

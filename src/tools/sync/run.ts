@@ -9,6 +9,7 @@
  */
 import {
   cardDetail,
+  createRequestPacer,
   getDictList,
   getKeywordConfig,
   mapLimit,
@@ -32,6 +33,11 @@ import type { SeriesPreset } from './exporters'
 
 export type SyncPhase = 'idle' | 'search' | 'detail' | 'keywords' | 'done' | 'error'
 export type FetchMode = 'fast' | 'deep'
+
+export const DEFAULT_FETCH_POLICY = {
+  fast: { concurrency: 3, minGapMs: 150, maxGapMs: 150 },
+  deep: { concurrency: 1, minGapMs: 500, maxGapMs: 1200 }
+} as const satisfies Record<FetchMode, { concurrency: number; minGapMs: number; maxGapMs: number }>
 
 export interface SyncProgress {
   phase: SyncPhase
@@ -61,10 +67,12 @@ export interface FetchDatasetOptions {
   baseUrl?: string
   /** 拉取模式，默认 fast */
   mode?: FetchMode
-  /** 并发数，默认 3（接口有网关限流，过高会触发 403） */
+  /** 并发数：快速模式默认 3，深度模式默认 1 */
   concurrency?: number
-  /** 全局最小请求间隔（毫秒），默认 150，用于规避网关限流 */
+  /** 全局最小请求间隔（毫秒）：快速模式默认 150，深度模式默认 500 */
   minGapMs?: number
+  /** 全局最大请求间隔（毫秒）：快速模式默认 150，深度模式默认 1200 */
+  maxGapMs?: number
   /** series 表已有代码，用于计算缺失系列 */
   existingSeriesCodes?: string[]
   /** 卡号前缀 → 系列代码（来自现有 cards_base），用于 fast 模式推断 series_name */
@@ -93,12 +101,21 @@ function prefixOf(base: string): string {
 
 /** 拉取并归一化全部数据（cards_base / card_prints / card_icons 三类） */
 export async function fetchDataset(opts: FetchDatasetOptions = {}): Promise<SyncDataset> {
+  const mode = opts.mode ?? 'fast'
+  const policy = DEFAULT_FETCH_POLICY[mode]
+  const concurrency = opts.concurrency ?? policy.concurrency
+  const minGapMs = opts.minGapMs ?? policy.minGapMs
+  const maxGapMs = opts.maxGapMs ?? (opts.minGapMs === undefined ? policy.maxGapMs : minGapMs)
   const {
-    baseUrl, mode = 'fast', concurrency = 3, minGapMs = 150,
+    baseUrl,
     existingSeriesCodes = [], seriesByPrefix = {}, existingCardKeys = [], detailCache,
     maxEnrich = 120, signal, onProgress
   } = opts
-  const req = { baseUrl, signal }
+  const req = {
+    baseUrl,
+    signal,
+    beforeRequest: createRequestPacer(minGapMs, maxGapMs, signal)
+  }
   const report = (phase: SyncPhase, label: string, done = 0, total = 0) =>
     onProgress?.({ phase, label, done, total })
 
@@ -137,8 +154,7 @@ export async function fetchDataset(opts: FetchDatasetOptions = {}): Promise<Sync
         if (!d) missing++
         return d
       },
-      (done, total) => report('detail', '拉取卡牌详情…', done, total),
-      minGapMs
+      (done, total) => report('detail', '拉取卡牌详情…', done, total)
     )
     for (const d of out) if (d) detailByCardNo.set(d.cardNo, d)
   }
@@ -205,8 +221,7 @@ export async function fetchDataset(opts: FetchDatasetOptions = {}): Promise<Sync
     tokens,
     concurrency,
     async (t) => buildIcon(await getKeywordConfig(t, req)),
-    (done, total) => report('keywords', '拉取关键词图标…', done, total),
-    minGapMs
+    (done, total) => report('keywords', '拉取关键词图标…', done, total)
   )
   const iconMap = new Map<string, CardIconRow>()
   for (const ic of iconRows) if (ic) iconMap.set(ic.name_zh, ic)

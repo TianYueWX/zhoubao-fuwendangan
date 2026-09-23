@@ -2,13 +2,20 @@
  * 符文战场 · 线上数据接口客户端
  *
  * 数据来源：官方小程序后端 https://lol-api.playloltcg.com/xcx
- *  - 公开可访问（无需鉴权），CORS 全开，浏览器可直连
+ *  - 公开可访问（无需鉴权）；QA 端点不返回 CORS 头，默认经本站同源函数转发
  *  - 统一响应结构 { result, code, message }，code === 0 为成功
  *
  * 只读接口，不写入任何数据；写入由 SyncView 通过 supabase 完成。
  */
 
 export const RIFTBOUND_API_BASE = 'https://lol-api.playloltcg.com/xcx'
+export const RIFTBOUND_QA_PROXY_BASE = '/api/riftbound'
+
+/** 只对已知缺少 CORS 头的官方 QA 地址使用同源代理。 */
+export function qaApiBase(baseUrl?: string): string {
+  const base = (baseUrl || RIFTBOUND_API_BASE).replace(/\/+$/, '')
+  return base === RIFTBOUND_API_BASE ? RIFTBOUND_QA_PROXY_BASE : base
+}
 
 export interface ApiEnvelope<T> {
   result: T
@@ -112,6 +119,16 @@ export interface ApiDictItem {
   sort: number | null
 }
 
+export interface ApiCommonQa {
+  id: number | string
+  code: string | null
+  sort: number | null
+  cardNo: string[] | null
+  cardName: string[] | null
+  question: string
+  answer: string
+}
+
 export interface SearchCardParams {
   pageNum?: number
   pageSize?: number
@@ -131,6 +148,8 @@ export interface SearchCardParams {
 export interface RequestOptions {
   baseUrl?: string
   signal?: AbortSignal
+  /** 同一轮同步共享的请求前置节流器。 */
+  beforeRequest?: () => Promise<void>
 }
 
 const RETRYABLE = new Set([403, 408, 429, 500, 502, 503, 504])
@@ -138,12 +157,50 @@ const MAX_RETRIES = 6
 
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
-    const t = setTimeout(resolve, ms)
-    signal?.addEventListener('abort', () => {
+    if (signal?.aborted) {
+      reject(new DOMException('已取消', 'AbortError'))
+      return
+    }
+    const onAbort = () => {
       clearTimeout(t)
       reject(new DOMException('已取消', 'AbortError'))
-    }, { once: true })
+    }
+    const t = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort)
+      resolve()
+    }, ms)
+    signal?.addEventListener('abort', onAbort, { once: true })
   })
+}
+
+/** 解析 Retry-After（秒数或 HTTP 日期），返回还需等待的毫秒数。 */
+export function parseRetryAfterMs(raw: string | null, now = Date.now()): number | null {
+  if (!raw) return null
+  const value = raw.trim()
+  if (/^\d+(?:\.\d+)?$/.test(value)) return Math.max(0, Math.ceil(Number(value) * 1000))
+  const at = Date.parse(value)
+  return Number.isFinite(at) ? Math.max(0, at - now) : null
+}
+
+/** 在上下限之间生成一次请求间隔；导出以便离线回归测试。 */
+export function randomGapMs(minGapMs: number, maxGapMs: number, random = Math.random): number {
+  const min = Math.max(0, minGapMs)
+  const max = Math.max(min, maxGapMs)
+  return Math.round(min + random() * (max - min))
+}
+
+/**
+ * 创建一轮同步专用的全局节流器。并发调用会先同步预约启动时刻，
+ * 因此即使有多个 worker，也不会在同一瞬间向上游发出突发请求。
+ */
+export function createRequestPacer(minGapMs: number, maxGapMs = minGapMs, signal?: AbortSignal) {
+  let nextStart = 0
+  return async (): Promise<void> => {
+    const now = Date.now()
+    const wait = Math.max(0, nextStart - now)
+    nextStart = Math.max(now, nextStart) + randomGapMs(minGapMs, maxGapMs)
+    if (wait > 0) await sleep(wait, signal)
+  }
 }
 
 async function request<T>(
@@ -153,6 +210,7 @@ async function request<T>(
   attempt = 0
 ): Promise<ApiEnvelope<T>> {
   const base = (opts.baseUrl || RIFTBOUND_API_BASE).replace(/\/+$/, '')
+  await opts.beforeRequest?.()
   let res: Response
   try {
     res = await fetch(base + path, { ...init, signal: opts.signal })
@@ -167,7 +225,9 @@ async function request<T>(
   // 网关限流（403/429）或瞬时 5xx：指数退避重试
   if (RETRYABLE.has(res.status)) {
     if (attempt < MAX_RETRIES) {
-      await sleep(600 * 2 ** attempt + Math.random() * 400, opts.signal)
+      const backoff = 600 * 2 ** attempt + Math.random() * 400
+      const retryAfter = parseRetryAfterMs(res.headers.get('retry-after')) ?? 0
+      await sleep(Math.max(backoff, retryAfter), opts.signal)
       return request<T>(path, init, opts, attempt + 1)
     }
     throw new Error(`接口限流或不可用 HTTP ${res.status}（${path}），已重试 ${MAX_RETRIES} 次`)
@@ -250,6 +310,37 @@ export async function getDictList(
     body: JSON.stringify({ pageNum: 1, pageSize: opts.pageSize ?? 200, type })
   }, opts)
   return ensureOk(env, '/dict/getDictList') || []
+}
+
+/** POST /cardCommonQa/getCardCommonQaList —— 卡牌常见问题（分页） */
+export async function getCardCommonQaList(
+  params: { pageNum?: number; pageSize?: number; searchContent?: string } = {},
+  opts: RequestOptions = {}
+): Promise<ApiCommonQa[]> {
+  const body = { pageNum: 1, pageSize: 30, searchContent: '', ...params }
+  const env = await request<ApiCommonQa[]>('/cardCommonQa/getCardCommonQaList', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  }, { ...opts, baseUrl: qaApiBase(opts.baseUrl) })
+  return ensureOk(env, '/cardCommonQa/getCardCommonQaList') || []
+}
+
+/** 分页拉取全部卡牌问答（直到某页不足一页） */
+export async function searchAllCommonQa(
+  opts: RequestOptions & { pageSize?: number; onPage?: (page: number, got: number) => void } = {}
+): Promise<ApiCommonQa[]> {
+  // 官方玩家端实际请求使用 30；不假设服务端会尊重更大的 pageSize，
+  // 否则若服务端强制上限 30，第一页就会被误判为最后一页。
+  const pageSize = opts.pageSize ?? 30
+  const out: ApiCommonQa[] = []
+  for (let page = 1; page <= 200; page++) {
+    const rows = await getCardCommonQaList({ pageNum: page, pageSize, searchContent: '' }, opts)
+    out.push(...rows)
+    opts.onPage?.(page, rows.length)
+    if (rows.length < pageSize) break
+  }
+  return out
 }
 
 /**

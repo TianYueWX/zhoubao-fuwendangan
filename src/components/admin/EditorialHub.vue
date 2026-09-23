@@ -10,7 +10,6 @@ import { computed } from 'vue';
 import { toolsOf } from '@/tools/catalog';
 import type { ToolDef } from '@/tools/catalog';
 import { navigate } from '@/router/hash';
-import { authState } from '@/tools/sources/auth';
 import EditorialShell from './EditorialShell.vue';
 
 /** 编辑部下属工具(hub 自身不计入) */
@@ -32,8 +31,6 @@ const TARGETS: Record<string, string> = {
   'editorial-sync': '全表 · 官方接口 → Supabase'
 };
 
-const email = computed(() => authState.session?.email ?? '');
-
 function open(code: string): void {
   navigate({ view: code });
 }
@@ -44,17 +41,9 @@ function open(code: string): void {
   <EditorialShell code="editorial">
     <div class="fade-in max-w-[980px] mx-auto">
       <section class="text-center pt-2 pb-9">
-        <p class="eyebrow mb-3">Editorial Desk</p>
         <h1 class="font-display font-black text-ink leading-tight text-[30px] lg:text-[40px]">
           编辑部
         </h1>
-        <p class="standfirst mt-4 text-[15px] max-w-[560px] mx-auto">
-          档案内容的校勘与发布台。改动的每一处都会即时生效于云端,
-          并在「资源与发布」中留下可追溯的发布时间戳。
-        </p>
-        <p class="mt-4 text-[11px] tracking-[0.18em] text-ink-faint">
-          值班编务 · {{ email || '—' }}
-        </p>
         <div class="hairline mt-8"></div>
       </section>
 

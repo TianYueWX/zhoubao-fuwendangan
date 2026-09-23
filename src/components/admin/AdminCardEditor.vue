@@ -22,7 +22,6 @@ import AdminTagInput from './AdminTagInput.vue';
 import AdminConfirmButton from './AdminConfirmButton.vue';
 import SectionHeading from '../SectionHeading.vue';
 import { debounce } from '@/utils/debounce';
-import { navigate } from '@/router/hash';
 import { errorText, notifyError, notifyOk, notifyWarn } from '@/tools/admin/notice';
 import { renderEffectPreview, formatTime } from '@/tools/admin/text';
 import {
@@ -60,6 +59,7 @@ const search = ref('');
 const filterSeries = ref('');
 const filterRarity = ref('');
 const page = ref(1);
+const listOpen = ref(true);
 
 const rows = ref<CardBase[]>([]);
 const total = ref<number | null>(null);
@@ -415,20 +415,9 @@ onMounted(async () => {
     <div class="max-w-[1720px] mx-auto">
       <!-- ══════════ 刊头 ══════════ -->
       <header class="mb-7">
-        <div class="flex items-center justify-between gap-4 flex-wrap text-[11px] text-ink-faint">
-          <button class="hover:text-brand transition-colors" @click="navigate({ view: 'editorial' })">
-            ← 返回编辑部
-          </button>
-          <span class="font-latin tracking-[0.22em] uppercase">Editorial Desk</span>
-        </div>
-        <p class="eyebrow mt-7">编辑部 · 校勘</p>
-        <h1 class="font-display font-black text-ink leading-tight mt-3 text-[28px] lg:text-[38px]">
+        <h1 class="font-display font-black text-ink leading-tight text-[28px] lg:text-[38px]">
           卡牌校勘
         </h1>
-        <p class="standfirst mt-4 text-[15px]">
-          逐张校订卡牌主数据与印刷版本。保存只提交变更字段;「保存并发布」会同时触碰
-          <code class="font-mono text-[13px]">version.cards</code> 的时间戳,通知站内客户端刷新卡表。
-        </p>
         <div class="hairline mt-7"></div>
       </header>
 
@@ -456,6 +445,16 @@ onMounted(async () => {
         <span class="text-[11px] text-ink-faint tabular-nums">
           {{ total === null ? '' : `${total} 张` }}
         </span>
+        <button
+          type="button"
+          class="btn-ghost px-3 py-1.5 text-xs"
+          :aria-expanded="listOpen"
+          aria-controls="card-list-panel"
+          :title="listOpen ? '收起卡牌列表，腾出更多校勘空间' : '展开卡牌列表'"
+          @click="listOpen = !listOpen"
+        >
+          {{ listOpen ? '收起列表' : '展开列表' }}
+        </button>
         <button class="btn-ghost px-3 py-1.5 text-xs" :disabled="listLoading" @click="loadList">
           刷新
         </button>
@@ -466,11 +465,12 @@ onMounted(async () => {
 
       <!-- ══════════ 主从布局 ══════════ -->
       <div
-        class="grid grid-cols-1 xl:grid-cols-[minmax(0,3fr)_minmax(0,7fr)] xl:divide-x xl:divide-panel-border"
+        class="grid grid-cols-1"
+        :class="listOpen ? 'xl:grid-cols-[minmax(0,3fr)_minmax(0,7fr)] xl:divide-x xl:divide-panel-border' : ''"
       >
         <!-- ───── 左:卡牌列表 ───── -->
-        <aside class="xl:pr-8">
-          <SectionHeading small title="卡牌列表" :note="`每页 ${PAGE_SIZE} 张 · 服务端分页`" />
+        <aside v-show="listOpen" id="card-list-panel" class="xl:pr-8">
+          <SectionHeading plain small title="卡牌列表" :note="`每页 ${PAGE_SIZE} 张 · 服务端分页`" />
 
           <div class="border border-card-border rounded-xl overflow-hidden">
             <div class="max-h-[540px] overflow-y-auto" :class="{ 'opacity-50': listLoading }">
@@ -523,7 +523,7 @@ onMounted(async () => {
         </aside>
 
         <!-- ───── 右:详情 + 印刷版本 ───── -->
-        <section class="xl:pl-8 pt-8 xl:pt-0 min-w-0">
+        <section class="min-w-0" :class="listOpen ? 'pt-8 xl:pt-0 xl:pl-8' : ''">
           <p v-if="detailLoading" class="text-sm text-ink-faint py-16 text-center">载入中…</p>
 
           <template v-else-if="form">
@@ -568,7 +568,7 @@ onMounted(async () => {
             </div>
 
             <!-- 基础字段 -->
-            <SectionHeading small eyebrow="其一 · 基础" title="名称与编号" />
+            <SectionHeading plain small title="名称与编号" />
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4 mb-2">
               <label class="block">
                 <span class="text-[11px] tracking-[0.14em] text-ink-faint">卡号</span>
@@ -599,7 +599,7 @@ onMounted(async () => {
             <div class="hairline my-6"></div>
 
             <!-- 数值与分类 -->
-            <SectionHeading small eyebrow="其二 · 数值" title="数值与分类" />
+            <SectionHeading plain small title="数值与分类" />
             <div class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-x-5 gap-y-4 mb-2">
               <label class="block">
                 <span class="text-[11px] tracking-[0.14em] text-ink-faint">能量</span>
@@ -635,8 +635,8 @@ onMounted(async () => {
 
             <!-- 数组字段 -->
             <SectionHeading
+              plain
               small
-              eyebrow="其三 · 标记"
               title="分类标记"
               note="下拉可选全表已出现过的值,也可直接输入回车新建"
             />
@@ -676,7 +676,7 @@ onMounted(async () => {
             <div class="hairline my-6"></div>
 
             <!-- 禁限控制 -->
-            <SectionHeading small eyebrow="其四 · 禁限" title="禁限与构筑上限" />
+            <SectionHeading plain small title="禁限与构筑上限" />
             <div class="flex items-center gap-6 flex-wrap mb-2">
               <div class="flex items-center gap-2.5">
                 <span class="text-[11px] tracking-[0.14em] text-ink-faint">禁用</span>
@@ -730,8 +730,8 @@ onMounted(async () => {
 
             <!-- 效果文本 -->
             <SectionHeading
+              plain
               small
-              eyebrow="其五 · 文本"
               title="效果文本"
               note="支持 {{标记}} 内联标签;预览经标签白名单过滤,不会执行库中的脚本"
             />
@@ -786,8 +786,8 @@ onMounted(async () => {
             <!-- ══════════ 印刷版本子表 ══════════ -->
             <div class="mt-10">
               <SectionHeading
+                plain
                 small
-                eyebrow="其六 · 印刷"
                 :title="`印刷版本（${prints.length}）`"
                 note="每行独立保存;新增行需先保存才能转移绑定"
               >

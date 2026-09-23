@@ -48,14 +48,9 @@ async function submit(): Promise<void> {
 <template>
   <div class="fade-in max-w-[820px] mx-auto">
     <header>
-      <p class="eyebrow mt-7">编辑部 · Editorial Desk</p>
-      <h1 class="font-display font-black text-ink leading-tight mt-3 text-[28px] lg:text-[38px]">
+      <h1 class="font-display font-black text-ink leading-tight text-[28px] lg:text-[38px]">
         编务门禁
       </h1>
-      <p class="standfirst mt-4 text-[15px]">
-        此处是档案内容的校勘与发布区。请以管理员账号登入 ——
-        未通过门禁前,本站不会向此页面加载任何档案数据。
-      </p>
       <div class="hairline mt-7"></div>
     </header>
 

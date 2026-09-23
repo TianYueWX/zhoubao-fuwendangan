@@ -2,6 +2,13 @@ import { defineConfig } from 'vite';
 import vue from '@vitejs/plugin-vue';
 import { fileURLToPath, URL } from 'node:url';
 
+const riftboundProxy = {
+  target: 'https://lol-api.playloltcg.com',
+  changeOrigin: true,
+  secure: true,
+  rewrite: (path: string) => path.replace(/^\/api\/riftbound/, '/xcx')
+};
+
 // https://vitejs.dev/config/
 export default defineConfig({
   // 关键:相对路径 base 同时兼容 file:// 与子路径部署(Cloudflare Pages)
@@ -38,11 +45,17 @@ export default defineConfig({
 
   server: {
     port: 5173,
-    open: false
+    open: false,
+    proxy: {
+      '/api/riftbound': riftboundProxy
+    }
   },
 
   preview: {
-    port: 4173
+    port: 4173,
+    proxy: {
+      '/api/riftbound': riftboundProxy
+    }
   },
 
   optimizeDeps: {

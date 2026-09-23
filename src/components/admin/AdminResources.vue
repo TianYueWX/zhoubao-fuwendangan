@@ -17,7 +17,6 @@ import { computed, onMounted, reactive, ref } from 'vue';
 import EditorialShell from './EditorialShell.vue';
 import SectionHeading from '../SectionHeading.vue';
 import AdminConfirmButton from './AdminConfirmButton.vue';
-import { navigate } from '@/router/hash';
 import { errorText, notifyError, notifyOk, notifyWarn } from '@/tools/admin/notice';
 import { formatTime } from '@/tools/admin/text';
 import {
@@ -362,20 +361,9 @@ onMounted(async () => {
     <div class="max-w-[1500px] mx-auto">
       <!-- ══════════ 刊头 ══════════ -->
       <header class="mb-7">
-        <div class="flex items-center justify-between gap-4 flex-wrap text-[11px] text-ink-faint">
-          <button class="hover:text-brand transition-colors" @click="navigate({ view: 'editorial' })">
-            ← 返回编辑部
-          </button>
-          <span class="font-latin tracking-[0.22em] uppercase">Editorial Desk</span>
-        </div>
-        <p class="eyebrow mt-7">编辑部 · 校勘</p>
-        <h1 class="font-display font-black text-ink leading-tight mt-3 text-[28px] lg:text-[38px]">
+        <h1 class="font-display font-black text-ink leading-tight text-[28px] lg:text-[38px]">
           资源与发布
         </h1>
-        <p class="standfirst mt-4 text-[15px]">
-          维护系列与关键词图标,并掌控发布的节奏。「发布」= 触碰该分类的
-          <code class="font-mono text-[13px]">version.updated_at</code>;客户端据此判断缓存是否失效。
-        </p>
         <div class="hairline mt-7"></div>
       </header>
 
@@ -395,7 +383,7 @@ onMounted(async () => {
       <!-- ══════════════════ 页签一:系列管理 ══════════════════ -->
       <section v-if="tab === 'series'">
         <SectionHeading
-          eyebrow="其一 · 系列"
+          plain
           :title="`系列管理（${seriesList.length}）`"
           note="保存显式带 updated_at;「引用印刷」列为归属该代码的印刷版本数(含继承基础卡系列)—— 删除系列不会改动卡牌,只会让它们失去系列归属"
         >
@@ -410,7 +398,7 @@ onMounted(async () => {
         <!-- 内联编辑面板 -->
         <div v-if="seriesOpen" class="card p-5 mb-5">
           <div class="flex items-start justify-between gap-4 flex-wrap">
-            <span class="eyebrow">{{ seriesEditingCode ? `编辑系列 ${seriesEditingCode}` : '新增系列' }}</span>
+            <span class="text-xs text-ink-faint">{{ seriesEditingCode ? `编辑系列 ${seriesEditingCode}` : '新增系列' }}</span>
             <button class="text-[12px] text-ink-faint hover:text-brand" @click="seriesOpen = false">收起</button>
           </div>
           <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-x-5 gap-y-4 mt-4">
@@ -545,7 +533,7 @@ onMounted(async () => {
       <!-- ══════════════════ 页签二:图标库 ══════════════════ -->
       <section v-else-if="tab === 'icons'">
         <SectionHeading
-          eyebrow="其二 · 图标"
+          plain
           :title="`图标库（${icons.length}）`"
           note="白描图标在深底上预览(isWhite);存储类型 online/local 决定客户端取图方式"
         >
@@ -561,7 +549,7 @@ onMounted(async () => {
         <!-- 内联编辑面板 -->
         <div v-if="iconOpen" class="card p-5 mb-5">
           <div class="flex items-start justify-between gap-4 flex-wrap">
-            <span class="eyebrow">{{ iconEditingId ? '编辑图标' : '新增图标' }}</span>
+            <span class="text-xs text-ink-faint">{{ iconEditingId ? '编辑图标' : '新增图标' }}</span>
             <div class="flex items-center gap-4">
               <div
                 class="w-12 h-12 grid place-items-center rounded-lg border border-card-border overflow-hidden"
@@ -666,7 +654,7 @@ onMounted(async () => {
       <!-- ══════════════════ 页签三:版本发布 ══════════════════ -->
       <section v-else>
         <SectionHeading
-          eyebrow="其三 · 发布"
+          plain
           title="版本发布"
           note="触碰某个分类的时间戳,即通知所有客户端该分类的缓存已失效、需要重新拉取"
         >

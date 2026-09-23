@@ -21,7 +21,6 @@ import EditorialShell from './EditorialShell.vue';
 import AdminPager from './AdminPager.vue';
 import SectionHeading from '../SectionHeading.vue';
 import { debounce } from '@/utils/debounce';
-import { navigate } from '@/router/hash';
 import { errorText, notifyError, notifyOk, notifyWarn } from '@/tools/admin/notice';
 import { publishCards, loadRarityOptions, loadSeriesOptions, type SeriesOption } from '@/tools/admin/cards';
 import {
@@ -382,20 +381,9 @@ onMounted(async () => {
     <div class="max-w-[1720px] mx-auto">
       <!-- ══════════ 刊头 ══════════ -->
       <header class="mb-7">
-        <div class="flex items-center justify-between gap-4 flex-wrap text-[11px] text-ink-faint">
-          <button class="hover:text-brand transition-colors" @click="navigate({ view: 'editorial' })">
-            ← 返回编辑部
-          </button>
-          <span class="font-latin tracking-[0.22em] uppercase">Editorial Desk</span>
-        </div>
-        <p class="eyebrow mt-7">编辑部 · 校勘</p>
-        <h1 class="font-display font-black text-ink leading-tight mt-3 text-[28px] lg:text-[38px]">
+        <h1 class="font-display font-black text-ink leading-tight text-[28px] lg:text-[38px]">
           批量校勘
         </h1>
-        <p class="standfirst mt-4 text-[15px]">
-          环境更新后集中调整禁限与数值。单元格点击即可改;整行保存只提交变更字段。
-          数值加减按「结果相同」分组提交,每组一次请求。
-        </p>
         <div class="hairline mt-7"></div>
       </header>
 
@@ -471,7 +459,7 @@ onMounted(async () => {
       <div v-if="op && preview" class="card p-5 mb-5">
         <div class="flex items-start justify-between gap-4 flex-wrap">
           <div>
-            <span class="eyebrow">批量操作 · {{ OP_LABEL[op] }}</span>
+            <span class="text-xs font-semibold">批量操作 · {{ OP_LABEL[op] }}</span>
             <p class="text-[11px] text-ink-faint mt-1.5">
               影响 {{ preview.affected }} 行;确认无误后执行
             </p>
@@ -578,8 +566,8 @@ onMounted(async () => {
 
       <!-- ══════════ 表格 ══════════ -->
       <SectionHeading
+        plain
         small
-        eyebrow="校勘表"
         title="卡牌总表"
         note="点击表头排序;点击单元格编辑;仅标量字段可改,数组与长文本请到卡牌校勘"
       />

@@ -116,5 +116,8 @@ npm run verify:all # 全部验证:类型检查与各项回归验证
 缺失时编辑部显示配置说明页,**期刊与本地分析工具完全不受影响**。
 
 Cloudflare Pages 配置:框架预设 None,构建命令 `npm run build`,输出目录 `dist`。
+仓库根目录的 `functions/` 会同时部署 QA 同源转发函数，用于解决官方
+`cardCommonQa` 端点不返回 CORS 头的问题。本地 `npm run dev` / `npm run preview`
+由 Vite 将同一路径代理到官方接口。
 
 数据仅供竞技参考 · Riot Games 与本工具无关。

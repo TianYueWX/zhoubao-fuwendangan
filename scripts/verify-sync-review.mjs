@@ -4,7 +4,8 @@ import { normalizeCardNo, buildCardsBase, buildPrintFromSearch } from '../src/to
 import { createReview, reviewState, buildOperation, reviewSql, reviewCsv, equivalent, identity, printIdentity } from '../src/tools/sync/review.ts';
 import { executeOperation } from '../src/tools/sync/write.ts';
 import { indexExisting, indexDrafts } from '../src/tools/sync/reviewIndex.ts';
-import { fetchDataset } from '../src/tools/sync/run.ts';
+import { DEFAULT_FETCH_POLICY, fetchDataset } from '../src/tools/sync/run.ts';
+import { parseRetryAfterMs, randomGapMs } from '../src/tools/sync/riftboundApi.ts';
 
 let passed = 0;
 function test(label, fn) { fn(); passed++; console.log(`✓ ${label}`); }
@@ -16,6 +17,18 @@ const dataset = (cards = [base], prints = [print]) => ({ cards, prints, icons: [
 const existing = (cards = [], prints = []) => ({ cards, prints, icons: [], seriesCodes: ['ARC'], seriesByPrefix: { ARC: 'ARC' } });
 const oldBase = { ...base, id: 'base-1', card_no: 'OGN-036', effect_cn: '库内效果', energy: 9 };
 const oldPrint = { ...print, id: 'print-1', card_id: 'base-1', img_cdn: 'old.png', artist: '旧画师', back_image: 'preserve.png' };
+
+test('深度拉取默认单并发，并使用 500–1200ms 随机间隔', () => {
+  assert.deepEqual(DEFAULT_FETCH_POLICY.deep, { concurrency: 1, minGapMs: 500, maxGapMs: 1200 });
+  assert.equal(randomGapMs(500, 1200, () => 0), 500);
+  assert.equal(randomGapMs(500, 1200, () => 1), 1200);
+});
+test('Retry-After 同时支持秒数和 HTTP 日期', () => {
+  const now = Date.UTC(2026, 8, 23, 0, 0, 0);
+  assert.equal(parseRetryAfterMs('3', now), 3000);
+  assert.equal(parseRetryAfterMs(new Date(now + 4000).toUTCString(), now), 4000);
+  assert.equal(parseRetryAfterMs('invalid', now), null);
+});
 
 test('编号保留版本后缀，拆出语言、总数和促销标记', () => {
   for (const text of ['ARC-001a-SC', 'ARC·001a·SC', 'ARC.001a.SC']) assert.deepEqual(normalizeCardNo(text), { extend: 'ARC-001a', language: 'SC', isPromo: false, error: undefined });

@@ -279,14 +279,15 @@ export async function restDelete<T = Record<string, unknown>>(
 /* ──────────────────────────── 发布 ──────────────────────────── */
 
 /** 分类名与 version.name 一一对应 */
-export type VersionCategory = 'cards' | 'prints' | 'icons' | 'rules' | 'series';
+export type VersionCategory = 'cards' | 'prints' | 'icons' | 'rules' | 'series' | 'qa';
 
 export const VERSION_CATEGORIES: readonly VersionCategory[] = [
   'cards',
   'prints',
   'icons',
   'rules',
-  'series'
+  'series',
+  'qa'
 ];
 
 export const VERSION_LABEL: Record<VersionCategory, string> = {
@@ -294,7 +295,8 @@ export const VERSION_LABEL: Record<VersionCategory, string> = {
   prints: '印刷版本',
   icons: '图标',
   rules: '规则书',
-  series: '系列'
+  series: '系列',
+  qa: '问答'
 };
 
 /**
