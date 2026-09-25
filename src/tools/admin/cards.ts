@@ -18,6 +18,7 @@ import {
   touchVersion
 } from '../sources/rest';
 import type { CardBase, CardPrint } from './types';
+import type { LuaExportCard, LuaExportPrint } from './luaExport';
 
 /** 列表页只取必要列,避免 971 行 × 全字段的传输 */
 export const CARD_LIST_COLUMNS =
@@ -339,4 +340,38 @@ export async function selectAllCards(columns = '*'): Promise<CardBase[]> {
 /** 全量读取印刷版本(快照导出用) */
 export async function selectAllPrints(columns = '*'): Promise<CardPrint[]> {
   return restSelectAll<CardPrint>('card_prints', { columns, order: 'card_no_extend.asc' });
+}
+
+/* ──────────────────────── 导出 TTS Lua ──────────────────────── */
+
+/** 「导出 TTS Lua」所需列(cards_base 只取用到的字段) */
+export const LUA_EXPORT_CARD_COLUMNS =
+  'id,card_name_cn,sub_title_cn,effect_cn,card_category,rarity_name,series_name';
+
+/** 「导出 TTS Lua」所需列(card_prints 只取用到的字段) */
+export const LUA_EXPORT_PRINT_COLUMNS =
+  'card_id,card_no_extend,img_cdn,back_image,extend_rarity_name,series,is_promo';
+
+export interface LuaExportRows {
+  cards: LuaExportCard[];
+  prints: LuaExportPrint[];
+}
+
+/**
+ * 拉取生成 TTS mod Lua 数据块所需的全部行。
+ * 印刷版本只取 language='SC'(卡图 / 异画版本以简中印刷版为准)。
+ */
+export async function loadLuaExportRows(): Promise<LuaExportRows> {
+  const [cards, prints] = await Promise.all([
+    restSelectAll<LuaExportCard>('cards_base', {
+      columns: LUA_EXPORT_CARD_COLUMNS,
+      order: 'card_no.asc'
+    }),
+    restSelectAll<LuaExportPrint>('card_prints', {
+      columns: LUA_EXPORT_PRINT_COLUMNS,
+      filters: [{ column: 'language', op: 'eq', value: 'SC' }],
+      order: 'card_no_extend.asc'
+    })
+  ]);
+  return { cards, prints };
 }

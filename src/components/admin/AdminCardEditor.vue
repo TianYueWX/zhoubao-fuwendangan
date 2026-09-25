@@ -34,6 +34,7 @@ import {
   listCards,
   listPrints,
   loadArrayFieldOptions,
+  loadLuaExportRows,
   loadRarityOptions,
   loadSeriesOptions,
   publishCards,
@@ -43,6 +44,8 @@ import {
   type PrintPayload,
   type SeriesOption
 } from '@/tools/admin/cards';
+import { buildAllCardsLua } from '@/tools/admin/luaExport';
+import { downloadText } from '@/tools/sync/exporters';
 import {
   deckLimitLabel,
   deckLimitToMode,
@@ -387,6 +390,66 @@ async function confirmTransfer(): Promise<void> {
   }
 }
 
+/* ──────────────────────── 导出 TTS Lua ──────────────────────── */
+
+/** 导出的 Lua 文本块与面板开关 */
+const luaOpen = ref(false);
+const luaLoading = ref(false);
+const luaText = ref('');
+const luaMeta = ref<{ total: number; skippedNoBase: number; skippedNoCardNo: number } | null>(null);
+const luaCopied = ref(false);
+const luaBox = ref<HTMLTextAreaElement | null>(null);
+let luaCopiedTimer: number | undefined;
+
+const luaNote = computed(() => {
+  if (!luaMeta.value) return '';
+  const parts = [`共 ${luaMeta.value.total} 条`];
+  if (luaMeta.value.skippedNoBase) parts.push(`跳过无基础卡 ${luaMeta.value.skippedNoBase} 条`);
+  if (luaMeta.value.skippedNoCardNo) parts.push(`跳过缺卡号 ${luaMeta.value.skippedNoCardNo} 条`);
+  return parts.join(' · ');
+});
+
+/** 拉全量卡表(SC 印刷版)→ 生成 all_cards Lua 文本 */
+async function generateLua(): Promise<void> {
+  luaLoading.value = true;
+  try {
+    const { cards, prints } = await loadLuaExportRows();
+    const result = buildAllCardsLua(cards, prints);
+    luaText.value = result.text;
+    luaMeta.value = {
+      total: result.total,
+      skippedNoBase: result.skippedNoBase,
+      skippedNoCardNo: result.skippedNoCardNo
+    };
+    luaOpen.value = true;
+    notifyOk(`已生成 ${result.total} 条 TTS 卡牌数据`);
+  } catch (e) {
+    notifyError(`导出 TTS Lua 失败:${errorText(e)}`);
+  } finally {
+    luaLoading.value = false;
+  }
+}
+
+async function copyLua(): Promise<void> {
+  if (!luaText.value) return;
+  try {
+    await navigator.clipboard.writeText(luaText.value);
+    luaCopied.value = true;
+    if (luaCopiedTimer) window.clearTimeout(luaCopiedTimer);
+    luaCopiedTimer = window.setTimeout(() => (luaCopied.value = false), 1500);
+  } catch {
+    // 剪贴板 API 需要安全上下文,失败时全选让用户手动复制
+    luaBox.value?.focus();
+    luaBox.value?.select();
+    notifyWarn('复制失败:已全选,请按 Ctrl/Cmd+C');
+  }
+}
+
+function downloadLua(): void {
+  if (!luaText.value) return;
+  downloadText('all_cards.lua', luaText.value, 'text/x-lua');
+}
+
 /* ──────────────────────── 启动 ──────────────────────── */
 
 onMounted(async () => {
@@ -458,10 +521,54 @@ onMounted(async () => {
         <button class="btn-ghost px-3 py-1.5 text-xs" :disabled="listLoading" @click="loadList">
           刷新
         </button>
+        <button
+          type="button"
+          class="btn-ghost px-3 py-1.5 text-xs"
+          :disabled="luaLoading"
+          :aria-expanded="luaOpen"
+          aria-controls="lua-export-panel"
+          title="把库中 SC 印刷版卡表生成为 TTS mod 的 all_cards Lua 数据块"
+          @click="generateLua"
+        >
+          {{ luaLoading ? '生成中…' : '导出 TTS Lua' }}
+        </button>
         <button class="btn-brand px-3 py-1.5 text-xs" :disabled="creating" @click="addCard">
           {{ creating ? '新建中…' : '新增卡牌' }}
         </button>
       </div>
+
+      <!-- ══════════ 导出 TTS Lua ══════════ -->
+      <section v-show="luaOpen" id="lua-export-panel" class="card p-4 mb-6">
+        <SectionHeading plain small title="导出 TTS Lua" :note="luaNote" />
+        <div class="flex items-center gap-2 flex-wrap mb-3">
+          <button class="btn-brand px-3 py-1.5 text-xs" @click="copyLua">
+            {{ luaCopied ? '已复制' : '复制全文' }}
+          </button>
+          <button class="btn-ghost px-3 py-1.5 text-xs" @click="downloadLua">
+            下载 all_cards.lua
+          </button>
+          <button
+            class="btn-ghost px-3 py-1.5 text-xs"
+            :disabled="luaLoading"
+            @click="generateLua"
+          >
+            {{ luaLoading ? '生成中…' : '重新生成' }}
+          </button>
+          <span class="flex-1"></span>
+          <span v-if="luaText" class="text-[11px] text-ink-faint tabular-nums">
+            {{ luaText.length.toLocaleString() }} 字符
+          </span>
+          <button class="btn-ghost px-3 py-1.5 text-xs" @click="luaOpen = false">关闭</button>
+        </div>
+        <textarea
+          ref="luaBox"
+          :value="luaText"
+          readonly
+          spellcheck="false"
+          aria-label="TTS Lua 数据"
+          class="w-full h-[420px] font-mono text-[11px] leading-relaxed bg-transparent border border-card-border rounded-lg p-3 text-ink resize-y"
+        ></textarea>
+      </section>
 
       <!-- ══════════ 主从布局 ══════════ -->
       <div
