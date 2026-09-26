@@ -333,7 +333,7 @@ onMounted(async () => {
 
         <div class="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-3 mt-4">
           <input v-model="apiBase" :disabled="fetching" aria-label="官方 API 地址" class="filter-select w-full font-mono disabled:opacity-50" />
-          <button v-if="!fetching" class="btn-brand px-5 py-1.5 text-xs" :disabled="!hasSelection || !configured || reviewBusy || qaBusy || existingLoading" @click="requestFetch">
+          <button v-if="!fetching" class="btn-brand px-5 py-1.5 text-xs" data-testid="sync-pull" :disabled="!hasSelection || !configured || reviewBusy || qaBusy || existingLoading" @click="requestFetch">
             开始拉取
           </button>
           <button v-else class="btn-ghost px-5 py-1.5 text-xs !text-brand !border-brand" @click="cancelFetch">

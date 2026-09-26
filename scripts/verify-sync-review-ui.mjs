@@ -41,12 +41,27 @@ try {
       { ...defaults, cardNo: 'NEW·001·SC', cardName: '新卡', subTitle: '' },
       ...Array.from({ length: 205 }, (_, i) => ({ ...defaults, cardNo: `ARC·${String(i+100).padStart(3,'0')}·SC`, cardName: '蔚', subTitle: '铲除者' }))
     ];
-    const base = { id: 'b1', card_no: 'OGN-036', card_name_cn: '蔚', sub_title_cn: '铲除者', effect_cn: '库内效果', card_color_list: ['red'], region: [], tag: [], card_category: ['单位'], energy: 0, return_energy: 1, power: 3 };
+    // 韩/繁中列已迁移：列存在但为空，官网面板据此放行繁中文本写入。
+    const base = { id: 'b1', card_no: 'OGN-036', card_name_cn: '蔚', sub_title_cn: '铲除者', effect_cn: '库内效果', card_name_tw: null, sub_title_tw: null, effect_tw: null, card_name_kr: null, sub_title_kr: null, effect_kr: null, card_color_list: ['red'], region: [], tag: [], card_category: ['单位'], energy: 0, return_energy: 1, power: 3 };
     window.__db = {
       cards_base: [base, { ...base, id: 'b2', card_no: 'OGN-002', card_name_cn: '凯特琳', sub_title_cn: null }, { ...base, id: 'b3', card_no: 'ARC-002', card_name_cn: '凯特琳', sub_title_cn: null }],
-      card_prints: [{ id: 'p1', card_id: 'b1', card_no_extend: 'ARC-001a', language: 'SC', artist: '旧画师', img_cdn: 'old.png', rarity_name: '异画', extend_rarity_name: '异画', series: 'ARC', flavor_text_cn: null, is_promo: false, back_image: 'preserve.png' }],
+      card_prints: [{ id: 'p1', card_id: 'b1', card_no_extend: 'ARC-001a', language: 'SC', artist: '旧画师', img_cdn: 'old.png', rarity_name: '异画', extend_rarity_name: '异画', series: 'ARC', flavor_text_cn: null, is_promo: false, back_image: 'preserve.png' },
+        { id: 'p2', card_id: 'b1', card_no_extend: 'ARC-100', language: 'SC', artist: '旧画师100', img_cdn: 'old100.png', rarity_name: '异画', extend_rarity_name: '异画', series: 'ARC', flavor_text_cn: null, is_promo: false, back_image: 'preserve.png' }],
       card_icons: [], series: [{ code: 'ARC' }, { code: 'OGN' }], version: ['cards','prints','icons','series'].map((name,i)=>({id:i,name}))
     };
+    // 官网卡表（繁中）夹具：一张有繁中文本与独立繁中卡图的 OGN-036，用于审核面板的繁中三列。
+    const galleryCard = (image) => ({
+      id: 'ogn-036-tw', publicCode: 'OGN-036', collectorNumber: 36, name: '蔚', subtitle: '鏟除者',
+      set: { value: { id: 'OGN', label: 'Origins' } }, rarity: { value: { id: 'rare', label: 'Rare' } },
+      cardType: { type: [{ id: 'unit', label: '單位' }] }, domain: { values: [{ id: 'chaos', label: '混沌' }] },
+      cardImage: { url: image, accessibilityText: 'Riftbound Origins: Vi, Destructive.' },
+      illustrator: { values: [{ label: '繁中畫師' }] },
+      text: { richText: { body: '<p>當此單位造成傷害時，{{S}}。</p>' } },
+      energy: { value: { id: '3' } }, might: { value: { id: '5' } }, tags: { tags: [] }
+    });
+    window.__gallerySets = [{ id: 'OGN', name: 'Origins', collectorNumberMax: 298 }];
+    window.__galleryTw = [galleryCard('https://cdn/tw-036.png')];
+    window.__galleryEn = [galleryCard('https://cdn/en-036.png')];
     if (window.__perfCount) {
       const count = window.__perfCount;
       window.__api = Array.from({length: count}, (_,i) => ({...defaults, cardNo: `ARC·${String(i+1).padStart(4,'0')}·SC`, cardName: `性能卡${i%900}`, subTitle: ''}));
@@ -59,6 +74,13 @@ try {
     const original = window.fetch.bind(window);
     window.fetch = async (input, init = {}) => {
       const url = new URL(typeof input === 'string' ? input : input.url, location.href);
+      if (url.pathname.startsWith('/api/riftbound/gallery/')) {
+        if (url.pathname.endsWith('/sets')) return Response.json({ data: window.__gallerySets });
+        const locale = url.searchParams.get('locale');
+        const from = Number(url.searchParams.get('from') ?? 0);
+        const data = from > 0 ? [] : locale === 'zh_TW' ? window.__galleryTw : locale === 'en_US' ? window.__galleryEn : [];
+        return Response.json({ data, metadata: { totalItems: data.length } });
+      }
       if (url.origin === location.origin) return original(input, init);
       if (url.pathname.includes('/xcx/')) {
         if (url.pathname.endsWith('searchCardCraft')) { const {pageNum=1,pageSize=1000}=JSON.parse(init.body); return Response.json({ code: 0, result: window.__api.slice((pageNum-1)*pageSize,pageNum*pageSize) }); }
@@ -92,14 +114,20 @@ try {
     throw new Error(`Timed out: ${expression}\n${await evaluate('document.body?.innerText')}`);
   };
   const click = async (text) => { await evaluate(`[...document.querySelectorAll('button')].find(b => b.textContent.trim() === ${JSON.stringify(text)})?.click()`); await sleep(100); };
-  const open = async (label) => { await evaluate(`[...document.querySelectorAll('tbody tr')].find(r => r.innerText.includes(${JSON.stringify(label)}))?.querySelector('button')?.click()`); await sleep(100); };
+  const open = async (label) => { await evaluate(`[...document.querySelectorAll('tbody tr')].find(r => r.innerText.includes(${JSON.stringify(label)}))?.querySelector('[data-testid="row-open"]')?.click()`); await sleep(100); };
   const checkField = async (field) => { await evaluate(`document.querySelector('[aria-label="更新 ${field}"]').click()`); await sleep(100); };
   const edit = async (field, value) => { await evaluate(`(() => {const el=document.querySelector('[aria-label="编辑 ${field}"]'); el.value=${JSON.stringify(value)}; el.dispatchEvent(new Event('input',{bubbles:true}));})()`); await sleep(100); };
-  const filter = async (value) => { await evaluate(`(() => { const el=document.querySelector('[aria-label="搜索卡号或卡名"]'); el.value=${JSON.stringify(value)}; el.dispatchEvent(new Event('input',{bubbles:true})); })()`); await sleep(100); };
-  await waitFor(`document.body?.innerText.includes('开始拉取')`);
-  await waitFor(`[...document.querySelectorAll('button')].some(b=>b.textContent.trim()==='开始拉取' && !b.disabled)`);
+  const filter = async (value) => { await evaluate(`(() => { const el=document.querySelector('[data-testid="sync-review"] [aria-label="搜索卡号或卡名"]'); el.value=${JSON.stringify(value)}; el.dispatchEvent(new Event('input',{bubbles:true})); })()`); await sleep(100); };
+  const gallery = (selector) => `document.querySelector('[data-testid="gallery-review"]').querySelector(${JSON.stringify(selector)})`;
+  const galleryAll = (selector) => `[...document.querySelector('[data-testid="gallery-review"]').querySelectorAll(${JSON.stringify(selector)})]`;
+  await waitFor(`document.body?.innerText.includes('选择拉取内容')`);
+  // 小程序面板必须先勾选「卡牌与关键词图标」；官网面板那只按钮文案同样是「开始拉取」，
+  // 所以按 testid 定位，避免点到未启用的一只。
+  await evaluate(`(() => { const label=[...document.querySelectorAll('label')].find(l=>l.innerText.includes('卡牌与关键词图标')); label.querySelector('input[type="checkbox"]').click(); })()`);
+  await sleep(100);
+  await waitFor(`!document.querySelector('[data-testid="sync-pull"]').disabled`);
   const startLoad = performance.now();
-  await click('开始拉取');
+  await evaluate(`document.querySelector('[data-testid="sync-pull"]').click()`);
   await waitFor(`document.body.innerText.includes('逐条审核同步差异')`);
   if (perf) {
     console.log(`PERF initial load ${Math.round(performance.now()-startLoad)} ms`);
@@ -112,11 +140,12 @@ try {
       return ms;
     };
     const timings = [];
-    timings.push(await measured('open editor', `document.querySelector('tbody tr button').click()`));
+    timings.push(await measured('open editor', `document.body.querySelector('[data-testid="row-open"]').click()`));
     timings.push(await measured('select attribute', `document.querySelector('[aria-label="更新 artist"]').click()`));
     timings.push(await measured('edit artist', `const el=document.querySelector('[aria-label="编辑 artist"]'); el.value='性能测试画师'; el.dispatchEvent(new Event('input',{bubbles:true}))`));
     timings.push(await measured('toggle record', `document.querySelector('tbody tr input[type="checkbox"]').click()`));
-    timings.push(await measured('switch tab', `[...document.querySelectorAll('button')].find(b=>b.textContent.trim().startsWith('基础卡 ·')).click()`));
+    timings.push(await measured('bulk select fields', `document.querySelector('[data-testid="bulk-select-fields"]').click(); await new Promise(r=>setTimeout(r,0)); document.querySelector('[data-testid="bulk-select-fields-confirm"]').click()`));
+    timings.push(await measured('switch tab', `[...document.querySelectorAll('[data-testid="sync-review"] button')].find(b=>b.textContent.trim().startsWith('基础卡 ·')).click()`));
     const cpu = await cdp('Profiler.stop');
     writeFileSync('/tmp/sync-review-performance.cpuprofile', JSON.stringify(cpu.result.profile));
     const top = [...cpu.result.profile.nodes].sort((a,b)=>(b.hitCount??0)-(a.hitCount??0)).slice(0,12).map(n=>({name:n.callFrame.functionName,url:n.callFrame.url.split('/').slice(-2).join('/'),hits:n.hitCount}));
@@ -192,6 +221,48 @@ try {
   assert.deepEqual(Object.keys(batchWrites[0].payload).sort(), ['img_cdn','updated_at']);
   console.log('✓ 批量提交只包含所选记录和所选字段');
 
+  // ── 一键勾选更新字段：行内全选 + 当前筛选批量全选 ──
+  await filter('ARC-100');
+  assert.ok((await evaluate(`document.querySelector('[data-testid="sync-review"]').innerText`)).includes('已勾选 0 项'));
+  assert.equal(await evaluate(`document.querySelector('[data-testid="row-select-fields"]').textContent.trim()`), '全选 2 项');
+  assert.match(await evaluate(`document.querySelector('[data-testid="bulk-select-fields"]').textContent.trim()`), /1 行 · 2 个字段/);
+  await evaluate(`document.querySelector('[data-testid="row-select-fields"]').click()`);
+  await sleep(100);
+  assert.equal(await evaluate(`document.querySelector('[data-testid="row-clear-fields"]').textContent.trim()`), '取消勾选');
+  await evaluate(`document.querySelector('[data-testid="row-open"]').click()`);
+  await sleep(150);
+  assert.equal(await evaluate(`document.querySelectorAll('[data-testid="sync-editor"] [aria-label^="更新 "]:checked').length`), 2);
+  console.log('✓ 行内「全选 2 项」一次勾完差异字段，编辑器同步勾选');
+  await evaluate(`document.querySelector('[data-testid="editor-toggle-fields"]').click()`);
+  await sleep(100);
+  assert.equal(await evaluate(`document.querySelectorAll('[data-testid="sync-editor"] [aria-label^="更新 "]:checked').length`), 0);
+  // 两步确认：第一次点击只进入确认态，不会先斩后奏
+  await evaluate(`document.querySelector('[data-testid="bulk-select-fields"]').click()`);
+  await sleep(100);
+  assert.equal(await evaluate(`document.querySelectorAll('[data-testid="sync-editor"] [aria-label^="更新 "]:checked').length`), 0);
+  assert.match(await evaluate(`document.querySelector('[data-testid="bulk-select-fields-confirm"]').textContent.trim()`), /确认勾选 2 个字段/);
+  await evaluate(`document.querySelector('[data-testid="bulk-select-fields-confirm"]').click()`);
+  await sleep(100);
+  assert.equal(await evaluate(`document.querySelectorAll('[data-testid="sync-editor"] [aria-label^="更新 "]:checked').length`), 2);
+  console.log('✓ 批量「包含并勾选」二次确认后一次勾完当前筛选的差异字段');
+  await evaluate(`document.querySelector('[data-testid="bulk-clear-fields"]').click()`);
+  await sleep(100);
+  assert.equal(await evaluate(`document.querySelectorAll('[data-testid="sync-editor"] [aria-label^="更新 "]:checked').length`), 0);
+  console.log('✓ 「清空本阶段字段勾选」回到默认不勾选状态');
+  await evaluate(`document.querySelector('[data-testid="bulk-select-fields"]').click()`);
+  await sleep(100);
+  await evaluate(`document.querySelector('[data-testid="bulk-select-fields-confirm"]').click()`);
+  await sleep(100);
+  // 该行此前被「清空本阶段批量选择」排除，批量勾选要顺带把它包含进来，否则提交会静默跳过。
+  assert.equal(await evaluate(`[...document.querySelectorAll('[data-testid="sync-review"] button')].find(b=>b.textContent.trim().startsWith('提交本阶段'))?.textContent.trim()`), '提交本阶段 1 条');
+  const countBeforeFields = await evaluate('window.__writes.length');
+  await click('提交本阶段 1 条');
+  await waitFor(`window.__writes.slice(${countBeforeFields}).some(w=>w.table==='card_prints')`);
+  const fieldWrites = await evaluate(`window.__writes.slice(${countBeforeFields}).filter(w=>w.table==='card_prints')`);
+  assert.equal(fieldWrites.length, 1);
+  assert.deepEqual(Object.keys(fieldWrites[0].payload).sort(), ['artist','img_cdn','updated_at']);
+  console.log('✓ 一键勾选后的差异字段按补丁提交，未勾选字段不进 payload');
+
   await evaluate(`document.querySelector('[data-testid="sync-editor"]').scrollIntoView({block:'start'})`);
   await sleep(250);
   await cdp('Page.captureScreenshot', { format: 'png' }).then(r => writeFileSync('/tmp/sync-review-desktop.png', Buffer.from(r.result.data,'base64')));
@@ -199,6 +270,41 @@ try {
   await evaluate(`document.querySelector('[data-testid="sync-editor"]').scrollIntoView({block:'start'})`);
   await sleep(250);
   await cdp('Page.captureScreenshot', { format: 'png' }).then(r => writeFileSync('/tmp/sync-review-mobile.png', Buffer.from(r.result.data,'base64')));
+
+  // ── 官网卡表面板：繁中三列（用户实际卡点） ──
+  await evaluate(`(() => { const el=document.querySelector('[data-testid="gallery-locale"]'); el.value='zh_TW'; el.dispatchEvent(new Event('change',{bubbles:true})); })()`);
+  await sleep(200);
+  await waitFor(`!document.querySelector('[data-testid="gallery-fetch"]').disabled`);
+  await evaluate(`document.querySelector('[data-testid="gallery-fetch"]').click()`);
+  await waitFor(`Boolean(document.querySelector('[data-testid="gallery-review"]'))`);
+  await evaluate(`${galleryAll('button')}.find(b=>b.textContent.trim().startsWith('基础卡 ·')).click()`);
+  await sleep(150);
+  const galleryRow = await evaluate(`${gallery('tbody tr')}.innerText`);
+  assert.match(galleryRow, /繁中名、繁中副标题、繁中效果/);
+  assert.match(galleryRow, /已勾选 0 项/);
+  assert.equal(await evaluate(`${gallery('[data-testid="row-select-fields"]')}.textContent.trim()`), '全选 3 项');
+  await evaluate(`${gallery('[data-testid="row-select-fields"]')}.click()`);
+  await sleep(100);
+  assert.match(await evaluate(`${gallery('tbody tr')}.innerText`), /已勾选 3 项/);
+  await evaluate(`${gallery('[data-testid="row-open"]')}.click()`);
+  await sleep(150);
+  assert.equal(await evaluate(`document.querySelectorAll('[data-testid="gallery-editor"] [aria-label^="更新 "]:checked').length`), 3);
+  console.log('✓ 官网繁中面板：行内一次勾完繁中名/繁中副标题/繁中效果');
+  await evaluate(`${gallery('[data-testid="bulk-clear-fields"]')}.click()`);
+  await sleep(100);
+  assert.equal(await evaluate(`document.querySelectorAll('[data-testid="gallery-editor"] [aria-label^="更新 "]:checked').length`), 0);
+  await evaluate(`${gallery('[data-testid="bulk-select-fields"]')}.click()`);
+  await sleep(100);
+  assert.match(await evaluate(`${gallery('[data-testid="bulk-select-fields-confirm"]')}.textContent.trim()`), /确认勾选 3 个字段/);
+  await evaluate(`${gallery('[data-testid="bulk-select-fields-confirm"]')}.click()`);
+  await sleep(100);
+  assert.equal(await evaluate(`document.querySelectorAll('[data-testid="gallery-editor"] [aria-label^="更新 "]:checked').length`), 3);
+  const countBeforeGallery = await evaluate('window.__writes.length');
+  await evaluate(`${galleryAll('button')}.find(b=>b.textContent.trim().startsWith('提交本阶段')).click()`);
+  await waitFor(`window.__writes.slice(${countBeforeGallery}).some(w=>w.table==='cards_base')`);
+  const galleryWrite = await evaluate(`window.__writes.slice(${countBeforeGallery}).find(w=>w.table==='cards_base')`);
+  assert.deepEqual(Object.keys(galleryWrite.payload).sort(), ['card_name_tw','effect_tw','sub_title_tw','updated_at']);
+  console.log('✓ 官网繁中面板：批量勾选后按繁中三列补丁提交，其他语言列不动');
   assert.deepEqual(exceptions, []);
   console.log('✓ 浏览器无未捕获异常；已保存桌面和手机截图');
   }

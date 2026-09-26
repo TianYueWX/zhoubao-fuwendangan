@@ -24,6 +24,9 @@ import {
   createGalleryReview, galleryState, buildGalleryOperation, galleryBaseCandidates, TARGET_FIELDS
 } from '../src/tools/sync/galleryReview.ts';
 import { indexExisting } from '../src/tools/sync/reviewIndex.ts';
+import {
+  allFieldsSelected, applyFieldSelection, clearFieldSelection, fieldSelectionPlan, selectedFieldCount
+} from '../src/tools/sync/fieldSelection.ts';
 import { normalizeCardNo, baseCardNo } from '../src/tools/sync/normalize.ts';
 import { validateOperation, reviewSql, reviewCsv } from '../src/tools/sync/review.ts';
 import {
@@ -543,6 +546,59 @@ test('印刷编号语言非法时阻断', () => {
   const st = galleryState(print, rows, ex, index);
   assert.equal(st.kind, 'blocked');
   assert.match(st.reason, /语言/);
+});
+
+test('繁中批量勾选：繁中名/副标题/效果一次勾选即可整体提交', () => {
+  const dataset = baseDataset({
+    locale: 'zh_TW',
+    option: { id: 'zh_TW', label: '繁體中文', target: 'tw', writable: true },
+    language: 'TC',
+    bases: [{
+      card_no: 'UNL-131', name: '遺棄', subtitle: '特菲利安', effect: '{{S}} 效果',
+      card_name_en: 'Abandon', sub_title_en: null, series_name: 'UNL', rarity_name: '不凡',
+      energy: 2, card_category: ['法术'], localized: true, source_id: 'unl-131-219'
+    }]
+  });
+  const ex = existingSnapshot();
+  const rows = createGalleryReview(dataset);
+  const index = makeIndex(ex, rows);
+  const stateOf = (r) => galleryState(r, rows, ex, index);
+  const base = rows.find((r) => r.table === 'cards_base');
+  assert.equal(stateOf(base).kind, 'update');
+  assert.deepEqual(stateOf(base).changed, ['card_name_tw', 'sub_title_tw', 'effect_tw']);
+  assert.equal(selectedFieldCount(base, stateOf(base)), 0);
+  assert.equal(buildGalleryOperation(base, rows, ex, index), null);
+  const plan = fieldSelectionPlan([base], stateOf);
+  assert.deepEqual({ rows: plan.rows, fields: plan.fields }, { rows: 1, fields: 3 });
+  applyFieldSelection([base], stateOf);
+  assert.equal(allFieldsSelected(base, stateOf(base)), true);
+  const op = buildGalleryOperation(base, rows, ex, index);
+  assert.deepEqual(op.payload, { card_name_tw: '遺棄', sub_title_tw: '特菲利安', effect_tw: '{{S}} 效果' });
+  validateOperation(op);
+  assert.equal(clearFieldSelection([base]), 3);
+  assert.equal(buildGalleryOperation(base, rows, ex, index), null);
+});
+
+test('繁中印刷批量勾选：差异字段整体进补丁，白名单放行导出', () => {
+  const ex = existingSnapshot({
+    prints: [{
+      id: 'print-1', card_id: 'base-1', card_no_extend: 'UNL-131', language: 'EN',
+      rarity_name: '不凡', extend_rarity_name: '平卡', img_cdn: 'https://cdn/old.png',
+      artist: 'Artist', series: 'UNL', flavor_text_cn: null, flavor_text_en: null, is_promo: false
+    }]
+  });
+  const rows = createGalleryReview(baseDataset());
+  const index = makeIndex(ex, rows);
+  const stateOf = (r) => galleryState(r, rows, ex, index);
+  const print = rows.find((r) => r.table === 'card_prints');
+  const changed = stateOf(print).changed;
+  assert.deepEqual(changed, ['img_cdn']);
+  applyFieldSelection(rows, stateOf);
+  assert.deepEqual(print.selected, changed);
+  const op = buildGalleryOperation(print, rows, ex, index);
+  assert.deepEqual(Object.keys(op.payload).sort(), [...changed].sort());
+  validateOperation(op);
+  assert.match(reviewSql([op]), /img_cdn/);
 });
 
 test('TARGET_FIELDS 与 printLanguageOf 对齐', () => {

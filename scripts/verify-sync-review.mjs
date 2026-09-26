@@ -2,6 +2,9 @@
 import assert from 'node:assert/strict';
 import { normalizeCardNo, buildCardsBase, buildPrintFromSearch } from '../src/tools/sync/normalize.ts';
 import { createReview, reviewState, buildOperation, reviewSql, reviewCsv, equivalent, identity, printIdentity } from '../src/tools/sync/review.ts';
+import {
+  allFieldsSelected, applyFieldSelection, clearFieldSelection, fieldSelectionPlan, selectableFields, selectedFieldCount
+} from '../src/tools/sync/fieldSelection.ts';
 import { executeOperation } from '../src/tools/sync/write.ts';
 import { indexExisting, indexDrafts } from '../src/tools/sync/reviewIndex.ts';
 import { DEFAULT_FETCH_POLICY, fetchDataset } from '../src/tools/sync/run.ts';
@@ -274,4 +277,60 @@ try {
     assert.equal(ds.prints[0].img_cdn, 'list-image');
   });
 } finally { globalThis.fetch = savedFetch; }
+
+/* ────────────── 批量勾选更新字段（fieldSelection） ────────────── */
+
+test('行内计数只算仍存在的差异，草稿改回原值后不虚报', () => {
+  const corrected = buildCardsBase({ ...detail, errata: '勘误效果' }, false);
+  const rows = createReview(dataset([corrected]));
+  const ex = existing([oldBase]);
+  const st = reviewState(rows[0], rows, ex);
+  assert.equal(st.kind, 'update');
+  assert.deepEqual(st.changed, ['effect_cn']);
+  rows[0].selected = ['effect_cn', 'energy'];
+  assert.equal(selectedFieldCount(rows[0], st), 1);
+  assert.equal(allFieldsSelected(rows[0], st), true);
+  assert.deepEqual(selectableFields(st), ['effect_cn']);
+});
+test('新增行与待处理行没有可批量勾选的字段', () => {
+  const rows = createReview(dataset());
+  const ex = existing();
+  const index = { ...indexExisting(ex), ...indexDrafts(rows) };
+  const stateOf = (r) => reviewState(r, rows, ex, index);
+  assert.equal(stateOf(rows[0]).kind, 'new');
+  assert.equal(stateOf(rows[1]).kind, 'blocked');
+  assert.deepEqual(selectableFields(stateOf(rows[0])), []);
+  assert.deepEqual(fieldSelectionPlan(rows, stateOf), { rows: 0, fields: 0 });
+  assert.deepEqual(applyFieldSelection(rows, stateOf).written, []);
+  assert.deepEqual(rows.map((r) => r.selected), [[], []]);
+});
+test('批量勾选差异字段后，补丁与逐条勾选完全一致，清空即回到未选', () => {
+  const rows = createReview(dataset());
+  const ex = existing([oldBase], [oldPrint]);
+  const index = { ...indexExisting(ex), ...indexDrafts(rows) };
+  const stateOf = (r) => reviewState(r, rows, ex, index);
+  const changed = stateOf(rows[1]).changed;
+  assert.deepEqual(changed, ['img_cdn', 'artist']);
+  assert.equal(stateOf(rows[0]).kind, 'same');
+  assert.equal(fieldSelectionPlan(rows, stateOf).rows, 1);
+  assert.equal(buildOperation(rows[1], rows, ex, index), null);
+  const applied = applyFieldSelection(rows, stateOf);
+  assert.equal(applied.rows, 1);
+  assert.equal(applied.fields, 2);
+  assert.deepEqual(applied.written, [rows[1]]);
+  assert.deepEqual(rows[1].selected, changed);
+  const op = buildOperation(rows[1], rows, ex, index);
+  assert.deepEqual(Object.keys(op.payload).sort(), [...changed].sort());
+  assert.equal(clearFieldSelection(rows), 2);
+  assert.equal(buildOperation(rows[1], rows, ex, index), null);
+});
+test('批量勾选整体替换旧选择，陈旧字段不会被带走', () => {
+  const rows = createReview(dataset());
+  const ex = existing([oldBase], [oldPrint]);
+  const index = { ...indexExisting(ex), ...indexDrafts(rows) };
+  const stateOf = (r) => reviewState(r, rows, ex, index);
+  rows[1].selected = ['img_cdn', 'card_id', 'is_promo'];
+  applyFieldSelection(rows, stateOf);
+  assert.deepEqual(rows[1].selected, ['img_cdn', 'artist']);
+});
 console.log(`\n${passed} sync review checks passed.`);

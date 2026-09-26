@@ -13,6 +13,8 @@ withDefaults(
     label?: string;
     confirmLabel?: string;
     disabled?: boolean;
+    /** 供验收脚本定位；确认态按钮自动加 -confirm 后缀 */
+    testid?: string;
   }>(),
   { label: '删除', confirmLabel: '确认删除' }
 );
@@ -54,6 +56,7 @@ onBeforeUnmount(clearTimer);
     <button
       class="text-[12px] text-ink-faint hover:text-brand transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
       :disabled="disabled"
+      :data-testid="testid"
       @click="onClick"
     >
       {{ label }}
@@ -63,6 +66,7 @@ onBeforeUnmount(clearTimer);
     <span class="inline-flex items-center gap-2.5">
       <button
         class="text-[12px] font-semibold text-brand hover:underline transition-colors"
+        :data-testid="testid ? `${testid}-confirm` : undefined"
         @click="onClick"
       >
         {{ confirmLabel }}

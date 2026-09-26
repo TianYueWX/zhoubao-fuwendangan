@@ -182,7 +182,7 @@ onMounted(() => {
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <label class="block">
           <span class="text-sm font-semibold block mb-2">拉取语言</span>
-          <select v-model="locale" class="filter-select w-full" :disabled="busyAll">
+          <select v-model="locale" class="filter-select w-full" data-testid="gallery-locale" :disabled="busyAll">
             <option v-for="o in GALLERY_LOCALE_OPTIONS" :key="o.id" :value="o.id">{{ o.label }}</option>
           </select>
         </label>
@@ -235,7 +235,7 @@ onMounted(() => {
       </div>
 
       <div class="flex items-center gap-3 flex-wrap mt-4">
-        <button v-if="!fetching" class="btn-brand px-5 py-1.5 text-xs" :disabled="busyAll || !configured || existingLoading || !existing" @click="requestFetch">
+        <button v-if="!fetching" class="btn-brand px-5 py-1.5 text-xs" data-testid="gallery-fetch" :disabled="busyAll || !configured || existingLoading || !existing" @click="requestFetch">
           开始拉取
         </button>
         <button v-else class="btn-ghost px-5 py-1.5 text-xs !text-brand !border-brand" @click="cancelFetch">取消</button>

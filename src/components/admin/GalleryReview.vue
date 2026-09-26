@@ -1,7 +1,11 @@
 <script setup lang="ts">
 /** 官网卡表（playriftbound.com）同步的逐条审核面板（独立于小程序同步）。 */
 import { computed, nextTick, ref, watch } from 'vue';
+import AdminConfirmButton from './AdminConfirmButton.vue';
 import { applyReviewOperation, type ExistingSnapshot } from '@/tools/admin/sync';
+import {
+  allFieldsSelected, applyFieldSelection, clearFieldSelection, fieldSelectionPlan, selectedFieldCount
+} from '@/tools/sync/fieldSelection';
 import { touchVersions, type VersionCategory } from '@/tools/sources/rest';
 import { errorText, notifyError, notifyOk, notifyWarn } from '@/tools/admin/notice';
 import { downloadText } from '@/tools/sync/exporters';
@@ -111,6 +115,32 @@ const stageCounts = computed(() => {
 });
 const readyCount = computed(() => tableRows.value.filter((r) => r.included && ready(r)).length);
 const submitDisabled = computed(() => readOnly.value || props.loading || busy.value);
+/** 只读语区、以及韩/繁中列未迁移时的基础卡行，都没有可提交的文本字段。 */
+const fieldsSelectable = (r: GalleryReviewRow): boolean => !readOnly.value && (r.table !== 'cards_base' || textWritable.value);
+/** 批量勾选只作用于当前筛选结果（并排除不可提交的行），不隐式扩大到整个阶段。 */
+const bulkRows = computed(() => filtered.value.filter(fieldsSelectable));
+const bulkPlan = computed(() => fieldSelectionPlan(bulkRows.value, state));
+const selectedFields = computed(() => tableRows.value.reduce((sum, r) => sum + r.selected.length, 0));
+const rowFields = (r: GalleryReviewRow): number => selectedFieldCount(r, state(r));
+const rowAllFields = (r: GalleryReviewRow): boolean => allFieldsSelected(r, state(r));
+/** 行内一键：差异字段全勾 / 取消，省去为每行展开编辑器。 */
+function toggleRowFields(row: GalleryReviewRow): void {
+  if (!fieldsSelectable(row)) return;
+  if (rowAllFields(row)) { row.selected = []; return; }
+  applyFieldSelection([row], state);
+}
+function selectFilteredFields(): void {
+  const plan = applyFieldSelection(bulkRows.value, state);
+  if (!plan.fields) { notifyWarn('当前筛选结果没有可勾选的更新字段'); return; }
+  // 字段勾了但记录没被包含，提交时会静默跳过；这里一并包含，和按钮文案一致。
+  for (const row of plan.written) row.included = true;
+  notifyOk(`已包含并勾选 ${plan.rows} 行的 ${plan.fields} 个更新字段`, '提交前请再核对差异值。');
+}
+function clearStageFields(): void {
+  const cleared = clearFieldSelection(tableRows.value);
+  if (!cleared) { notifyWarn('本阶段没有已勾选的更新字段'); return; }
+  notifyOk(`已清空本阶段 ${cleared} 个字段勾选`);
+}
 const rowName = (r: GalleryReviewRow): string => {
   const target = r.target;
   const name = r.draft[`card_name_${target}`];
@@ -278,12 +308,12 @@ defineExpose({ hasUnsavedReview });
 </script>
 
 <template>
-  <section class="mb-10">
+  <section class="mb-10" data-testid="gallery-review">
     <div class="flex justify-between gap-4 items-start mb-4">
       <div>
         <h2 class="font-display text-xl font-bold">逐条审核官网卡表差异</h2>
         <p class="text-xs text-ink-muted mt-2">
-          更新字段默认不勾选；星号/SP/超编号印刷会回找原作基础卡，多个候选时需手选。
+          更新字段默认不勾选，可在行内或按当前筛选一键勾选；星号/SP/超编号印刷会回找原作基础卡，多个候选时需手选。
           <span v-if="readOnly" class="text-accent">当前语区只支持预览，不能写库。</span>
           <span v-else-if="dataset.option.target === 'kr' || dataset.option.target === 'tw'" class="text-ink-faint">
             韩/繁中文本仅在库内已有对应列时才能提交。
@@ -309,10 +339,18 @@ defineExpose({ hasUnsavedReview });
         </select>
         <span class="text-xs text-ink-faint self-center">{{ filtered.length }} 条 · 当前阶段可提交 {{ readyCount }} 条</span>
       </div>
-      <div v-if="!readOnly" class="flex gap-4 flex-wrap text-xs mb-3">
+      <div v-if="!readOnly" class="flex gap-4 flex-wrap items-center text-xs mb-3">
         <button class="text-brand hover:underline" @click="tableRows.forEach(r => r.included = false)">清空本阶段批量选择</button>
         <button class="text-brand hover:underline" @click="filtered.forEach(r => r.included = true)">包含当前筛选结果</button>
-        <span class="text-ink-faint">仅选择记录，不会勾选更新字段。</span>
+        <AdminConfirmButton
+          testid="bulk-select-fields"
+          :label="`包含并勾选当前筛选的更新字段（${bulkPlan.rows} 行 · ${bulkPlan.fields} 个字段）`"
+          :confirm-label="`确认勾选 ${bulkPlan.fields} 个字段`"
+          :disabled="!bulkPlan.fields || busy || loading"
+          @confirm="selectFilteredFields" />
+        <button class="text-brand hover:underline disabled:text-ink-faint disabled:no-underline" data-testid="bulk-clear-fields"
+          :disabled="!selectedFields" @click="clearStageFields">清空本阶段字段勾选（{{ selectedFields }}）</button>
+        <span class="text-ink-faint">「包含」只选记录；「勾选字段」只勾差异值。两者都不会自动提交。</span>
       </div>
       <div class="border border-card-border rounded-xl overflow-x-auto">
         <table class="w-full text-xs">
@@ -329,11 +367,19 @@ defineExpose({ hasUnsavedReview });
               </td>
               <td class="p-3 max-w-[420px] break-words">
                 <span v-if="state(row).reason" class="text-accent">{{ state(row).reason }}</span>
-                <span v-else-if="state(row).kind === 'update'">{{ state(row).changed.map(f => labels[f] ?? f).join('、') }} · 已勾选 {{ state(row).changed.filter(f => row.selected.includes(f)).length }} 项</span>
+                <span v-else-if="state(row).kind === 'update'">
+                  {{ state(row).changed.map(f => labels[f] ?? f).join('、') }} · 已勾选 {{ rowFields(row) }} 项
+                  <template v-if="fieldsSelectable(row)">
+                    <button v-if="!rowAllFields(row)" data-testid="row-select-fields" class="ml-1 text-brand hover:underline"
+                      @click="toggleRowFields(row)">全选 {{ state(row).changed.length }} 项</button>
+                    <button v-else data-testid="row-clear-fields" class="ml-1 text-ink-faint hover:underline"
+                      @click="row.selected = []">取消勾选</button>
+                  </template>
+                </span>
                 <span v-else>{{ state(row).kind === 'new' ? '审核后可单独 Insert' : '无可同步差异' }}</span>
                 <p v-if="errors[row.key]" class="mt-1 text-delta-down">{{ errors[row.key] }}</p>
               </td>
-              <td class="p-3 whitespace-nowrap"><button class="text-brand hover:underline" @click="openEditor(row)">查看 / 编辑</button></td>
+              <td class="p-3 whitespace-nowrap"><button class="text-brand hover:underline" data-testid="row-open" @click="openEditor(row)">查看 / 编辑</button></td>
             </tr>
             <tr v-if="!visibleRows.length"><td colspan="5" class="p-8 text-center text-ink-faint">没有符合条件的记录</td></tr>
           </tbody>
@@ -373,7 +419,14 @@ defineExpose({ hasUnsavedReview });
         </p>
         <div class="overflow-x-auto">
           <table class="w-full text-xs min-w-[680px]">
-            <thead class="text-left text-ink-faint"><tr><th class="p-2">更新</th><th class="p-2">字段</th><th class="p-2 w-1/4">数据库值</th><th class="p-2 w-1/4">API 映射值</th><th class="p-2 w-1/3">待提交值</th></tr></thead>
+            <thead class="text-left text-ink-faint"><tr>
+              <th class="p-2">更新
+                <button v-if="activeState.before && activeState.changed.length && fieldsSelectable(active)" data-testid="editor-toggle-fields"
+                  class="block font-normal text-brand hover:underline" @click="toggleRowFields(active)">
+                  {{ rowAllFields(active) ? '取消勾选' : `全选 ${activeState.changed.length} 项` }}
+                </button>
+              </th>
+              <th class="p-2">字段</th><th class="p-2 w-1/4">数据库值</th><th class="p-2 w-1/4">API 映射值</th><th class="p-2 w-1/3">待提交值</th></tr></thead>
             <tbody>
               <tr v-for="field in editorFields" :key="`${active.key}:${field}`" class="border-t border-card-border align-top">
                 <td class="p-2">
@@ -411,7 +464,7 @@ defineExpose({ hasUnsavedReview });
 
       <div class="card p-5 mt-5">
         <p class="text-sm font-semibold">当前阶段：{{ stages.find(s => s.table === tab)?.label }}</p>
-        <p class="text-xs text-ink-muted mt-2">批量仅处理本阶段已包含且可提交的 {{ readyCount }} 条。</p>
+        <p class="text-xs text-ink-muted mt-2">批量仅处理本阶段已包含且可提交的 {{ readyCount }} 条；「包含并勾选」按当前筛选结果勾选字段。</p>
         <div class="flex gap-3 flex-wrap mt-4">
           <button class="btn-brand px-4 py-2 text-xs" :disabled="!readyCount || submitDisabled" @click="submit()">提交本阶段 {{ readyCount }} 条</button>
           <button class="btn-ghost px-4 py-2 text-xs" :disabled="!readyCount || readOnly" @click="exportReviewed('sql')">导出本阶段 SQL</button>
