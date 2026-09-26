@@ -223,11 +223,18 @@ export interface GalleryFetchOptions extends RetryOptions {
 }
 
 function withPacer(opts: GalleryFetchOptions): RetryOptions {
-  const minGapMs = opts.minGapMs ?? 120
-  const maxGapMs = Math.max(minGapMs, opts.maxGapMs ?? minGapMs)
+  // 官方卡表虽非小程序接口，也会对持续快速请求限流；默认放慢，重试时自动再降速。
+  const minGapMs = opts.minGapMs ?? 300
+  // 显式传了 minGapMs 却没传 maxGapMs 时（测试常用 0），max 跟随 min，保持确定性。
+  const maxGapMs = Math.max(minGapMs, opts.maxGapMs ?? (opts.minGapMs === undefined ? 700 : minGapMs))
+  const pacer = createRequestPacer(minGapMs, maxGapMs, opts.signal)
   return {
     ...opts,
-    beforeRequest: createRequestPacer(minGapMs, maxGapMs, opts.signal)
+    beforeRequest: pacer,
+    onRetry: (info: RetryInfo) => {
+      pacer.slowDown()
+      opts.onRetry?.({ ...info, gapRange: pacer.gapRange() })
+    }
   }
 }
 

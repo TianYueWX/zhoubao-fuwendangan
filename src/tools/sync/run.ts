@@ -36,8 +36,10 @@ export type SyncPhase = 'idle' | 'search' | 'detail' | 'keywords' | 'done' | 'er
 export type FetchMode = 'fast' | 'deep'
 
 export const DEFAULT_FETCH_POLICY = {
-  fast: { concurrency: 3, minGapMs: 150, maxGapMs: 150 },
-  deep: { concurrency: 1, minGapMs: 500, maxGapMs: 1200 }
+  // 官方接口会对持续快速请求触发 WAF 限流（浏览器里常表现为 CORS 报错），
+  // 默认就放慢：单并发 + 随机间隔；重试时会在此基础上自动再降速。
+  fast: { concurrency: 1, minGapMs: 400, maxGapMs: 900 },
+  deep: { concurrency: 1, minGapMs: 800, maxGapMs: 1600 }
 } as const satisfies Record<FetchMode, { concurrency: number; minGapMs: number; maxGapMs: number }>
 
 export interface SyncProgress {
@@ -114,11 +116,16 @@ export async function fetchDataset(opts: FetchDatasetOptions = {}): Promise<Sync
     existingSeriesCodes = [], seriesByPrefix = {}, existingCardKeys = [], detailCache,
     maxEnrich = 120, signal, onProgress, onRetry
   } = opts
+  const pacer = createRequestPacer(minGapMs, maxGapMs, signal)
   const req = {
     baseUrl,
     signal,
-    beforeRequest: createRequestPacer(minGapMs, maxGapMs, signal),
-    onRetry
+    beforeRequest: pacer,
+    // 任何重试（限流/5xx/网络失败）都让整轮请求进一步降速，而不是只等单次退避。
+    onRetry: (info: RetryInfo) => {
+      pacer.slowDown()
+      onRetry?.({ ...info, gapRange: pacer.gapRange() })
+    }
   }
   const report = (phase: SyncPhase, label: string, done = 0, total = 0) =>
     onProgress?.({ phase, label, done, total })
@@ -127,7 +134,7 @@ export async function fetchDataset(opts: FetchDatasetOptions = {}): Promise<Sync
   report('search', '拉取卡牌列表…')
   const searchRows: ApiSearchCard[] = await searchAllCards({
     ...req,
-    onPage: (page, got) => report('search', `拉取卡牌列表…第 ${page} 页（${got} 条）`)
+    onPage: (page, got, total) => report('search', `拉取卡牌列表…第 ${page} 页（${got} 条，累计 ${total}）`)
   })
   throwIfAborted(signal)
   if (!searchRows.length) throw new Error('接口未返回任何卡牌')

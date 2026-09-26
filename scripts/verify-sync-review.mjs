@@ -8,7 +8,9 @@ import {
 import { executeOperation } from '../src/tools/sync/write.ts';
 import { indexExisting, indexDrafts } from '../src/tools/sync/reviewIndex.ts';
 import { DEFAULT_FETCH_POLICY, fetchDataset } from '../src/tools/sync/run.ts';
-import { parseRetryAfterMs, randomGapMs } from '../src/tools/sync/riftboundApi.ts';
+import {
+  MAX_PACER_GAP_MS, SEARCH_PAGE_SIZE, createRequestPacer, parseRetryAfterMs, randomGapMs, searchAllCards
+} from '../src/tools/sync/riftboundApi.ts';
 
 let passed = 0;
 function test(label, fn) { fn(); passed++; console.log(`✓ ${label}`); }
@@ -21,10 +23,26 @@ const existing = (cards = [], prints = []) => ({ cards, prints, icons: [], serie
 const oldBase = { ...base, id: 'base-1', card_no: 'OGN-036', effect_cn: '库内效果', energy: 9 };
 const oldPrint = { ...print, id: 'print-1', card_id: 'base-1', img_cdn: 'old.png', artist: '旧画师', back_image: 'preserve.png' };
 
-test('深度拉取默认单并发，并使用 500–1200ms 随机间隔', () => {
-  assert.deepEqual(DEFAULT_FETCH_POLICY.deep, { concurrency: 1, minGapMs: 500, maxGapMs: 1200 });
-  assert.equal(randomGapMs(500, 1200, () => 0), 500);
-  assert.equal(randomGapMs(500, 1200, () => 1), 1200);
+test('快速/深度拉取都默认单并发与慢节奏随机间隔', () => {
+  assert.deepEqual(DEFAULT_FETCH_POLICY.fast, { concurrency: 1, minGapMs: 400, maxGapMs: 900 });
+  assert.deepEqual(DEFAULT_FETCH_POLICY.deep, { concurrency: 1, minGapMs: 800, maxGapMs: 1600 });
+  assert.equal(randomGapMs(400, 900, () => 0), 400);
+  assert.equal(randomGapMs(400, 900, () => 1), 900);
+  assert.equal(randomGapMs(800, 1600, () => 0), 800);
+  assert.equal(randomGapMs(800, 1600, () => 1), 1600);
+});
+test('节流器可被重试自动降速，并有间隔上限', () => {
+  const pacer = createRequestPacer(100, 200);
+  assert.deepEqual(pacer.gapRange(), { min: 100, max: 200 });
+  pacer.slowDown();
+  assert.deepEqual(pacer.gapRange(), { min: 200, max: 400 });
+  pacer.slowDown(1.5);
+  assert.deepEqual(pacer.gapRange(), { min: 300, max: 600 });
+  pacer.slowDown(100);
+  assert.deepEqual(pacer.gapRange(), { min: MAX_PACER_GAP_MS, max: MAX_PACER_GAP_MS });
+  const zero = createRequestPacer(0, 0);
+  zero.slowDown();
+  assert.deepEqual(zero.gapRange(), { min: 0, max: 0 }, '测试用零间隔不应被降速放大');
 });
 test('Retry-After 同时支持秒数和 HTTP 日期', () => {
   const now = Date.UTC(2026, 8, 23, 0, 0, 0);
@@ -264,7 +282,10 @@ passed++; console.log('✓ series 返回缺少 code 时不能报告成功');
 const savedFetch = globalThis.fetch;
 let detailCalls = 0;
 globalThis.fetch = async (url, opts) => {
-  if (String(url).includes('searchCardCraft')) return Response.json({ code: 0, result: [{ ...detail, errata: '新勘误', frontImage: 'list-image', rarityName: '异画' }] });
+  if (String(url).includes('searchCardCraft')) {
+    const body = JSON.parse(opts.body);
+    return Response.json({ code: 0, result: body.pageNum === 1 ? [{ ...detail, errata: '新勘误', frontImage: 'list-image', rarityName: '异画' }] : [] });
+  }
   if (String(url).includes('cardDetail')) { detailCalls++; return Response.json({ code: 0, result: { ...detail, errata: '新勘误', cardSeries: 'ARC', craftList: [{ frontImage: 'wrong-first-craft' }] } }); }
   return Response.json({ code: 0, result: [] });
 };
@@ -276,6 +297,34 @@ try {
     assert.equal(ds.cards[0].effect_cn, '新勘误\n装配效果');
     assert.equal(ds.prints[0].img_cdn, 'list-image');
   });
+} finally { globalThis.fetch = savedFetch; }
+
+/* ────────────── 卡牌列表分页（25 条/批） ────────────── */
+
+const pageCalls = [];
+globalThis.fetch = async (_url, opts) => {
+  const body = JSON.parse(opts.body);
+  pageCalls.push({ pageNum: body.pageNum, pageSize: body.pageSize });
+  const all = Array.from({ length: 60 }, (_, i) => ({ ...detail, cardNo: `ARC·${String(i + 1).padStart(3, '0')}·SC` }));
+  const start = (body.pageNum - 1) * body.pageSize;
+  return Response.json({ code: 0, result: all.slice(start, start + body.pageSize) });
+};
+try {
+  const rows = await searchAllCards();
+  assert.equal(SEARCH_PAGE_SIZE, 25);
+  assert.equal(rows.length, 60);
+  assert.deepEqual(pageCalls.map((c) => c.pageSize), [25, 25, 25, 25]);
+  assert.deepEqual(pageCalls.map((c) => c.pageNum), [1, 2, 3, 4], '60 条 ÷ 25 必须在第 4 页用空页收工');
+  passed++; console.log('✓ 列表按 25 条/批翻页，直到空页才结束');
+} finally { globalThis.fetch = savedFetch; }
+
+globalThis.fetch = async () => Response.json({
+  code: 0,
+  result: Array.from({ length: 25 }, (_, i) => ({ ...detail, cardNo: `DUP·${String(i + 1).padStart(3, '0')}·SC` }))
+});
+try {
+  await assert.rejects(searchAllCards(), /分页未推进/);
+  passed++; console.log('✓ 服务端忽略 pageNum（整页重复）时抛错，不静默漏卡');
 } finally { globalThis.fetch = savedFetch; }
 
 /* ────────────── 批量勾选更新字段（fieldSelection） ────────────── */

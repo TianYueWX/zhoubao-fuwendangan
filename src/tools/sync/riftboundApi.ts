@@ -11,6 +11,14 @@
 export const RIFTBOUND_API_BASE = 'https://lol-api.playloltcg.com/xcx'
 export const RIFTBOUND_QA_PROXY_BASE = '/api/riftbound'
 
+/**
+ * 官方卡牌列表接口实测单次只返回 25 条；服务端不保证会尊重更大的 pageSize，
+ * 因此列表分页固定按 25 条/批，并只在拿到空页时收工（见 searchAllCards）。
+ */
+export const SEARCH_PAGE_SIZE = 25
+/** 卡牌列表分页上限：25 条/页 × 400 页 = 1 万条，远超当前全表规模 */
+export const MAX_SEARCH_PAGES = 400
+
 /** 只对已知缺少 CORS 头的官方 QA 地址使用同源代理。 */
 export function qaApiBase(baseUrl?: string): string {
   const base = (baseUrl || RIFTBOUND_API_BASE).replace(/\/+$/, '')
@@ -152,6 +160,8 @@ export interface RetryInfo {
   attempt: number
   maxAttempts: number
   waitMs: number
+  /** 自动降速后的请求间隔（毫秒），供界面显示当前节奏。 */
+  gapRange?: { min: number; max: number }
 }
 
 export interface RequestOptions {
@@ -201,18 +211,41 @@ export function randomGapMs(minGapMs: number, maxGapMs: number, random = Math.ra
   return Math.round(min + random() * (max - min))
 }
 
+/** 节流器自动降速后的间隔上限：再慢也不能让整轮同步停滞。 */
+export const MAX_PACER_GAP_MS = 5000
+
+export interface RequestPacer {
+  (): Promise<void>
+  /** 触发限流/重试后整体放慢：间隔 ×factor（默认 2），封顶 MAX_PACER_GAP_MS。 */
+  slowDown(factor?: number): void
+  /** 当前请求间隔范围，供界面显示与离线测试。 */
+  gapRange(): { min: number; max: number }
+}
+
 /**
  * 创建一轮同步专用的全局节流器。并发调用会先同步预约启动时刻，
  * 因此即使有多个 worker，也不会在同一瞬间向上游发出突发请求。
+ *
+ * 官方接口在持续快速请求后会触发 WAF 限流（浏览器里常表现为 CORS 报错）。
+ * 因此每次重试都会调用 slowDown()，让整轮请求越挫越慢，而不是只等单次退避。
  */
-export function createRequestPacer(minGapMs: number, maxGapMs = minGapMs, signal?: AbortSignal) {
+export function createRequestPacer(minGapMs: number, maxGapMs = minGapMs, signal?: AbortSignal): RequestPacer {
+  let min = Math.max(0, minGapMs)
+  let max = Math.max(min, maxGapMs)
   let nextStart = 0
-  return async (): Promise<void> => {
+  const pace = (async (): Promise<void> => {
     const now = Date.now()
     const wait = Math.max(0, nextStart - now)
-    nextStart = Math.max(now, nextStart) + randomGapMs(minGapMs, maxGapMs)
+    nextStart = Math.max(now, nextStart) + randomGapMs(min, max)
     if (wait > 0) await sleep(wait, signal)
+  }) as RequestPacer
+  pace.slowDown = (factor = 2): void => {
+    const f = Math.max(1, factor)
+    min = Math.min(MAX_PACER_GAP_MS, Math.round(min * f))
+    max = Math.min(MAX_PACER_GAP_MS, Math.max(min, Math.round(max * f)))
   }
+  pace.gapRange = () => ({ min, max })
+  return pace
 }
 
 async function request<T>(
@@ -234,7 +267,10 @@ async function request<T>(
       await sleep(waitMs, opts.signal)
       return request<T>(path, init, opts, attempt + 1)
     }
-    throw e
+    throw new Error(
+      `无法访问官方接口（${path}）：${e?.message ?? e}。` +
+      '请求可能被限流/WAF 拦截（浏览器里常显示为 CORS 错误），请等待 10–30 分钟后用更慢的节奏重试'
+    )
   }
   // 网关限流（403/429）或瞬时 5xx：指数退避重试
   if (RETRYABLE.has(res.status)) {
@@ -246,7 +282,10 @@ async function request<T>(
       await sleep(waitMs, opts.signal)
       return request<T>(path, init, opts, attempt + 1)
     }
-    throw new Error(`接口限流或不可用 HTTP ${res.status}（${path}），已重试 ${MAX_RETRIES} 次`)
+    const hint = res.status === 403
+      ? '官方接口拒绝访问（可能触发限流/WAF，浏览器里常显示为 CORS 错误），请等待 10–30 分钟后重试'
+      : '接口限流或不可用'
+    throw new Error(`${hint} HTTP ${res.status}（${path}），已重试 ${MAX_RETRIES} 次`)
   }
   if (!res.ok) throw new Error(`接口请求失败 HTTP ${res.status}（${path}）`)
   return (await res.json()) as ApiEnvelope<T>
@@ -257,12 +296,12 @@ function ensureOk<T>(env: ApiEnvelope<T>, path: string): T {
   return env.result
 }
 
-/** POST /card/searchCardCraft —— 分页拉取卡牌（每行 = 一个印刷版本） */
+/** POST /card/searchCardCraft —— 分页拉取卡牌（每行 = 一个印刷版本，官方单次上限 25 条） */
 export async function searchCards(
   params: SearchCardParams = {},
   opts: RequestOptions = {}
 ): Promise<ApiSearchCard[]> {
-  const body: SearchCardParams = { pageNum: 1, pageSize: 1000, ...params }
+  const body: SearchCardParams = { pageNum: 1, pageSize: SEARCH_PAGE_SIZE, ...params }
   const env = await request<ApiSearchCard[]>('/card/searchCardCraft', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -271,19 +310,36 @@ export async function searchCards(
   return ensureOk(env, '/card/searchCardCraft') || []
 }
 
-/** 分页拉取全部卡牌（直到某页为空） */
+/**
+ * 分页拉取全部卡牌：25 条/批，逐页累计直到**空页**。
+ *
+ * 不能用「本页不足 pageSize 即结束」判断：服务端实际只给 25 条，
+ * 若请求更大的 pageSize，第一页就会被误判为最后一页，静默漏掉全表。
+ * 另设两道保险：整页重复（pageNum 未推进）或超过页数上限时直接抛错，
+ * 宁可使本轮失败，也不产出不完整的卡表。
+ */
 export async function searchAllCards(
-  opts: RequestOptions & { pageSize?: number; onPage?: (page: number, got: number) => void } = {}
+  opts: RequestOptions & { pageSize?: number; onPage?: (page: number, got: number, total: number) => void } = {}
 ): Promise<ApiSearchCard[]> {
-  const pageSize = opts.pageSize ?? 1000
+  const pageSize = opts.pageSize ?? SEARCH_PAGE_SIZE
   const out: ApiSearchCard[] = []
-  for (let page = 1; page <= 50; page++) {
+  const seen = new Set<string>()
+  for (let page = 1; page <= MAX_SEARCH_PAGES; page++) {
     const rows = await searchCards({ pageNum: page, pageSize }, opts)
-    out.push(...rows)
-    opts.onPage?.(page, rows.length)
-    if (rows.length < pageSize) break
+    if (!rows.length) return out
+    let fresh = 0
+    for (const row of rows) {
+      if (seen.has(row.cardNo)) continue
+      seen.add(row.cardNo)
+      out.push(row)
+      fresh++
+    }
+    opts.onPage?.(page, rows.length, out.length)
+    if (page > 1 && fresh === 0) {
+      throw new Error(`官方接口分页未推进（第 ${page} 页全部为重复卡号），已停止以避免静默漏卡`)
+    }
   }
-  return out
+  throw new Error(`官方接口分页超过 ${MAX_SEARCH_PAGES} 页仍未结束，已停止以避免静默漏卡`)
 }
 
 /** POST /card/cardDetail —— 单卡详情；卡牌不存在时返回 null */

@@ -128,16 +128,20 @@ async function runFetch(options: QaFetchOptions): Promise<{ total: number; newCo
     let total = 0;
     let label = '拉取问答…';
     const emit = (retry: RetryInfo | null): void => options.onProgress?.({ label, done: total, total: 0, retry });
+    const pacer = createRequestPacer(500, 1000, options.signal);
     const items = await searchAllCommonQa({
       baseUrl: props.apiBase,
       signal: options.signal,
-      beforeRequest: createRequestPacer(150, 150, options.signal),
+      beforeRequest: pacer,
       onPage: (page, _got, accumulated) => {
         label = `拉取问答…第 ${page} 页（累计 ${accumulated} 条）`;
         total = accumulated;
         emit(null);
       },
-      onRetry: (info) => emit(info)
+      onRetry: (info) => {
+        pacer.slowDown();
+        emit({ ...info, gapRange: pacer.gapRange() });
+      }
     });
     if (!items.length) throw new Error('接口未返回任何问答');
     const incoming: QaIncoming[] = items.map((item) => buildQaIncoming(item, ex.cardNos, nameByNo, pendingCardNos));

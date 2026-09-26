@@ -74,6 +74,12 @@ function statusClass(status: PullStatus): string {
   return status === 'error' ? 'text-delta-down' : status === 'success' ? 'text-delta-up' : 'text-ink-faint';
 }
 
+/** 重试时展示节流器自动降速后的间隔（毫秒 → 秒）。 */
+function gapRangeLabel(range?: { min: number; max: number }): string {
+  if (!range) return '';
+  return `已自动降速至 ${(range.min / 1000).toFixed(1)}–${(range.max / 1000).toFixed(1)} 秒/次`;
+}
+
 const detailCache: Record<string, ApiCardDetail> = loadDetailCache();
 const cacheSize = ref(cacheCount(detailCache));
 
@@ -368,8 +374,8 @@ onMounted(async () => {
           <span class="text-[11px] text-ink-faint leading-relaxed max-w-[560px]">
             {{
               mode === 'fast'
-                ? '分页拉取列表，并补拉新基础卡、勘误卡和未知系列的详情'
-                : '逐卡拉详情(约 1200+ 次)，单并发、每次随机间隔 0.5–1.2 秒，每轮从头拉取'
+                ? '分页拉取列表(25 条/批)，并补拉新基础卡、勘误卡和未知系列的详情；单并发，每次间隔 0.4–0.9 秒'
+                : '逐卡拉详情(每个印刷版本 1 次)，单并发、每次随机间隔 0.8–1.6 秒，每轮从头拉取，耗时较长'
             }}
           </span>
           <span v-if="!pullCards" class="text-[11px] text-ink-faint">模式仅适用于「卡牌与关键词图标」。</span>
@@ -408,6 +414,9 @@ onMounted(async () => {
               </p>
               <p v-if="taskProgress[item.key].retry" class="text-[11px] text-accent mt-1" role="status">
                 接口抖动，重试 {{ taskProgress[item.key].retry?.attempt }} / {{ taskProgress[item.key].retry?.maxAttempts }}…
+                <span v-if="taskProgress[item.key].retry?.gapRange">
+                  · {{ gapRangeLabel(taskProgress[item.key].retry?.gapRange) }}
+                </span>
               </p>
             </template>
           </div>
