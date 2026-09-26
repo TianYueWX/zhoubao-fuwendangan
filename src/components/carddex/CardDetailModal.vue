@@ -344,6 +344,14 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey));
                   {{ item.base.nameEn }}
                   <small>{{ item.base.subtitleEn }}</small>
                 </h3>
+                <h3 v-if="item.base.nameKr">
+                  {{ item.base.nameKr }}
+                  <small>{{ item.base.subtitleKr }}</small>
+                </h3>
+                <h3 v-if="item.base.nameTw">
+                  {{ item.base.nameTw }}
+                  <small>{{ item.base.subtitleTw }}</small>
+                </h3>
               </div>
               <div class="chips">
                 <span v-if="selected?.series || item.base.series">{{
@@ -392,7 +400,12 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey));
             </dl>
           </div>
           <section
-            v-if="item.base.effectCn || item.base.effectEn"
+            v-if="
+              item.base.effectCn ||
+              item.base.effectEn ||
+              item.base.effectKr ||
+              item.base.effectTw
+            "
             class="copy-block"
           >
             <h4>{{ locale === "zh" ? "卡牌效果" : "Card text" }}</h4>
@@ -405,6 +418,16 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey));
               v-if="item.base.effectEn"
               class="effect secondary"
               v-html="rich(item.base.effectEn)"
+            ></div>
+            <div
+              v-if="item.base.effectKr"
+              class="effect secondary"
+              v-html="rich(item.base.effectKr)"
+            ></div>
+            <div
+              v-if="item.base.effectTw"
+              class="effect secondary"
+              v-html="rich(item.base.effectTw)"
             ></div>
           </section>
           <section

@@ -92,7 +92,7 @@ const eq = (label, actual, wanted) =>
     changedBatchFields({ ...before, rarity_name: null }, { ...before, rarity_name: undefined }), {});
   eq('数组字段不在批量可改范围',
     changedBatchFields({ tag: ['a'] }, { tag: ['b'] }), {});
-  eq('可改字段清单固定为 9 个', BATCH_FIELDS.length, 9);
+  eq('可改字段清单固定为 11 个', BATCH_FIELDS.length, 11);
 }
 
 /* ────────── deck_limit 三态 ────────── */

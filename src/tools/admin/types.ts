@@ -11,8 +11,12 @@ export interface CardBase {
   card_no: string | null;
   card_name_cn: string | null;
   card_name_en: string | null;
+  card_name_kr: string | null;
+  card_name_tw: string | null;
   sub_title_cn: string | null;
   sub_title_en: string | null;
+  sub_title_kr: string | null;
+  sub_title_tw: string | null;
   card_color_list: string[] | null;
   region: string[] | null;
   tag: string[] | null;
@@ -21,6 +25,8 @@ export interface CardBase {
   champion_tag: string | null;
   effect_cn: string | null;
   effect_en: string | null;
+  effect_kr: string | null;
+  effect_tw: string | null;
   flavor_text_cn: string | null;
   flavor_text_en: string | null;
   energy: number | null;

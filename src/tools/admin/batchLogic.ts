@@ -13,6 +13,8 @@ export const BATCH_FIELDS = [
   'card_no',
   'card_name_cn',
   'card_name_en',
+  'card_name_kr',
+  'card_name_tw',
   'energy',
   'return_energy',
   'power',

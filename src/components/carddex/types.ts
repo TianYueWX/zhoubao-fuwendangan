@@ -17,8 +17,12 @@ export interface CardBase {
   cardNo: string;
   nameCn: string;
   nameEn: string;
+  nameKr: string;
+  nameTw: string;
   subtitleCn: string;
   subtitleEn: string;
+  subtitleKr: string;
+  subtitleTw: string;
   colors: string[];
   regions: string[];
   tags: string[];
@@ -27,6 +31,8 @@ export interface CardBase {
   championTag: string;
   effectCn: string;
   effectEn: string;
+  effectKr: string;
+  effectTw: string;
   energy: number | null;
   returnEnergy: number | null;
   power: number | null;

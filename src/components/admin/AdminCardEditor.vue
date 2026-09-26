@@ -124,7 +124,7 @@ const form = ref<CardBase | null>(null);
 const detailLoading = ref(false);
 const saving = ref(false);
 
-const effectTab = ref<'cn' | 'en'>('cn');
+const effectTab = ref<'cn' | 'en' | 'kr' | 'tw'>('cn');
 const flavorOpen = ref(false);
 
 const deckMode = ref<DeckMode>('default');
@@ -170,7 +170,12 @@ watch([deckMode, deckN], () => {
 
 const effectPreview = computed(() => {
   if (!form.value) return '';
-  const text = effectTab.value === 'cn' ? form.value.effect_cn : form.value.effect_en;
+  const text = {
+    cn: form.value.effect_cn,
+    en: form.value.effect_en,
+    kr: form.value.effect_kr,
+    tw: form.value.effect_tw
+  }[effectTab.value];
   return renderEffectPreview(text);
 });
 
@@ -701,6 +706,22 @@ onMounted(async () => {
                 <span class="text-[11px] tracking-[0.14em] text-ink-faint">英文副题</span>
                 <input v-model="form.sub_title_en" class="filter-select w-full mt-1.5" />
               </label>
+              <label class="block">
+                <span class="text-[11px] tracking-[0.14em] text-ink-faint">韩文名</span>
+                <input v-model="form.card_name_kr" class="filter-select w-full mt-1.5" />
+              </label>
+              <label class="block">
+                <span class="text-[11px] tracking-[0.14em] text-ink-faint">韩文副题</span>
+                <input v-model="form.sub_title_kr" class="filter-select w-full mt-1.5" />
+              </label>
+              <label class="block">
+                <span class="text-[11px] tracking-[0.14em] text-ink-faint">繁中名</span>
+                <input v-model="form.card_name_tw" class="filter-select w-full mt-1.5" />
+              </label>
+              <label class="block">
+                <span class="text-[11px] tracking-[0.14em] text-ink-faint">繁中副题</span>
+                <input v-model="form.sub_title_tw" class="filter-select w-full mt-1.5" />
+              </label>
             </div>
 
             <div class="hairline my-6"></div>
@@ -846,7 +867,9 @@ onMounted(async () => {
               <button
                 v-for="t in ([
                   { id: 'cn', label: '中文效果' },
-                  { id: 'en', label: '英文效果' }
+                  { id: 'en', label: '英文效果' },
+                  { id: 'kr', label: '韩文效果' },
+                  { id: 'tw', label: '繁中效果' }
                 ] as const)"
                 :key="t.id"
                 class="px-3.5 py-1.5 text-xs transition-colors border-l border-card-border first:border-l-0"
@@ -864,11 +887,25 @@ onMounted(async () => {
               placeholder="支持 {{标记}} 内联效果标签"
             ></textarea>
             <textarea
-              v-else
+              v-else-if="effectTab === 'en'"
               v-model="form.effect_en"
               rows="4"
               class="filter-select w-full font-mono text-[12.5px] leading-relaxed"
               placeholder="可含 <p> 等段落标签"
+            ></textarea>
+            <textarea
+              v-else-if="effectTab === 'kr'"
+              v-model="form.effect_kr"
+              rows="4"
+              class="filter-select w-full font-mono text-[12.5px] leading-relaxed"
+              placeholder="支持 {{标记}}；官网数据为纯文本 + 标记"
+            ></textarea>
+            <textarea
+              v-else
+              v-model="form.effect_tw"
+              rows="4"
+              class="filter-select w-full font-mono text-[12.5px] leading-relaxed"
+              placeholder="支持 {{标记}}；官网数据为纯文本 + 标记"
             ></textarea>
 
             <div v-if="effectPreview" class="mt-3 border border-dashed border-card-border rounded-lg p-3 bg-panel-bg">
@@ -955,6 +992,8 @@ onMounted(async () => {
                         <select v-model="row.language" class="filter-select w-full">
                           <option value="SC">SC</option>
                           <option value="EN">EN</option>
+                          <option value="TC">TC</option>
+                          <option value="KR">KR</option>
                         </select>
                       </td>
                       <td class="px-2.5 py-1.5">

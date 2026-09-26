@@ -19,13 +19,17 @@ export interface CardsBaseRow {
   sync_detail_complete?: boolean
   card_no: string
   card_name_cn: string | null
+  card_name_en?: string | null
   sub_title_cn: string | null
+  sub_title_en?: string | null
   card_color_list: string[]
   region: string[]
   tag: string[]
   champion_tag: string | null
   effect_cn: string | null
+  effect_en?: string | null
   flavor_text_cn: string | null
+  flavor_text_en?: string | null
   energy: number | null
   return_energy: number | null
   power: number | null
@@ -47,6 +51,7 @@ export interface CardPrintRow {
   artist: string | null
   series: string | null
   flavor_text_cn: string | null
+  flavor_text_en?: string | null
   is_promo: boolean
 }
 
@@ -94,7 +99,8 @@ export function normalizeCardNo(apiCardNo: string): NormalizedCardNo {
   const isPromo = /-P$/i.test(s)
   if (isPromo) s = s.slice(0, -2)
   s = s.replace(/\/\d+$/, '')
-  const valid = /^[A-Z0-9]+-[A-Z]?\d+[a-z]*$/.test(s)
+  // 允许官网/库内已存在的形态：字母版本 066a、星号 300*、SP3、T04。
+  const valid = /^[A-Z0-9]+-[A-Z0-9]*\d[A-Z0-9]*[a-z*]*$/.test(s)
   return { extend: s, isPromo, language, error: valid ? undefined : `无法解析编号或语言：${apiCardNo}` }
 }
 

@@ -10,6 +10,7 @@
 - 已有基础卡仅允许 API `errata` 非空时更新 `effect_cn`，详情中的装配效果保留；不同勘误来源须手选。
 - `back_image` 不展示、不比较、不写入。新增使用数据库默认值。
 - `is_banned`、英文列、keyword、advanced_tag、deck_limit、tts_cdn、print_order、is_default 不自动同步。
+  （英文列可通过下方「官网卡表」面板单独同步，见后文。）
 
 | API | cards_base（仅新增；effect_cn 可勘误更新） |
 | --- | --- |
@@ -33,6 +34,31 @@
 
 列表每行是一种印刷版本，不能用详情的 `craftList[0]` 替代该版本的图片。快速模式对新增基础卡和勘误卡补拉详情，避免丢失装配效果。勘误详情不使用旧缓存。
 
+## 官网卡表（playriftbound.com）
+
+同步页另有独立面板，直接读取 Riot 官网卡表接口：
+
+- 上游：`content.publishing.riotgames.com/.../list/riftbound_gallery_{sets,cards}`，公开可访问，但 CORS 只放行 playriftbound.com，浏览器一律经同源函数 `/api/riftbound/gallery/*` 转发（Cloudflare Pages Function + Vite dev 代理）。
+- 语言选择器列出官网全部 9 个语区，实测只有 4 个有卡牌级本地化：
+
+| 语区 | 文本 | 卡图 | 写库目标 |
+| --- | --- | --- | --- |
+| en-us | 全部英文 | 英文卡图 | `card_name_en` / `sub_title_en` / `effect_en` + `card_prints` language=EN |
+| zh-cn | 全部中文（约 15% 未翻译） | 中文卡图 | `card_name_cn` / `sub_title_cn` / `effect_cn`（`{{标记}}`）+ language=SC |
+| ko-kr | 仅 OGN+OGS 共 376 张 | 375 张独立韩版图 | `card_name_kr` / `sub_title_kr` / `effect_kr` + language=KR |
+| zh-tw | 仅 OGN+OGS 共 376 张 | 352 张独立繁中图 | `card_name_tw` / `sub_title_tw` / `effect_tw` + language=TC |
+| fr/es/de/it/ja | 无（英文回退） | 同英文 | 只读预览，禁止提交/导出 |
+
+- 系列多选（OGN/OGS/SFD/UNL/VEN，默认全部）：列表接口忽略 set 过滤参数，先拉全量再本地筛选。
+- 副标题：优先官方 `subtitle` 字段；为空且名字含 `,`/`，` 时按逗号拆分（如 `Heisho, Shell of the World`、`艾蕾，头号拥趸`）。
+- 效果文本：英文保留原始 HTML；中文/韩文/繁中转成 `纯文本 + {{标记}}`（`:rb_might:`→`{{S}}`、`:rb_energy_8:`→`{{8}}`、`:rb_rune_rainbow:`→`{{A}}`、`[急速]`→`{{急速}}` 等）；未识别标记会在审核行标注，不静默写入。
+- 未翻译条目：文本置空、标记「未翻译」，绝不把英文回退写进译文列；卡图印刷仍可同步。
+- 稀有度：common/uncommon/rare/epic/showcase → 普通/不凡/稀有/史诗/异画；编号超过系列上限 → 超编，带 `*` → 签名超编。
+- 基础卡按 `card_no` 唯一匹配；`*`/SP/超编号印刷（如 `SFD-227*` → `OGN-119`）用 accessibilityText 里的英文名＋副标题回找原作基础卡，多个候选必须手选。
+- 允许新建只带目标语言文本的基础卡（英文卡可仅有 `card_name_en`）；库内已有卡只更新目标语言列，不覆盖其他语言。
+- 韩/繁中列迁移：先执行 `supabase/migrations/20260926_add_kr_tw_columns.sql`；未执行时面板自动降级——韩/繁中文本不可提交，卡图印刷照常。
+- 已知限制：新增「仅韩文/仅英文」基础卡后，小程序源按中文名匹配不到它，可能提示编号被占用，需要人工在卡牌编辑器补中文列；官网无 flavor text、无背面图、无印刷顺序。
+
 ## 提交和导出
 
 1. 打开任意记录，查看库内值、API 映射值和可编辑的待提交值。
@@ -43,9 +69,9 @@
 6. 重读数据库保留编辑值，但清空更新字段勾选，要求重新审核最新值。
 7. SQL 按阶段导出，并按发布勾选状态触碰该阶段的版本标记；新基础卡尚未落库时，不导出依赖它的印刷版本。基础卡 SQL 执行后重读，再导出印刷阶段。
 8. CSV 分为新增文件和 `update-patches` 文件；后者按 `table,id,attribute,value_json` 保存补丁，不能当整行 CSV 导入。
-9. 站点快照仍是独立的全库原始数据导出，保留站点需要的全部字段。
+9. 站点快照仍是独立的全库原始数据导出，保留站点需要的全部字段。官网面板与小程序面板共用同一套字段白名单与导出校验。
 
-写入使用 INSERT 或按 ID 的 PATCH，不使用整行 upsert；提交前检查重复身份和所选字段的新值，PATCH 在可用时携带时间戳条件。失败/零行返回不会报成功。没有数据库结构改动。
+写入使用 INSERT 或按 ID 的 PATCH，不使用整行 upsert；提交前检查重复身份和所选字段的新值，PATCH 在可用时携带时间戳条件。失败/零行返回不会报成功。小程序流程没有数据库结构改动；官网面板的韩/繁中列是可选迁移（`supabase/migrations/20260926_add_kr_tw_columns.sql`），未执行时自动降级为仅同步卡图。
 
 ## 性能
 
@@ -61,6 +87,7 @@
 
 ```sh
 npm run verify:sync-review
+npm run verify:gallery-sync
 npm run verify:admin-sync
 npm run build
 # 另一个终端启动 npm run dev

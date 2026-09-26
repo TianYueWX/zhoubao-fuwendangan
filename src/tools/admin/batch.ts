@@ -34,6 +34,8 @@ export const SORTABLE_FIELDS = [
   'card_no',
   'card_name_cn',
   'card_name_en',
+  'card_name_kr',
+  'card_name_tw',
   'energy',
   'return_energy',
   'power',
@@ -45,7 +47,7 @@ export type SortField = (typeof SORTABLE_FIELDS)[number];
 
 /** 表内展示需要的列(card_no 必带,用于定位) */
 export const BATCH_COLUMNS =
-  'id,card_no,card_name_cn,card_name_en,energy,return_energy,power,rarity_name,series_name,is_banned,deck_limit';
+  'id,card_no,card_name_cn,card_name_en,card_name_kr,card_name_tw,energy,return_energy,power,rarity_name,series_name,is_banned,deck_limit';
 
 export type BatchRow = Pick<
   CardBase,
@@ -53,6 +55,8 @@ export type BatchRow = Pick<
   | 'card_no'
   | 'card_name_cn'
   | 'card_name_en'
+  | 'card_name_kr'
+  | 'card_name_tw'
   | 'energy'
   | 'return_energy'
   | 'power'
@@ -84,7 +88,7 @@ export async function listBatchRows(
   const { rows, total } = await restSelect<BatchRow>('cards_base', {
     columns: BATCH_COLUMNS,
     or: kw
-      ? `card_no.ilike.*${kw}*,card_name_cn.ilike.*${kw}*,card_name_en.ilike.*${kw}*`
+      ? `card_no.ilike.*${kw}*,card_name_cn.ilike.*${kw}*,card_name_en.ilike.*${kw}*,card_name_kr.ilike.*${kw}*,card_name_tw.ilike.*${kw}*`
       : undefined,
     filters: [
       ...(q.series ? [{ column: 'series_name', op: 'eq' as const, value: q.series }] : []),

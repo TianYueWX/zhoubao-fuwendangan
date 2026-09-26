@@ -56,6 +56,24 @@ export const UPDATE_FIELDS: Record<ReviewTable, readonly string[]> = {
 export const ARRAY_FIELDS = ['card_color_list', 'region', 'tag', 'card_category']
 export const NUMBER_FIELDS = ['energy', 'return_energy', 'power', 'release_order']
 export const BOOL_FIELDS = ['is_promo', 'isWhite', 'is_standard', 'is_active']
+/**
+ * 官网卡表同步新增的 cards_base 列。小程序流程（UPDATE_FIELDS.cards_base）刻意
+ * 只允许 effect_cn，不受这里影响；这里只用于放行官网面板的提交与导出。
+ */
+export const GALLERY_BASE_FIELDS = [
+  'card_name_en',
+  'sub_title_en',
+  'effect_en',
+  'card_name_cn',
+  'sub_title_cn',
+  'effect_cn',
+  'card_name_kr',
+  'sub_title_kr',
+  'effect_kr',
+  'card_name_tw',
+  'sub_title_tw',
+  'effect_tw'
+] as const
 const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T
 export const identity = (name: unknown, subtitle: unknown): string =>
   JSON.stringify([String(name ?? '').trim(), String(subtitle ?? '').trim()])
@@ -206,7 +224,8 @@ export function buildOperation(row: ReviewRow, rows: ReviewRow[], ex: ExistingSn
 
 /** Whitelist is applied again at the write/export boundary. */
 export function validateOperation(op: ReviewOperation): void {
-  const allowed = op.kind === 'insert' ? INSERT_FIELDS[op.table] : UPDATE_FIELDS[op.table]
+  const galleryBase = op.table === 'cards_base' ? GALLERY_BASE_FIELDS : []
+  const allowed = [...(op.kind === 'insert' ? INSERT_FIELDS : UPDATE_FIELDS)[op.table], ...galleryBase]
   if (!allowed || !Object.keys(op.payload).length || Object.keys(op.payload).some((k) => !allowed.includes(k))) throw new Error('提交包含未授权的字段')
   if (op.kind === 'update' && !op.id) throw new Error('更新必须指定记录 ID')
   if (op.kind === 'update' && (Object.keys(op.expected).some((k) => !allowed.includes(k)) ||

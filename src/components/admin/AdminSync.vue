@@ -3,6 +3,7 @@
 import { computed, onMounted, reactive, ref } from 'vue';
 import SyncReview from './SyncReview.vue';
 import AdminQaSync from './AdminQaSync.vue';
+import AdminGallerySync from './AdminGallerySync.vue';
 import { identity } from '@/tools/sync/review';
 import EditorialShell from './EditorialShell.vue';
 import SectionHeading from '../SectionHeading.vue';
@@ -35,6 +36,7 @@ const confirmDiscard = ref(false);
 const incomingIdentityCount = computed(() => new Set((dataset.value?.cards ?? []).map(c => identity(c.card_name_cn, c.sub_title_cn))).size);
 let controller: AbortController | null = null;
 const qaBusy = ref(false);
+const galleryBusy = ref(false);
 const syncReview = ref<{ hasUnsavedReview: () => boolean } | null>(null);
 const qaSync = ref<{
   runFetch: (options: {
@@ -138,7 +140,7 @@ async function runCardFetch(signal: AbortSignal): Promise<SyncDataset> {
 }
 
 function requestFetch(): void {
-  if (fetching.value || reviewBusy.value || qaBusy.value || !hasSelection.value) return;
+  if (fetching.value || reviewBusy.value || qaBusy.value || galleryBusy.value || !hasSelection.value) return;
   const hasOldReview = Boolean(syncReview.value?.hasUnsavedReview()) || Boolean(qaSync.value?.hasUnsavedReview());
   if (hasOldReview) {
     confirmDiscard.value = true;
@@ -148,7 +150,7 @@ function requestFetch(): void {
 }
 
 async function startFetch(): Promise<void> {
-  if (fetching.value || reviewBusy.value || qaBusy.value || !hasSelection.value) return;
+  if (fetching.value || reviewBusy.value || qaBusy.value || galleryBusy.value || !hasSelection.value) return;
   confirmDiscard.value = false;
   resetRunState();
   fetching.value = true;
@@ -445,6 +447,14 @@ onMounted(async () => {
         @reload="loadExistingRows(true)" @busy="reviewBusy = $event" />
 
       <AdminQaSync ref="qaSync" :api-base="apiBase" @busy="qaBusy = $event" />
+
+      <AdminGallerySync
+        :existing="existing"
+        :existing-loading="existingLoading"
+        :configured="configured"
+        @reload="loadExistingRows(true)"
+        @busy="galleryBusy = $event"
+      />
 
       <!-- 站点卡表快照 -->
       <section>

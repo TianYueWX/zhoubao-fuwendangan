@@ -9,6 +9,17 @@ const riftboundProxy = {
   rewrite: (path: string) => path.replace(/^\/api\/riftbound/, '/xcx')
 };
 
+// 官网卡表（Riot PCS）：CORS 只放行 playriftbound.com，dev 下同样走同源路径。
+const galleryUpstream =
+  'https://content.publishing.riotgames.com/publishing-content/v2.0/public/channel/riftbound_website/list';
+const galleryProxy = (list: string) => ({
+  target: 'https://content.publishing.riotgames.com',
+  changeOrigin: true,
+  secure: true,
+  rewrite: (path: string) =>
+    path.replace(/^\/api\/riftbound\/gallery\/[^?]+/, `${galleryUpstream}/riftbound_gallery_${list}`)
+});
+
 // https://vitejs.dev/config/
 export default defineConfig({
   // 关键:相对路径 base 同时兼容 file:// 与子路径部署(Cloudflare Pages)
@@ -47,6 +58,8 @@ export default defineConfig({
     port: 5173,
     open: false,
     proxy: {
+      '/api/riftbound/gallery/cards': galleryProxy('cards'),
+      '/api/riftbound/gallery/sets': galleryProxy('sets'),
       '/api/riftbound': riftboundProxy
     }
   },
@@ -54,6 +67,8 @@ export default defineConfig({
   preview: {
     port: 4173,
     proxy: {
+      '/api/riftbound/gallery/cards': galleryProxy('cards'),
+      '/api/riftbound/gallery/sets': galleryProxy('sets'),
       '/api/riftbound': riftboundProxy
     }
   },

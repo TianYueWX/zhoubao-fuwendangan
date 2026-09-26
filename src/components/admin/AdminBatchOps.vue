@@ -162,7 +162,7 @@ function setNum(row: Row, field: 'energy' | 'return_energy' | 'power', v: string
   row.data[field] = n === null || Number.isNaN(n) ? null : n;
 }
 
-function setText(row: Row, field: 'card_no' | 'card_name_cn' | 'card_name_en', v: string): void {
+function setText(row: Row, field: 'card_no' | 'card_name_cn' | 'card_name_en' | 'card_name_kr' | 'card_name_tw', v: string): void {
   row.data[field] = v;
 }
 
@@ -590,6 +590,8 @@ onMounted(async () => {
                   { key: 'card_no', label: '卡号', w: '110px' },
                   { key: 'card_name_cn', label: '中文名', w: '150px' },
                   { key: 'card_name_en', label: '英文名', w: '150px' },
+                  { key: 'card_name_kr', label: '韩文名', w: '150px' },
+                  { key: 'card_name_tw', label: '繁中名', w: '150px' },
                   { key: 'energy', label: '能量', w: '80px' },
                   { key: 'return_energy', label: '返还能量', w: '90px' },
                   { key: 'power', label: '战力', w: '80px' },
@@ -684,6 +686,25 @@ onMounted(async () => {
                   @click="startEdit(row.id, 'card_name_en')"
                 >
                   {{ row.data.card_name_en || '—' }}
+                </button>
+              </td>
+
+              <!-- 韩文名 / 繁中名 -->
+              <td v-for="f in (['card_name_kr', 'card_name_tw'] as const)" :key="f" class="px-2.5 py-1.5">
+                <input
+                  v-if="isEditing(row.id, f)"
+                  :value="row.data[f] ?? ''"
+                  class="filter-select w-full"
+                  @input="setText(row, f, ($event.target as HTMLInputElement).value)"
+                  @blur="stopEdit"
+                  @keyup.enter="stopEdit"
+                />
+                <button
+                  v-else
+                  class="w-full text-left text-[13px] hover:text-brand transition-colors truncate"
+                  @click="startEdit(row.id, f)"
+                >
+                  {{ row.data[f] || '—' }}
                 </button>
               </td>
 

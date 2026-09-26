@@ -15,6 +15,11 @@ import { normalizeCardNo } from './normalize'
 export interface ExistingReviewIndex {
   bases: Map<string, Values[]>
   baseNumbers: Set<unknown>
+  /** 官网卡表同步：按 card_no 直接定位基础卡（card_no 唯一）。 */
+  basesByNumber: Map<string, Values>
+  /** 官网卡表同步：星号/SP/超编号印刷用英文名＋副标题回找基础卡。 */
+  basesByEnIdentity: Map<string, Values[]>
+  basesByEnName: Map<string, Values[]>
   prints: Map<string, Values[]>
   icons: Map<unknown, Values>
   series: Set<string>
@@ -34,18 +39,39 @@ function tally(map: Map<string, number>, key: string): void {
 }
 export function indexExisting(ex: ExistingSnapshot): ExistingReviewIndex {
   const bases = new Map<string, Values[]>()
+  const basesByNumber = new Map<string, Values>()
+  const basesByEnIdentity = new Map<string, Values[]>()
+  const basesByEnName = new Map<string, Values[]>()
   const prints = new Map<string, Values[]>()
   const baseNumbers = new Set<unknown>()
   const icons = new Map<unknown, Values>()
   for (const card of ex.cards) {
     append(bases, identity(card.card_name_cn, card.sub_title_cn), card as unknown as Values)
     baseNumbers.add(card.card_no)
+    const value = card as unknown as Values
+    if (card.card_no && !basesByNumber.has(card.card_no)) basesByNumber.set(card.card_no, value)
+    // 英文身份的匹配规则与 galleryReview 保持一致（trim 后比较）。
+    append(
+      basesByEnIdentity,
+      JSON.stringify([String(card.card_name_en ?? '').trim(), String(card.sub_title_en ?? '').trim()]),
+      value
+    )
+    append(basesByEnName, String(card.card_name_en ?? '').trim(), value)
   }
   for (const print of ex.prints) append(prints,
     printIdentity(normalizeCardNo(print.card_no_extend).extend, print.language), print as unknown as Values)
   // First match wins, matching `ex.icons.find(...)` rather than a last-wins Map seed.
   for (const icon of ex.icons) if (!icons.has(icon.name_zh)) icons.set(icon.name_zh, icon as unknown as Values)
-  return { bases, baseNumbers, prints, icons, series: new Set(ex.seriesCodes) }
+  return {
+    bases,
+    baseNumbers,
+    basesByNumber,
+    basesByEnIdentity,
+    basesByEnName,
+    prints,
+    icons,
+    series: new Set(ex.seriesCodes)
+  }
 }
 export function indexDrafts(rows: ReviewRow[]): DraftReviewIndex {
   const byKey = new Map<string, ReviewRow>()
