@@ -19,7 +19,7 @@ import {
 } from '../src/tools/sync/galleryNormalize.ts';
 import { toGalleryCard, fetchAllGalleryCards, galleryPath } from '../src/tools/sync/galleryApi.ts';
 import { parseRetryAfterMs } from '../src/tools/sync/riftboundApi.ts';
-import { fetchGalleryDataset } from '../src/tools/sync/galleryRun.ts';
+import { fetchGalleryDataset, parseSeriesCodes } from '../src/tools/sync/galleryRun.ts';
 import {
   createGalleryReview, galleryState, buildGalleryOperation, galleryBaseCandidates, TARGET_FIELDS
 } from '../src/tools/sync/galleryReview.ts';
@@ -561,6 +561,16 @@ test('galleryPath 使用同源代理且带白名单参数', () => {
     galleryPath('cards', 'zh_CN', 200, 200),
     '/api/riftbound/gallery/cards?locale=zh_CN&from=200&limit=200'
   );
+});
+
+test('手输系列代码：多分隔符、大小写归一、去重、空串', () => {
+  assert.deepEqual(parseSeriesCodes('VEN'), ['VEN']);
+  assert.deepEqual(parseSeriesCodes('ven, sfd'), ['VEN', 'SFD']);
+  assert.deepEqual(parseSeriesCodes('VEN、OGN；unl unk'), ['VEN', 'OGN', 'UNL', 'UNK']);
+  assert.deepEqual(parseSeriesCodes(' ven , ven ,, '), ['VEN']);
+  assert.deepEqual(parseSeriesCodes('v-e-n!'), ['V-E-N']);
+  assert.deepEqual(parseSeriesCodes(''), []);
+  assert.deepEqual(parseSeriesCodes('   '), []);
 });
 
 console.log(`\n──────── 结果：${passed} 通过 ────────`);

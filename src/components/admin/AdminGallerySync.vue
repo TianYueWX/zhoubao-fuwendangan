@@ -13,7 +13,7 @@ import {
   type GalleryLocale,
   type RetryInfo
 } from '@/tools/sync/galleryApi';
-import { fetchGalleryDataset, type GalleryDataset, type GallerySeriesOption } from '@/tools/sync/galleryRun';
+import { fetchGalleryDataset, parseSeriesCodes, type GalleryDataset, type GallerySeriesOption } from '@/tools/sync/galleryRun';
 
 const props = defineProps<{
   existing: ExistingSnapshot | null;
@@ -48,7 +48,19 @@ const busyAll = computed(() => fetching.value || reviewBusy.value);
 watch(busyAll, (value) => emit('busy', value), { immediate: true });
 
 const allSeriesSelected = computed(() => !seriesIds.value.length);
+/** 手输系列代码（如 VEN、SFD）：非空时优先于上方勾选。 */
+const customSeries = ref('');
+const customCodes = computed(() => parseSeriesCodes(customSeries.value));
+const customActive = computed(() => customCodes.value.length > 0);
+const effectiveSeriesIds = computed(() => (customActive.value ? customCodes.value : seriesIds.value));
+/** 手输代码不在已拉到的官网列表中（拼写错误，或列表尚未更新）。 */
+const unknownCustomCodes = computed(() => {
+  if (!seriesOptions.value.length) return [];
+  const known = new Set(seriesOptions.value.map((s) => s.id));
+  return customCodes.value.filter((code) => !known.has(code));
+});
 const selectedSeriesLabel = computed(() => {
+  if (customActive.value) return `自定义：${customCodes.value.join('、')}`;
   if (allSeriesSelected.value) return '全部系列';
   return seriesOptions.value
     .filter((s) => seriesIds.value.includes(s.id))
@@ -120,7 +132,7 @@ async function startFetch(): Promise<void> {
   try {
     const ds = await fetchGalleryDataset({
       locale: locale.value,
-      seriesIds: seriesIds.value,
+      seriesIds: effectiveSeriesIds.value,
       signal: controller.value.signal,
       onProgress: (p) => {
         progress.label = p.label;
@@ -175,19 +187,50 @@ onMounted(() => {
           </select>
         </label>
         <div>
-          <span class="text-sm font-semibold block mb-2">系列（可多选）</span>
-          <div class="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
+          <div class="flex items-center justify-between gap-3 mb-2">
+            <span class="text-sm font-semibold">系列（可多选）</span>
+            <button
+              class="text-[11px] text-brand hover:underline disabled:opacity-40"
+              :disabled="busyAll || seriesLoading"
+              @click="loadSeries"
+            >
+              {{ seriesLoading ? '读取系列…' : '刷新系列' }}
+            </button>
+          </div>
+          <div class="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs" :class="{ 'opacity-50': customActive }">
             <label class="flex items-center gap-1.5">
-              <input type="checkbox" :checked="allSeriesSelected" :disabled="busyAll" @change="toggleAllSeries" />
+              <input type="checkbox" :checked="allSeriesSelected" :disabled="busyAll || customActive" @change="toggleAllSeries" />
               全部
             </label>
             <label v-for="s in seriesOptions" :key="s.id" class="flex items-center gap-1.5">
-              <input type="checkbox" :checked="seriesIds.includes(s.id)" :disabled="busyAll" @change="toggleSeries(s.id, ($event.target as HTMLInputElement).checked)" />
+              <input type="checkbox" :checked="seriesIds.includes(s.id)" :disabled="busyAll || customActive" @change="toggleSeries(s.id, ($event.target as HTMLInputElement).checked)" />
               {{ s.id }} · {{ s.name }}
             </label>
-            <span v-if="seriesLoading" class="text-ink-faint">读取系列…</span>
           </div>
-          <p v-if="seriesError" class="text-[11px] text-accent mt-1">系列列表读取失败：{{ seriesError }}</p>
+          <div class="flex items-center gap-2 mt-2">
+            <input
+              v-model="customSeries"
+              :disabled="busyAll"
+              class="filter-select flex-1 font-mono"
+              placeholder="自定义系列代码，如 VEN、SFD（填写后优先于上方勾选）"
+              aria-label="自定义系列代码"
+            />
+            <button
+              v-if="customSeries"
+              class="text-[11px] text-ink-faint hover:text-ink-muted disabled:opacity-40"
+              :disabled="busyAll"
+              @click="customSeries = ''"
+            >
+              清空
+            </button>
+          </div>
+          <p v-if="customActive" class="text-[11px] text-ink-faint mt-1">
+            已切换为手输模式，上方勾选暂不生效；清空输入框即恢复勾选。
+          </p>
+          <p v-if="unknownCustomCodes.length" class="text-[11px] text-accent mt-1">
+            以下代码不在官网系列列表中：{{ unknownCustomCodes.join('、') }}（拼写错误或列表尚未更新，仍会参与过滤）
+          </p>
+          <p v-if="seriesError" class="text-[11px] text-accent mt-1">系列列表读取失败：{{ seriesError }}（可直接在手输框填代码兜底）</p>
         </div>
       </div>
 

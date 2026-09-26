@@ -258,3 +258,19 @@ export function gallerySeriesLabel(dataset: GalleryDataset): string {
   const codes = dataset.series.filter((s) => dataset.selectedSeries.includes(s.id)).map((s) => s.id)
   return codes.length ? codes.join('、') : dataset.selectedSeries.join('、')
 }
+
+/**
+ * 手输系列代码 → 代码数组（如 "ven, sfd" → ["VEN","SFD"]）。
+ * 支持 , ， 、 空白 ; 分隔；统一大写、去重、过滤非法字符；空串返回 []。
+ */
+export function parseSeriesCodes(raw: string): string[] {
+  const out: string[] = []
+  const seen = new Set<string>()
+  for (const part of String(raw ?? '').split(/[\s,，、;；]+/)) {
+    const code = part.trim().toUpperCase().replace(/[^A-Z0-9-]/g, '')
+    if (!code || seen.has(code)) continue
+    seen.add(code)
+    out.push(code)
+  }
+  return out
+}
