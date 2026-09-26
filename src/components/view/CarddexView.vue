@@ -118,7 +118,7 @@ const labels = computed(() =>
       },
 );
 
-const options = computed(() => facetOptions(records.value));
+const options = computed(() => facetOptions(records.value, query.mode));
 const bounds = computed(() => numericBounds(records.value));
 const results = computed(() => buildDisplayCards(records.value, query));
 const visible = computed(() => results.value.slice(0, visibleCount.value));

@@ -7,6 +7,7 @@ import type {
   CarddexQueryState,
   DisplayCard,
   FilterType,
+  ResultMode,
   SortField,
 } from "./types";
 
@@ -36,7 +37,7 @@ export const FILTER_TYPES: readonly FilterType[] = [
 
 export const OPTIONS_PRIORITY = {
   card_color_list: ["red", "green", "blue", "orange", "purple", "yellow"],
-  series: ["FND", "ARC", "OGS", "OGN", "SFD", "UNL", "VEN"],
+  series: ["FND", "ARC", "OGS", "OGN", "SFD", "UNL", "VEN", "T1S", "T1A", "RAD"],
   rarity: ["普通", "不凡", "稀有", "史诗", "异画"],
   card_category: [
     "传奇",
@@ -89,6 +90,7 @@ function values(
   base: CardBase,
   prints: readonly CardPrint[],
   type: FilterType,
+  mode: ResultMode,
 ): string[] {
   switch (type) {
     case "color":
@@ -96,6 +98,8 @@ function values(
     case "category":
       return base.categories;
     case "series":
+      // 系列是模式相关的 facet：按卡牌只认基础卡系列，按印本才看每个印本的系列。
+      if (mode === "base") return base.series ? [base.series] : [];
       return [
         ...new Set(
           (prints.length
@@ -190,7 +194,9 @@ function baseMatches(
     return false;
   return FILTER_TYPES.every((type) => {
     const fs = state.filters.filter((f) => f.type === type);
-    return !fs.length || typeMatches(values(record.base, prints, type), fs);
+    return (
+      !fs.length || typeMatches(values(record.base, prints, type, state.mode), fs)
+    );
   });
 }
 
@@ -201,7 +207,10 @@ function printMatchesFacet(
 ): boolean {
   return FILTER_TYPES.every((type) => {
     const fs = state.filters.filter((f) => f.type === type);
-    return !fs.length || typeMatches(values(base, [print], type), fs);
+    return (
+      !fs.length ||
+      typeMatches(values(base, [print], type, state.mode), fs)
+    );
   });
 }
 
@@ -282,13 +291,21 @@ export function buildDisplayCards(
       out.push({ key: record.base.id, base: record.base, print });
       continue;
     }
+    // 印本模式：同一 card_no_extend 的多个语言只出一张 tile，语言取 SC 优先。
+    const byCardNo = new Map<string, CardPrint[]>();
     for (const print of record.prints) {
       if (
         !baseMatches(record, [print], state) ||
         !printMatchesFacet(record.base, print, state)
       )
         continue;
-      out.push({ key: printKey(print), base: record.base, print });
+      const group = byCardNo.get(print.cardNo) ?? [];
+      group.push(print);
+      byCardNo.set(print.cardNo, group);
+    }
+    for (const group of byCardNo.values()) {
+      const print = chooseDefaultPrint(group);
+      if (print) out.push({ key: printKey(print), base: record.base, print });
     }
   }
   return sortDisplayCards(out, state.sort);
@@ -296,13 +313,14 @@ export function buildDisplayCards(
 
 export function facetOptions(
   records: readonly CardRecord[],
+  mode: ResultMode,
 ): Record<FilterType, string[]> {
   const sets = Object.fromEntries(
     FILTER_TYPES.map((type) => [type, new Set<string>()]),
   ) as Record<FilterType, Set<string>>;
   for (const record of records) {
     for (const type of FILTER_TYPES)
-      for (const v of values(record.base, record.prints, type))
+      for (const v of values(record.base, record.prints, type, mode))
         sets[type].add(v);
   }
   return Object.fromEntries(
