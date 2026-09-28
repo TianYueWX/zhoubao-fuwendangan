@@ -59,6 +59,29 @@
 - 韩/繁中列迁移：先执行 `supabase/migrations/20260926_add_kr_tw_columns.sql`；未执行时面板自动降级——韩/繁中文本不可提交，卡图印刷照常。
 - 已知限制：新增「仅韩文/仅英文」基础卡后，小程序源按中文名匹配不到它，可能提示编号被占用，需要人工在卡牌编辑器补中文列；官网无 flavor text、无背面图、无印刷顺序。
 
+## 离线拉取包（Colab → 导入）
+
+浏览器直连官方接口会被 WAF 限流（表现为 CORS 报错）。替代路径：在 Colab 里用
+`scripts/colab_fetch_xcx_cards.py` 把「卡牌列表 + 每个印刷版本的详情」拉成一个 JSON 包，
+再用同步页「导入拉取包」导入——导入过程一个网络请求都不发，之后完全走本文档上半部分的审核步骤。
+
+- 脚本：单文件，粘进 Colab 单元格或 `!python colab_fetch_xcx_cards.py` 都能跑。`CONFIG` 区可调
+  分页（默认 25 条/页，与在线一致）、筛选、并发与请求间隔（默认串行 + 0.8–1.6 秒）、
+  是否顺带拉关键词图标/系列字典。进度写 `/content/xcx_progress.jsonl`，同一会话内重跑自动续跑。
+- 实测（2026-09）：`searchCardCraft` 传大 `pageSize` 也能一次返回全量，但脚本仍按「直到空页」分页并保留
+  「整页重复即报错」守卫；`cardDetail` 单次 1.8–5.4 秒，全量 1306 个印刷版本串行约 1.5 小时；
+  筛选用 `searchContent`（如 `{"searchContent": "VEN"}` → 253 行），`productCodeList`/`cardSeriesList`/
+  `cardCategoryList` 服务端会返回 0 行，脚本已注明不要用。
+- 包结构：`format = riftbound-xcx-pull` + `formatVersion`，内含原始响应
+  （`search.envelope`、`details[cardNo]`）与拉取元信息（`pulledAt` / `filters` / `stats` / `errors`）。
+  图标与系列字典是可选键：包里有就同步，没有就跳过该阶段并提示。
+- 导入：`src/tools/sync/importPull.ts`。结构性错误（非 JSON／format 或版本不符／没有卡牌列表／
+  列表为空或来自失败响应）直接拒绝，不动当前数据集；数据性缺失（个别卡没详情、筛选子集）放行并在摘要里标黄。
+  构建走 `run.ts` 步骤 ④ 的同一套映射与去重键，因此**导入结果与在线「深度模式」逐字一致**；
+  同基础卡的多个印刷各自对应自己的详情，不做去重替代。
+- 导入后审核照旧：阶段、状态筛选、字段勾选、提交与 SQL/CSV 导出都不变。已有未提交审核时导入会先二次确认
+  （导入替换当前数据集，QA 不受影响）。筛选包只覆盖被拉取的卡，库内其余卡不在本轮比对范围。
+
 ## 提交和导出
 
 1. 打开任意记录，查看库内值、API 映射值和可编辑的待提交值。

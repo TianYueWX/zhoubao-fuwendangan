@@ -92,7 +92,8 @@ export interface FetchDatasetOptions {
   onRetry?: (info: RetryInfo) => void
 }
 
-const SERIES_RELEASE_ORDER: Record<string, number> = {
+/** 系列发行顺序：在线拉取与离线包导入共用（importPull.ts 也读它）。 */
+export const SERIES_RELEASE_ORDER: Record<string, number> = {
   FND: 10, ARC: 20, OGN: 30, OGS: 40, SFD: 50, UNL: 50, VEN: 60
 }
 

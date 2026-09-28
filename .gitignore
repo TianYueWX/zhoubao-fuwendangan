@@ -17,3 +17,6 @@ public/data/manifest.json
 # 项目内 pnpm store(全局 store 只读时的替代;删除会让 node_modules 失效)
 .pnpm-store/
 .npm-cache/
+
+# Python 字节码(scripts/colab_fetch_xcx_cards.py 本地跑过就会生成)
+__pycache__/

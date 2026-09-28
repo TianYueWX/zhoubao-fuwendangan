@@ -12,6 +12,7 @@ import { loadExisting, loadSnapshotRows, type ExistingSnapshot } from '@/tools/a
 import { isSupabaseConfigured } from '@/tools/sources/config';
 import { RIFTBOUND_API_BASE, type ApiCardDetail, type RetryInfo } from '@/tools/sync/riftboundApi';
 import { fetchDataset, type SyncDataset } from '@/tools/sync/run';
+import { datasetFromPull, parsePullPackage, type PullSummary } from '@/tools/sync/importPull';
 import { cacheCount, clearDetailCache, loadDetailCache } from '@/tools/sync/cache';
 import { downloadText } from '@/tools/sync/exporters';
 import {
@@ -47,6 +48,13 @@ const qaSync = ref<{
   reset: () => void;
   hasUnsavedReview: () => boolean;
 } | null>(null);
+
+/* 离线拉取包（Colab 脚本产出）导入 */
+const pullFileInput = ref<HTMLInputElement | null>(null);
+const pullImporting = ref(false);
+const pullImport = ref<PullSummary | null>(null);
+const pullImportError = ref('');
+const confirmImport = ref(false);
 
 type PullTask = 'cards' | 'qa';
 type PullStatus = 'idle' | 'queued' | 'running' | 'success' | 'error' | 'cancelled';
@@ -115,6 +123,9 @@ function isAbortError(error: unknown): boolean {
 
 function resetRunState(): void {
   dataset.value = null;
+  pullImport.value = null;
+  pullImportError.value = '';
+  confirmImport.value = false;
   qaSync.value?.reset();
   fetchError.value = '';
   taskProgress.cards = emptyTask(pullCards.value ? 'queued' : 'idle');
@@ -240,6 +251,71 @@ function cancelFetch(): void {
   controller?.abort();
 }
 
+/* ══════════════════ 离线拉取包导入 ══════════════════ */
+
+/**
+ * Colab 脚本产出的拉取包（format = riftbound-xcx-pull）导入。
+ * 走与在线拉取同一条路：解析 → 构建 SyncDataset → 交给 SyncReview，
+ * 因此审核步骤（阶段、状态、字段勾选、提交）不需要任何新概念。
+ * 导入本身不发任何网络请求；只读取库内现状用于比对。
+ */
+function requestImport(): void {
+  if (fetching.value || pullImporting.value || reviewBusy.value || qaBusy.value || galleryBusy.value) return;
+  if (syncReview.value?.hasUnsavedReview()) {
+    confirmImport.value = true;
+    return;
+  }
+  pullImportError.value = '';
+  pullFileInput.value?.click();
+}
+
+function confirmImportPick(): void {
+  confirmImport.value = false;
+  pullImportError.value = '';
+  pullFileInput.value?.click();
+}
+
+async function onPullFilePicked(event: Event): Promise<void> {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = ''; // 允许连续导入同一个文件
+  if (!file) return;
+  await importPullFile(file);
+}
+
+async function importPullFile(file: File): Promise<void> {
+  if (pullImporting.value) return;
+  pullImporting.value = true;
+  pullImportError.value = '';
+  try {
+    if (!configured.value) throw new Error('未配置 Supabase，无法读取库内现状用于比对');
+    const loaded = await loadExistingRows(true);
+    if (!loaded || !existing.value) throw new Error('请先成功读取库内现状，再导入拉取包');
+    const text = await file.text();
+    const pkg = parsePullPackage(text);
+    const { dataset: ds, summary } = datasetFromPull(pkg, {
+      existingSeriesCodes: existing.value.seriesCodes,
+      seriesByPrefix: existing.value.seriesByPrefix
+    });
+    dataset.value = ds;
+    pullImport.value = summary;
+    taskProgress.cards.status = 'success';
+    taskProgress.cards.retry = null;
+    taskProgress.cards.detail =
+      `导入 ${summary.searchRows} 个印刷版本 · ${incomingIdentityCount.value} 个基础卡身份 · ${ds.icons.length} 个图标`;
+    notifyOk(
+      `已导入拉取包（${file.name}）：${summary.searchRows} 个印刷版本，详情 ${summary.detailOk}/${summary.searchRows}`,
+      summary.problems.length ? `注意：${summary.problems[0]}` : '请在下方按现有步骤审核并提交'
+    );
+  } catch (e) {
+    const message = errorText(e);
+    pullImportError.value = message;
+    notifyError(`拉取包导入失败:${message}`);
+  } finally {
+    pullImporting.value = false;
+  }
+}
+
 function clearCache(notify = true): void {
   clearDetailCache();
   for (const k of Object.keys(detailCache)) delete detailCache[k];
@@ -347,6 +423,35 @@ onMounted(async () => {
           </button>
         </div>
 
+        <!-- 离线拉取包：Colab 拉好再导入，网页端一个请求都不发 -->
+        <div class="flex items-center gap-3 flex-wrap mt-3">
+          <button
+            class="btn-ghost px-4 py-1.5 text-xs"
+            data-testid="sync-import-pull"
+            :disabled="fetching || pullImporting || !configured || reviewBusy || qaBusy || galleryBusy || existingLoading"
+            @click="requestImport"
+          >
+            {{ pullImporting ? '导入中…' : '导入拉取包' }}
+          </button>
+          <span class="text-[11px] text-ink-faint leading-relaxed max-w-[620px]">
+            选 Colab 脚本 <span class="font-mono">scripts/colab_fetch_xcx_cards.py</span> 产出的
+            <span class="font-mono">xcx_pull_*.json</span>：导入后走下面同一套审核步骤，导入过程不联网官方接口。
+          </span>
+          <input ref="pullFileInput" type="file" accept="application/json,.json" class="hidden" @change="onPullFilePicked" />
+        </div>
+
+        <div v-if="confirmImport" role="alert" class="mt-3 rounded-lg border border-accent/40 bg-panel-bg p-3 flex items-center justify-between gap-4 flex-wrap">
+          <p class="text-xs text-ink-muted">导入拉取包会替换当前数据集，并清空未提交的卡牌审核结果（QA 不受影响）。</p>
+          <div class="flex items-center gap-3">
+            <button class="text-xs text-ink-faint hover:text-ink-muted" @click="confirmImport = false">取消</button>
+            <button class="btn-brand px-3 py-1.5 text-xs" @click="confirmImportPick">确认并选择文件</button>
+          </div>
+        </div>
+
+        <p v-if="pullImportError" class="mt-3 text-[13px] text-delta-down leading-relaxed pl-3 border-l-2 border-brand">
+          {{ pullImportError }}
+        </p>
+
         <div v-if="confirmDiscard" role="alert" class="mt-3 rounded-lg border border-accent/40 bg-panel-bg p-3 flex items-center justify-between gap-4 flex-wrap">
           <p class="text-xs text-ink-muted">开始新一轮会清空当前未提交的卡牌与 QA 审核结果，并清理详情缓存。</p>
           <div class="flex items-center gap-3">
@@ -449,6 +554,49 @@ onMounted(async () => {
             检测到 {{ dataset.seriesPresets.length }} 个缺失系列(名称先占位,写入后请到资源页手改):
             <span class="font-mono">{{ dataset.seriesPresets.map((s) => s.code).join('、') }}</span>
           </p>
+        </div>
+
+        <!-- 导入包摘要：拉取时间、条数、缺口与范围，只标黄不拦截 -->
+        <div v-if="pullImport" class="mt-4 rounded-lg border border-card-border p-3" data-testid="sync-pull-summary">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="text-xs font-semibold">已导入拉取包</span>
+            <span class="text-[11px] px-2 py-1 rounded border border-card-border text-ink-muted tabular-nums">
+              拉取于 {{ pullImport.pulledAt || '未知时间' }}<template v-if="pullImport.ageText"> · {{ pullImport.ageText }}</template>
+            </span>
+            <span class="text-[11px] px-2 py-1 rounded border border-card-border text-ink-muted tabular-nums">
+              列表 {{ pullImport.searchRows }}
+            </span>
+            <span class="text-[11px] px-2 py-1 rounded border border-card-border text-ink-muted tabular-nums">
+              详情 {{ pullImport.detailOk }}/{{ pullImport.searchRows }}
+            </span>
+            <span v-if="pullImport.detailFailed" class="text-[11px] px-2 py-1 rounded border border-accent/40 text-accent tabular-nums">
+              详情失败 {{ pullImport.detailFailed }}
+            </span>
+            <span
+              class="text-[11px] px-2 py-1 rounded border tabular-nums"
+              :class="pullImport.hasIcons ? 'border-card-border text-ink-muted' : 'border-accent/40 text-accent'"
+            >
+              {{ pullImport.hasIcons ? `图标 ${pullImport.icons}` : '无图标(该阶段跳过)' }}
+            </span>
+            <span
+              class="text-[11px] px-2 py-1 rounded border"
+              :class="pullImport.hasDict ? 'border-card-border text-ink-muted' : 'border-accent/40 text-accent'"
+            >
+              {{ pullImport.hasDict ? '含系列字典' : '无系列字典(按编号前缀推断)' }}
+            </span>
+            <span v-if="pullImport.script" class="text-[11px] text-ink-faint font-mono">{{ pullImport.script }}</span>
+          </div>
+          <ul v-if="pullImport.problems.length" class="mt-2 space-y-1">
+            <li v-for="p in pullImport.problems" :key="p" class="text-[11px] text-accent leading-relaxed">· {{ p }}</li>
+          </ul>
+          <details v-if="pullImport.errors.length" class="mt-2">
+            <summary class="text-[11px] text-ink-faint cursor-pointer">拉取失败清单 {{ pullImport.errors.length }} 条</summary>
+            <ul class="mt-1 space-y-0.5 max-h-40 overflow-auto">
+              <li v-for="e in pullImport.errors.slice(0, 50)" :key="`${e.cardNo}-${e.stage}-${e.error}`" class="text-[11px] text-ink-faint font-mono">
+                {{ e.cardNo }} · {{ e.error }}
+              </li>
+            </ul>
+          </details>
         </div>
       </section>
 
