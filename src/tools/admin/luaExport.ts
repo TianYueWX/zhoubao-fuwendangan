@@ -7,6 +7,8 @@
  *
  * 口径(与 TTS mod 模板逐字对齐,只导 SC 语言印刷版):
  *   card_no            ← card_prints.card_no_extend
+ *                        (**签名超编的 `*` 换成 `S`**,见 exportCardNo:mod 按卡号
+ *                         命名卡图文件,而 `*` 在 Windows 文件名里非法)
  *   card_name          ← cards_base.card_name_cn
  *   sub_title          ← cards_base.sub_title_cn
  *   card_effect        ← cards_base.effect_cn(不是 effect_en 的 HTML)
@@ -98,7 +100,29 @@ export function luaValue(value: string | null | undefined): string {
   return `"${escapeLuaString(value)}"`;
 }
 
-/** 把基础卡 + SC 印刷版拼成扁平条目(按 card_no 排序,过滤无基础卡的印刷版) */
+/**
+ * 导出用卡号:把签名超编的 `*` 换成 `S`。
+ *
+ * 为什么只在这一个出口上换:mod 按卡号命名卡图文件,而 `*` 在 Windows 文件名里
+ * 是非法字符(会保存失败或被改名),`S` 才是 mod 侧认的写法。
+ * **库内约定不动** —— `card_prints.card_no_extend` 仍然保留 `*`
+ * (见 src/tools/sync/galleryNormalize.ts 的编号规范),这里只做导出期转写。
+ *
+ * 影响面(线上实测):SC 里 45 个卡号含 `*`,全是「签名超编」;换成 `S` 后与
+ * 既有卡号零冲突。`*` 也出现在 1 行 effect_cn 里,所以**绝不能**对文本字段做
+ * 同样的替换 —— 这个函数只喂给 card_no。
+ */
+export function exportCardNo(cardNo: string): string {
+  return cardNo.replace(/\*/g, 'S');
+}
+
+/**
+ * 把基础卡 + SC 印刷版拼成扁平条目(按导出后的 card_no 排序,过滤无基础卡的印刷版)。
+ *
+ * 排序用的是**转写后**的 card_no。实测 SC 全量 1329 条,`*` → `S` 前后顺序
+ * 逐位完全一致 —— 因为 `OGN-299` 是 `OGN-299*` 的前缀,且与相邻卡号的差异位
+ * 出现在 `*` 之前。也就是说这个转写只换字符,不会让任何条目挪位置。
+ */
 export function buildLuaEntries(
   cards: readonly LuaExportCard[],
   prints: readonly LuaExportPrint[]
@@ -120,7 +144,8 @@ export function buildLuaEntries(
       continue;
     }
     entries.push({
-      card_no: cardNo,
+      // 导出期转写:签名超编 `*` → `S`(库内编号不动)
+      card_no: exportCardNo(cardNo),
       card_name: base.card_name_cn,
       sub_title: base.sub_title_cn,
       card_effect: base.effect_cn,

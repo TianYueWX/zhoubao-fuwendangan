@@ -5,16 +5,19 @@
  *
  *   node --experimental-strip-types --import ./scripts/register-hooks.mjs scripts/verify-lua-export.mjs
  *
- * 重点是三件容易静默出错的事:
+ * 重点是四件容易静默出错的事:
  *   ① 换行 / 引号 / 反斜杠的 Lua 转义(库里的 effect_cn 是 CRLF);
  *   ② rarity_name 必须取基础卡,不能被异画印刷版的「异画」覆盖;
- *   ③ is_promo 必须是布尔字面量,不能变成字符串或 nil。
+ *   ③ is_promo 必须是布尔字面量,不能变成字符串或 nil;
+ *   ④ 签名超编的 `*` 必须转成 `S`,且**只能**动 card_no,不能碰文本字段
+ *      (线上有 1 行 effect_cn 真的含 `*`)。
  * ================================================================ */
 import assert from 'node:assert/strict';
 import {
   buildAllCardsLua,
   buildLuaEntries,
   escapeLuaString,
+  exportCardNo,
   luaValue,
   renderAllCardsLua
 } from '../src/tools/admin/luaExport.ts';
@@ -120,6 +123,56 @@ test('缺基础卡 / 缺卡号的印刷版被跳过并计数', () => {
   assert.equal(r.total, 1);
   assert.equal(r.skippedNoBase, 1);
   assert.equal(r.skippedNoCardNo, 1);
+});
+
+/* ────────── 签名超编:card_no 的 `*` → `S` ────────── */
+
+test('exportCardNo:签名超编的星号换成 S', () => {
+  assert.equal(exportCardNo('OGN-299*'), 'OGN-299S');
+  assert.equal(exportCardNo('VEN-197*'), 'VEN-197S');
+});
+
+test('exportCardNo:普通编号、字母版本、SP 促销原样不动', () => {
+  assert.equal(exportCardNo('OGN-007'), 'OGN-007');
+  assert.equal(exportCardNo('OGN-007a'), 'OGN-007a');
+  assert.equal(exportCardNo('VEN-SP3'), 'VEN-SP3');
+  assert.equal(exportCardNo('UNL-T04'), 'UNL-T04');
+});
+
+test('exportCardNo:多个星号全部替换', () => {
+  assert.equal(exportCardNo('OGN-299**'), 'OGN-299SS');
+});
+
+test('导出条目里的 card_no 已转写,但 extend_rarity_name 仍是「签名超编」', () => {
+  const base = { ...baseA, id: 's1', card_name_cn: '签名卡' };
+  const print = { ...printA, card_id: 's1', card_no_extend: 'OGN-299*', extend_rarity_name: '签名超编' };
+  const { entries } = buildLuaEntries([base], [print]);
+  assert.equal(entries[0].card_no, 'OGN-299S');
+  assert.equal(entries[0].extend_rarity_name, '签名超编', '稀有度分类不跟着换字符');
+});
+
+test('转写只作用于 card_no:效果文本里的 * 必须原样保留', () => {
+  // 线上真实存在:某行 effect_cn 含 `*`
+  const base = { ...baseA, id: 's2', effect_cn: '造成 2*3 点伤害,带 * 号的文本' };
+  const print = { ...printA, card_id: 's2', card_no_extend: 'OGN-299*' };
+  const { entries } = buildLuaEntries([base], [print]);
+  assert.equal(entries[0].card_no, 'OGN-299S');
+  assert.equal(entries[0].card_effect, '造成 2*3 点伤害,带 * 号的文本');
+  assert.ok(entries[0].card_effect.includes('*'), '文本字段不能跟着替换');
+});
+
+test('转写不改变排序位置:OGN-299 与 OGN-299* 的前后关系保持', () => {
+  const b1 = { ...baseA, id: 'x1' };
+  const b2 = { ...baseA, id: 'x2' };
+  const b3 = { ...baseA, id: 'x3' };
+  const p1 = { ...printA, card_id: 'x1', card_no_extend: 'OGN-299' };
+  const p2 = { ...printA, card_id: 'x2', card_no_extend: 'OGN-299*' };
+  const p3 = { ...printA, card_id: 'x3', card_no_extend: 'OGN-300' };
+  const { entries } = buildLuaEntries([b1, b2, b3], [p3, p2, p1]);
+  assert.deepEqual(
+    entries.map((e) => e.card_no),
+    ['OGN-299', 'OGN-299S', 'OGN-300']
+  );
 });
 
 /* ────────── 文本格式 ────────── */
