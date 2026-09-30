@@ -19,6 +19,7 @@ import {
   type RestFilter
 } from '../sources/rest';
 import type { CardBase, CardPrint } from './types';
+import type { PrintRow } from './printDefaults';
 import type { LuaExportCard, LuaExportPrint } from './luaExport';
 
 /** 列表页只取必要列,避免 971 行 × 全字段的传输 */
@@ -295,32 +296,121 @@ export async function loadArrayFieldOptions(
   return [...set].sort((a, b) => a.localeCompare(b, 'zh'));
 }
 
+/* ──────────────────────── 范围内取卡(体检类功能共用) ──────────────────────── */
+
+/**
+ * 按列表筛选取一批卡(分页拉完)。
+ *
+ * 走与列表页**同一套筛选语义**:编务筛了哪个系列、哪个稀有度、搜了什么词,
+ * 体检就只扫那一批。不传筛选 = 全表(1016 行 = 2 次请求)。
+ * 判定全部在本地做 —— 规则引擎是纯函数,这里只负责把数据取回来。
+ */
+function selectCardsScoped<T>(filter: CardFilter, columns: string): Promise<T[]> {
+  return restSelectAll<T>('cards_base', {
+    columns,
+    ...filterQuery(filter),
+    order: 'card_no.asc'
+  });
+}
+
 /* ──────────────────────── 关键词体检 ──────────────────────── */
 
-/** 体检所需列:只取判定用得到的字段,不拉整表全字段 */
+/** 关键词体检所需列:只取判定用得到的字段,不拉整表全字段 */
 export const KEYWORD_AUDIT_COLUMNS =
   'id,card_no,card_name_cn,effect_cn,effect_en,keyword,series_name';
 
-/** 体检行(比 CardBase 窄) */
+/** 关键词体检行(比 CardBase 窄) */
 export type KeywordAuditRow = Pick<
   CardBase,
   'id' | 'card_no' | 'card_name_cn' | 'effect_cn' | 'effect_en' | 'keyword' | 'series_name'
 >;
 
-/**
- * 拉取「关键词体检」要扫的卡(分页拉完)。
- *
- * 走与列表页**同一套筛选语义**:编务筛了哪个系列、哪个稀有度、搜了什么词,
- * 体检就只扫那一批。不传筛选 = 全表(1016 行 = 2 次请求)。
- * 判定全部在本地做 —— 规则引擎是纯函数,这里只负责把文本取回来。
- */
 export function selectCardsForKeywordAudit(filter: CardFilter = {}): Promise<KeywordAuditRow[]> {
-  return restSelectAll<KeywordAuditRow>('cards_base', {
-    columns: KEYWORD_AUDIT_COLUMNS,
-    ...filterQuery(filter),
-    order: 'card_no.asc'
+  return selectCardsScoped<KeywordAuditRow>(filter, KEYWORD_AUDIT_COLUMNS);
+}
+
+/* ──────────────────────── 默认印刷体检 ──────────────────────── */
+
+/** 默认印刷体检只需要卡号做取舍与展示 */
+export const DEFAULT_AUDIT_CARD_COLUMNS = 'id,card_no,card_name_cn,series_name';
+
+export type DefaultAuditCardRow = Pick<
+  CardBase,
+  'id' | 'card_no' | 'card_name_cn' | 'series_name'
+>;
+
+export function selectCardsForDefaultAudit(
+  filter: CardFilter = {}
+): Promise<DefaultAuditCardRow[]> {
+  return selectCardsScoped<DefaultAuditCardRow>(filter, DEFAULT_AUDIT_CARD_COLUMNS);
+}
+
+/** 判定默认印刷版本所需列 */
+export const PRINT_DEFAULT_COLUMNS =
+  'id,card_id,card_no_extend,extend_rarity_name,rarity_name,language,is_default,print_order';
+
+export interface PrintDefaultRow extends PrintRow {
+  rarity_name: string | null;
+}
+
+/**
+ * 拉全部印刷版本(3241 行 = 4 次请求)。
+ *
+ * 不做 `card_id=in.(...)` 按范围过滤:全表本来就只有 3241 行,而 PostgREST 的
+ * in.() 走查询串,1016 个 uuid 要切成 20 多块反而更慢更脆。拉回来在本地按
+ * card_id 分组即可。
+ *
+ * ⚠️ 排序必须带 id 兜底:`card_no_extend` **不唯一**(同一个卡号有 TC/KR/SC/EN
+ * 四行),而 PostgREST 分页在排序键并列时不保证跨页稳定 —— 实测只按
+ * card_no_extend.asc 分 4 页拉,会**静默丢 1 行**(OGN-220 的 SC 平卡)。
+ */
+export function selectAllPrintsForDefault(): Promise<PrintDefaultRow[]> {
+  return restSelectAll<PrintDefaultRow>('card_prints', {
+    columns: PRINT_DEFAULT_COLUMNS,
+    order: 'card_no_extend.asc,id.asc'
   });
 }
+
+/**
+ * 批量置默认。
+ *
+ * 与关键词不同:这里每行写入的是**同一个补丁**({ is_default: true }),所以能走
+ * 「一次请求改一批行」。按 50 个 id 分块 —— 每个 uuid 36 字符,一次塞几百个会把
+ * 查询串撑爆(PostgREST 的 in.() 走 URL)。分块方式与 batch.ts 的 updateMany 一致。
+ */
+export async function setDefaultPrints(
+  ids: readonly string[],
+  onProgress?: (done: number, total: number) => void
+): Promise<{ updated: number; failedIds: string[] }> {
+  if (!ids.length) return { updated: 0, failedIds: [] };
+  const CHUNK = 50;
+  let updated = 0;
+  const failedIds: string[] = [];
+  let done = 0;
+
+  for (let i = 0; i < ids.length; i += CHUNK) {
+    const chunk = ids.slice(i, i + CHUNK);
+    try {
+      const rows = await restUpdate<{ id: string }>(
+        'card_prints',
+        { is_default: true, updated_at: new Date().toISOString() },
+        [{ column: 'id', op: 'in', value: chunk }]
+      );
+      updated += rows.length;
+      // 服务端只回被真正改动的行;缺口即被 RLS 拦掉的行
+      if (rows.length < chunk.length) {
+        const ok = new Set(rows.map((r) => r.id));
+        failedIds.push(...chunk.filter((id) => !ok.has(id)));
+      }
+    } catch {
+      failedIds.push(...chunk);
+    }
+    done += chunk.length;
+    onProgress?.(Math.min(done, ids.length), ids.length);
+  }
+  return { updated, failedIds };
+}
+
 
 export interface KeywordWriteItem {
   id: string;
@@ -378,6 +468,15 @@ export async function writeKeywords(
 /** 触碰 version.name='cards' —— 站内客户端据此判断卡表缓存是否失效 */
 export function publishCards(): Promise<void> {
   return touchVersion('cards');
+}
+
+/**
+ * 触碰 version.name='prints'。
+ * 改的是 card_prints(如默认印刷版本),对应的分类是 prints 而不是 cards ——
+ * 与同步落地的分类映射一致(见 src/tools/sync/review.ts)。
+ */
+export function publishPrints(): Promise<void> {
+  return touchVersion('prints');
 }
 
 /* ──────────────────────── 变更计算 ──────────────────────── */
@@ -445,9 +544,16 @@ export async function selectAllCards(columns = '*'): Promise<CardBase[]> {
   return restSelectAll<CardBase>('cards_base', { columns, order: 'card_no.asc' });
 }
 
-/** 全量读取印刷版本(快照导出用) */
+/**
+ * 全量读取印刷版本(快照导出用)。
+ * 排序带 id 兜底 —— `card_no_extend` 不唯一,只按它分页会静默丢行
+ * (详见 selectAllPrintsForDefault 的注释)。
+ */
 export async function selectAllPrints(columns = '*'): Promise<CardPrint[]> {
-  return restSelectAll<CardPrint>('card_prints', { columns, order: 'card_no_extend.asc' });
+  return restSelectAll<CardPrint>('card_prints', {
+    columns,
+    order: 'card_no_extend.asc,id.asc'
+  });
 }
 
 /* ──────────────────────── 导出 TTS Lua ──────────────────────── */
@@ -478,7 +584,9 @@ export async function loadLuaExportRows(): Promise<LuaExportRows> {
     restSelectAll<LuaExportPrint>('card_prints', {
       columns: LUA_EXPORT_PRINT_COLUMNS,
       filters: [{ column: 'language', op: 'eq', value: 'SC' }],
-      order: 'card_no_extend.asc'
+      // 带 id 兜底:实测 SC 范围内 card_no_extend 目前恰好唯一(1329 行不丢),
+      // 但这是数据巧合而非保证 —— 哪天同卡号同语言出两个印刷版本就会开始丢行。
+      order: 'card_no_extend.asc,id.asc'
     })
   ]);
   return { cards, prints };

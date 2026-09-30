@@ -179,6 +179,16 @@ export async function restSelect<T = Record<string, unknown>>(
 /**
  * 分页读全表(PostgREST 单次上限默认 1000 行)。
  * 用于同步差异比对这类需要全量快照的场景。
+ *
+ * ⚠️ `query.order` 必须是**唯一**的排序键,否则会静默丢行。
+ * 本函数逐页发 `limit/offset`,而 SQL 不保证并列行在两次查询间顺序一致 ——
+ * 当排序键有重复值时,同一行可能在第 2 页出现、又不在第 3 页出现,于是有的行
+ * 永远读不到。线上真实事故:`card_prints` 按 `card_no_extend.asc` 分 4 页拉
+ * 3241 行,结果只拿到 3240 个不同 id(丢了 OGN-220 的 SC 平卡),因为同一个
+ * 卡号有 TC/KR/SC/EN 四行。
+ *
+ * 稳妥写法:排序列后面缀上主键,如 `order: 'card_no_extend.asc,id.asc'`。
+ * 只读一页(总行数 < pageSize)时无此风险。
  */
 export async function restSelectAll<T = Record<string, unknown>>(
   table: string,

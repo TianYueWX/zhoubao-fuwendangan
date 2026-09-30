@@ -22,6 +22,7 @@ import AdminTagInput from './AdminTagInput.vue';
 import AdminConfirmButton from './AdminConfirmButton.vue';
 import KeywordSuggest from './KeywordSuggest.vue';
 import KeywordAudit from './KeywordAudit.vue';
+import PrintDefaultAudit from './PrintDefaultAudit.vue';
 import SectionHeading from '../SectionHeading.vue';
 import { debounce } from '@/utils/debounce';
 import { errorText, notifyError, notifyOk, notifyWarn } from '@/tools/admin/notice';
@@ -191,6 +192,9 @@ function applySuggested(keywords: string[]): void {
 
 /** 关键词体检抽屉 */
 const auditOpen = ref(false);
+
+/** 重设默认印刷抽屉(与体检共用同一份 auditFilter) */
+const defaultAuditOpen = ref(false);
 
 /**
  * 体检的扫描范围 = 列表页当前的筛选。
@@ -612,6 +616,15 @@ onMounted(async () => {
           @click="auditOpen = true"
         >
           关键词体检
+        </button>
+        <button
+          type="button"
+          class="btn-ghost px-3 py-1.5 text-xs"
+          title="给范围内每张卡把 SC 平卡那一行置为默认印刷版本"
+          data-testid="print-default-audit"
+          @click="defaultAuditOpen = true"
+        >
+          重设默认印刷
         </button>
         <button
           type="button"
@@ -1259,6 +1272,9 @@ onMounted(async () => {
       :vocabulary="arrayOptions.keyword"
       @applied="refreshKeywordOptions"
     />
+
+    <!-- 重设默认印刷:同样只处理列表当前筛选出来的卡 -->
+    <PrintDefaultAudit v-model:open="defaultAuditOpen" :filter="auditFilter" />
   </EditorialShell>
 </template>
 
