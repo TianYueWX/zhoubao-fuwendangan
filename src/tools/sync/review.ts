@@ -19,6 +19,19 @@ export interface ReviewRow {
   included: boolean
   parentKey?: string
   chosenBaseId: string
+  /**
+   * 基础卡专用:库内存在多条「同名同副标题」时,明确表示「这照样是一张新基础卡」,
+   * 而不是去更新候选里的某一条。
+   *
+   * 为什么需要它:createReview 刻意按 identity(卡名, 副标题) 把 API 卡合并成一条
+   * 基础卡行,而库内同名同副标题本来就合法(线上 20 组 / 54 张,几乎全是跨系列
+   * 重印,如 ARC-001 蔚·铲除者 与 OGN-036 蔚·铲除者)。没有这个开关时,
+   * 撞上这些身份的**新卡**会被迫二选一地去合并进已有记录。
+   *
+   * 它不绕过任何护栏:卡号仍须未被占用(见 reviewState 的 baseNumbers 检查),
+   * 所以开着它也只能在卡号真空着时落库,不会造出重复卡号。
+   */
+  newBaseInstead: boolean
   errata: boolean
   error: string
   variants: Values[]
@@ -91,7 +104,7 @@ function pick(row: Values, fields: readonly string[]): Values {
 }
 function makeRow(table: ReviewTable, key: string, source: Values, label: string): ReviewRow {
   return { table, key, source: clone(source), draft: pick(source, INSERT_FIELDS[table]), label,
-    selected: [], included: true, chosenBaseId: '', errata: false, error: '', variants: [],
+    selected: [], included: true, chosenBaseId: '', newBaseInstead: false, errata: false, error: '', variants: [],
     variantChosen: true, detailComplete: true }
 }
 
@@ -142,7 +155,21 @@ export function baseCandidates(row: ReviewRow, ex: ExistingSnapshot, index?: Rev
 }
 export function resolvedBase(row: ReviewRow, ex: ExistingSnapshot, index?: ReviewIndex): Values | undefined {
   const candidates = baseCandidates(row, ex, index)
-  return candidates.length === 1 ? candidates[0] : candidates.find((c) => c.id === row.chosenBaseId)
+  if (candidates.length === 1) return candidates[0]
+  const chosen = candidates.find((c) => c.id === row.chosenBaseId)
+  if (chosen) return chosen
+  /**
+   * 身份不唯一时用卡号定夺:库内 card_no 唯一,命中即同一条记录。
+   *
+   * 这条让「照样当作新的基础卡」能闭环 —— 新卡落库后本身份的候选从 N 条变成
+   * N+1 条,若不按卡号认领,该基础卡行会以「基础编号已被另一张卡占用」拦住自己
+   * (刚建完就报错),它的印刷版行也退不回可提交状态。
+   *
+   * 不会因此绕过占用检查:卡号撞上**不同身份**的卡时那条记录不在 candidates 里,
+   * 仍会照常被拦下。
+   */
+  const number = textValue(row.draft.card_no)
+  return number ? candidates.find((c) => textValue(c.card_no) === number) : undefined
 }
 
 /** Pass `index` (see reviewIndex.ts) to answer every lookup in O(1). Without it the
@@ -155,7 +182,7 @@ export function reviewState(row: ReviewRow, rows: ReviewRow[], ex: ExistingSnaps
     const candidates = baseCandidates(row, ex, index)
     before = resolvedBase(row, ex, index)
     if (!textValue(row.draft.card_name_cn)) reason = '卡名不能为空'
-    else if (candidates.length > 1 && !before) reason = '同名同副标题有多个基础卡，请选择关联记录'
+    else if (candidates.length > 1 && !before && !row.newBaseInstead) reason = '同名同副标题有多个基础卡，请选择关联记录'
     else if (!row.variantChosen) reason = '官方存在不同勘误文本，请选择要采用的来源'
     else if ((!before || row.errata) && !row.detailComplete) reason = '详情缺失，无法确认装配效果；请重新拉取详情'
     else if (!before && (index
@@ -179,7 +206,8 @@ export function reviewState(row: ReviewRow, rows: ReviewRow[], ex: ExistingSnaps
     if (normalized.error || normalized.extend !== row.draft.card_no_extend) reason = '请填写不含语言的有效印刷编号'
     else if (!['SC', 'TC', 'EN', 'JP', 'JA', 'KR', 'KO'].includes(String(row.draft.language))) reason = '无法解析语言'
     else if (matches.length > 1) reason = '库内有多个相同编号和语言的印刷版本，请先处理冲突'
-    else if (!parentId) reason = parent && baseCandidates(parent, ex, index).length > 1
+    // 父基础卡选了「当作新卡」时,它还没落库,印刷版要等它先建成 —— 不能再说「请先选择关联的基础卡」
+    else if (!parentId) reason = parent && baseCandidates(parent, ex, index).length > 1 && !parent.newBaseInstead
       ? '请先选择关联的基础卡' : '等待你先创建基础卡，再单独提交印刷版本'
     else if (index
       ? (index.printCounts.get(printIdentity(row.draft.card_no_extend, row.draft.language)) ?? 0) > 1

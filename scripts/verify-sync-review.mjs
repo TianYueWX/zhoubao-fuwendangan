@@ -93,6 +93,49 @@ test('重复基础卡必须手选，关联变更也需要勾选 card_id', () => 
   rows[1].selected = ['card_id'];
   assert.deepEqual(buildOperation(rows[1], rows, ex).payload, { card_id: 'base-2' });
 });
+test('多条同名同副标题时，可选「照样当作新的基础卡」改走新增', () => {
+  const rows = createReview(dataset());
+  const ex = existing([oldBase, { ...oldBase, id: 'base-2' }], [oldPrint]);
+  // 默认:被拦，要求手选关联记录
+  assert.equal(reviewState(rows[0], rows, ex).kind, 'blocked');
+  assert.equal(reviewState(rows[0], rows, ex).reason, '同名同副标题有多个基础卡，请选择关联记录');
+  // 选「当作新卡」→ 变新增，且不绑定任何库内记录
+  rows[0].newBaseInstead = true;
+  const st = reviewState(rows[0], rows, ex);
+  assert.equal(st.kind, 'new');
+  assert.equal(st.before, undefined);
+  assert.equal(buildOperation(rows[0], rows, ex).kind, 'insert');
+});
+test('「当作新卡」不能绕过卡号占用检查', () => {
+  const rows = createReview(dataset());
+  // 同卡号但不同身份的卡:不在同名候选里，所以只能由 baseNumbers 拦
+  const taken = { ...oldBase, id: 'base-3', card_no: base.card_no, card_name_cn: '另一张卡', sub_title_cn: '' };
+  const ex = existing([oldBase, { ...oldBase, id: 'base-2' }, taken], [oldPrint]);
+  rows[0].newBaseInstead = true;
+  const st = reviewState(rows[0], rows, ex);
+  assert.equal(st.kind, 'blocked');
+  assert.equal(st.reason, '基础编号已被另一张卡占用，请修改新增编号');
+});
+test('父基础卡选「当作新卡」时，印刷版提示等待创建而不是请先选择', () => {
+  const rows = createReview(dataset());
+  const ex = existing([oldBase, { ...oldBase, id: 'base-2' }], [oldPrint]);
+  assert.equal(reviewState(rows[1], rows, ex).reason, '请先选择关联的基础卡');
+  rows[0].newBaseInstead = true;
+  assert.equal(reviewState(rows[1], rows, ex).reason, '等待你先创建基础卡，再单独提交印刷版本');
+});
+test('「当作新卡」闭环:新卡落库后基础卡行与印刷版都自动认领它', () => {
+  const rows = createReview(dataset());
+  const ex = existing([oldBase, { ...oldBase, id: 'base-2' }], [oldPrint]);
+  rows[0].newBaseInstead = true;
+  // 模拟该基础卡已按新增提交并落库(卡号与 draft 一致)
+  ex.cards.push({ ...rows[0].draft, id: 'created-new' });
+  // 候选从 2 条变 3 条 —— 靠卡号认领，不能再报「编号已被占用」
+  assert.equal(reviewState(rows[0], rows, ex).kind, 'same');
+  // 印刷版也随之可提交(card_id 是关联字段，按既有设计必须显式勾选)
+  rows[1].selected = ['card_id'];
+  const op = buildOperation(rows[1], rows, ex);
+  assert.equal(op.payload.card_id, 'created-new');
+});
 test('同名多印刷只生成一个新基础卡，必须分两次提交', () => {
   const rows = createReview(dataset([base, { ...base, card_no: 'ALT-001' }], [print, { ...print, card_no_extend: 'ALT-001' }]));
   const ex = existing();

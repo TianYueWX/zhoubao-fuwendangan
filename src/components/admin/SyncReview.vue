@@ -161,6 +161,28 @@ function chooseVariant(event: Event): void {
   r.variantChosen = true;
   r.selected = [];
 }
+/** 下拉哨兵值:明确表示「照样当作新的基础卡」,而不是关联到某条库内记录 */
+const NEW_BASE_CHOICE = '__new__';
+/**
+ * 选关联的基础卡。
+ *
+ * 库内存在多条同名同副标题时,除了「挑一条去更新」,还要能说「这照样是一张新卡」——
+ * 线上 20 组同名同副标题几乎全是跨系列重印(ARC-001 蔚·铲除者 / OGN-036 蔚·铲除者),
+ * 没有这个出口时,撞上这些身份的新卡只能被迫合并进已有记录。
+ *
+ * 注意它**不是**绕过校验:卡号若已被占用,reviewState 仍会以
+ * 「基础编号已被另一张卡占用」拦下。
+ */
+function chooseBase(event: Event): void {
+  const r = parentRow.value;
+  if (!r) return;
+  const value = (event.target as HTMLSelectElement).value;
+  r.newBaseInstead = value === NEW_BASE_CHOICE;
+  r.chosenBaseId = r.newBaseInstead ? '' : value;
+  // 关联变了,先前勾的字段(尤其 card_id)一律作废
+  r.selected = [];
+  if (active.value) active.value.selected = active.value.selected.filter((f) => f !== 'card_id');
+}
 async function openEditor(row: ReviewRow): Promise<void> {
   editorKey.value = row.key;
   await nextTick();
@@ -332,11 +354,15 @@ defineExpose({ hasUnsavedReview });
         <div v-if="parentRow" class="my-4 p-3 border border-card-border rounded-lg text-xs">
           <p>基础卡：{{ parentRow.draft.card_name_cn }} {{ parentRow.draft.sub_title_cn }}</p>
           <label v-if="candidates.length > 1" class="block mt-2">有多个同名候选，请选择关联记录
-            <select v-model="parentRow.chosenBaseId" class="filter-select w-full mt-2" @change="parentRow.selected = []; active.selected = active.selected.filter(f => f !== 'card_id')">
+            <select :value="parentRow.newBaseInstead ? NEW_BASE_CHOICE : parentRow.chosenBaseId" class="filter-select w-full mt-2" data-testid="sync-choose-base" @change="chooseBase">
               <option value="">请选择，不会自动选择</option>
+              <option :value="NEW_BASE_CHOICE">照样当作新的基础卡（不关联库内记录）</option>
               <option v-for="candidate in candidates" :key="String(candidate.id)" :value="candidate.id">{{ candidate.card_no }} · {{ candidate.card_name_cn }} {{ candidate.sub_title_cn }} · {{ candidate.id }}</option>
             </select>
           </label>
+          <p v-if="parentRow.newBaseInstead" class="mt-2 text-ink-faint">
+            将新增基础卡 <span class="font-mono">{{ parentRow.draft.card_no }}</span>；卡号若已被占用仍会被拦下。
+          </p>
           <p v-else-if="candidates.length === 1" class="mt-2 font-mono">{{ candidates[0]?.card_no }} · {{ candidates[0]?.id }}</p>
           <p v-else class="mt-2 text-accent">基础卡尚未创建。</p>
           <button v-if="active.table === 'card_prints'" class="text-brand mt-2 hover:underline" @click="openParent">查看 / 创建基础卡 →</button>
