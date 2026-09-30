@@ -16,7 +16,7 @@ import {
 import { indexExisting, indexDrafts, type ReviewIndex } from '@/tools/sync/reviewIndex';
 
 const props = defineProps<{ dataset: SyncDataset; existing: ExistingSnapshot; loading: boolean }>();
-const emit = defineEmits<{ reload: []; busy: [value: boolean] }>();
+const emit = defineEmits<{ reload: []; busy: [value: boolean]; applied: [cards: number] }>();
 const rows = ref<ReviewRow[]>(createReview(props.dataset));
 const snapshot = ref(props.existing);
 /** Bumped when snapshot contents are mutated in place (acceptResult): a deep-reactive ref
@@ -196,6 +196,9 @@ async function submit(single?: ReviewRow): Promise<void> {
   if (!selectedRows.length) return;
   busy.value = true;
   let done = 0;
+  /** 本次落地的 cards_base 行数 —— keyword 是人工维护列,新卡落地后是空的,
+   *  上层据此提示「去关键词体检」。 */
+  let cardsApplied = 0;
   const categories = new Set<VersionCategory>();
   try {
     for (const row of selectedRows) {
@@ -207,6 +210,7 @@ async function submit(single?: ReviewRow): Promise<void> {
         acceptResult(row, result);
         categories.add(({ cards_base: 'cards', card_prints: 'prints', card_icons: 'icons', series: 'series' } as const)[row.table]);
         done++;
+        if (row.table === 'cards_base') cardsApplied++;
       } catch (e) {
         errors.value[row.key] = errorText(e);
         notifyError(`已成功 ${done} 条；${row.label} 提交失败`, errorText(e));
@@ -219,7 +223,10 @@ async function submit(single?: ReviewRow): Promise<void> {
       const failed = results.filter((r) => !r.ok);
       if (failed.length) notifyWarn('数据已写入，部分分类发布失败', failed.map((r) => r.error).join('；'));
     }
-    if (done) notifyOk(`已提交 ${done} 条`, '其他阶段需由你分别点击提交');
+    if (done) {
+      notifyOk(`已提交 ${done} 条`, '其他阶段需由你分别点击提交');
+      emit('applied', cardsApplied);
+    }
   } catch (e) { notifyError('提交后的发布失败', errorText(e)); }
   finally { busy.value = false; progress.value = ''; }
 }

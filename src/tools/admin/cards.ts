@@ -15,7 +15,8 @@ import {
   restSelect,
   restSelectAll,
   restUpdate,
-  touchVersion
+  touchVersion,
+  type RestFilter
 } from '../sources/rest';
 import type { CardBase, CardPrint } from './types';
 import type { LuaExportCard, LuaExportPrint } from './luaExport';
@@ -72,12 +73,36 @@ function sanitizeSearch(raw: string): string {
   return raw.replace(/[,()\\]/g, ' ').trim();
 }
 
-export interface CardQuery {
+export interface CardQuery extends CardFilter {
+  page: number;
+  pageSize: number;
+}
+
+/** 列表筛选条件。关键词体检也用这一套 —— 两处语义必须一致 */
+export interface CardFilter {
   search?: string;
   series?: string;
   rarity?: string;
-  page: number;
-  pageSize: number;
+}
+
+/**
+ * 把筛选条件翻译成 PostgREST 查询。
+ *
+ * 抽出来共用而不是各写一份:关键词体检必须和列表页筛出**同一批卡**,
+ * 否则「列表里筛出 45 张 RAD」与「体检扫出来的卡」对不上,编务就不知道
+ * 自己到底在改哪些卡。
+ */
+function filterQuery(f: CardFilter): { or?: string; filters: RestFilter[] } {
+  const kw = sanitizeSearch(f.search ?? '');
+  return {
+    or: kw
+      ? `card_no.ilike.*${kw}*,card_name_cn.ilike.*${kw}*,card_name_en.ilike.*${kw}*`
+      : undefined,
+    filters: [
+      ...(f.series ? [{ column: 'series_name', op: 'eq' as const, value: f.series }] : []),
+      ...(f.rarity ? [{ column: 'rarity_name', op: 'eq' as const, value: f.rarity }] : [])
+    ]
+  };
 }
 
 export interface CardPage {
@@ -94,17 +119,10 @@ export type PrintPayload = Omit<CardPrint, 'id'> & { id?: string | null };
 
 /** 分页 + 筛选读取卡牌列表(服务端分页) */
 export async function listCards(q: CardQuery): Promise<CardPage> {
-  const kw = sanitizeSearch(q.search ?? '');
   const offset = (q.page - 1) * q.pageSize;
   const { rows, total } = await restSelect<CardBase>('cards_base', {
     columns: CARD_LIST_COLUMNS,
-    or: kw
-      ? `card_no.ilike.*${kw}*,card_name_cn.ilike.*${kw}*,card_name_en.ilike.*${kw}*`
-      : undefined,
-    filters: [
-      ...(q.series ? [{ column: 'series_name', op: 'eq' as const, value: q.series }] : []),
-      ...(q.rarity ? [{ column: 'rarity_name', op: 'eq' as const, value: q.rarity }] : [])
-    ],
+    ...filterQuery(q),
     order: 'card_no.asc',
     limit: q.pageSize,
     offset,
@@ -250,17 +268,23 @@ export async function loadSeriesOptions(): Promise<SeriesOption[]> {
 
 /** 稀有度候选:全表去重(库中无字典表) */
 export async function loadRarityOptions(): Promise<string[]> {
-  const { rows } = await restSelect<{ rarity_name: string | null }>('cards_base', {
+  const rows = await restSelectAll<{ rarity_name: string | null }>('cards_base', {
     columns: 'rarity_name'
   });
   return [...new Set(rows.map((r) => r.rarity_name).filter((v): v is string => !!v))].sort();
 }
 
-/** 数组字段候选值:全表去重(供多选标签输入器的下拉) */
+/**
+ * 数组字段候选值:全表去重(供多选标签输入器的下拉)。
+ *
+ * 必须走 restSelectAll —— PostgREST 单次响应上限 1000 行,而 cards_base 已有
+ * 1016 行。原先用 restSelect 不分页,会静默漏掉最后 16 行:线上实测下拉框里
+ * 只有 49 个关键词候选取值,而全表实际有 50 个(漏掉的是「法盾3」)。
+ */
 export async function loadArrayFieldOptions(
   field: 'card_color_list' | 'region' | 'tag' | 'keyword' | 'advanced_tag'
 ): Promise<string[]> {
-  const { rows } = await restSelect<Record<string, string[] | null>>('cards_base', {
+  const rows = await restSelectAll<Record<string, string[] | null>>('cards_base', {
     columns: field
   });
   const set = new Set<string>();
@@ -269,6 +293,84 @@ export async function loadArrayFieldOptions(
     if (Array.isArray(arr)) for (const v of arr) if (typeof v === 'string' && v) set.add(v);
   }
   return [...set].sort((a, b) => a.localeCompare(b, 'zh'));
+}
+
+/* ──────────────────────── 关键词体检 ──────────────────────── */
+
+/** 体检所需列:只取判定用得到的字段,不拉整表全字段 */
+export const KEYWORD_AUDIT_COLUMNS =
+  'id,card_no,card_name_cn,effect_cn,effect_en,keyword,series_name';
+
+/** 体检行(比 CardBase 窄) */
+export type KeywordAuditRow = Pick<
+  CardBase,
+  'id' | 'card_no' | 'card_name_cn' | 'effect_cn' | 'effect_en' | 'keyword' | 'series_name'
+>;
+
+/**
+ * 拉取「关键词体检」要扫的卡(分页拉完)。
+ *
+ * 走与列表页**同一套筛选语义**:编务筛了哪个系列、哪个稀有度、搜了什么词,
+ * 体检就只扫那一批。不传筛选 = 全表(1016 行 = 2 次请求)。
+ * 判定全部在本地做 —— 规则引擎是纯函数,这里只负责把文本取回来。
+ */
+export function selectCardsForKeywordAudit(filter: CardFilter = {}): Promise<KeywordAuditRow[]> {
+  return restSelectAll<KeywordAuditRow>('cards_base', {
+    columns: KEYWORD_AUDIT_COLUMNS,
+    ...filterQuery(filter),
+    order: 'card_no.asc'
+  });
+}
+
+export interface KeywordWriteItem {
+  id: string;
+  card_no: string;
+  keyword: string[];
+}
+
+export interface KeywordWriteResult {
+  /** 真正落库的行数(服务端回了行才算) */
+  ok: number;
+  failed: { id: string; card_no: string; error: string }[];
+}
+
+/**
+ * 批量写关键词。
+ *
+ * 为什么不复用 batch.ts 的 updateMany:那是「同值补丁」批处理(一次请求改
+ * 一批行),而每张卡的关键词数组各不相同,合并不到一个 patch 里。
+ * 所以逐行更新,但每行**只提交 keyword 一个字段**(外加 updated_at),
+ * 不整行覆盖 —— 沿用后台三条库约定之②③。
+ */
+export async function writeKeywords(
+  patches: readonly KeywordWriteItem[],
+  onProgress?: (done: number, total: number) => void
+): Promise<KeywordWriteResult> {
+  const failed: KeywordWriteResult['failed'] = [];
+  let ok = 0;
+  let done = 0;
+
+  for (const p of patches) {
+    try {
+      const rows = await restUpdate<{ id: string }>(
+        'cards_base',
+        { keyword: p.keyword, updated_at: new Date().toISOString() },
+        [{ column: 'id', op: 'eq', value: p.id }]
+      );
+      // 服务端只回真正被改动的行;空数组 = 无匹配行或被 RLS 拒绝(不是错误,但多半是权限)
+      if (rows.length) ok += 1;
+      else failed.push({ id: p.id, card_no: p.card_no, error: '未写入(无匹配行或权限不足)' });
+    } catch (e) {
+      failed.push({
+        id: p.id,
+        card_no: p.card_no,
+        error: e instanceof Error ? e.message : String(e)
+      });
+    }
+    done += 1;
+    onProgress?.(done, patches.length);
+  }
+  return { ok, failed };
 }
 
 /* ──────────────────────── 发布 ──────────────────────── */

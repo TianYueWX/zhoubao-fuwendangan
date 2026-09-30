@@ -20,10 +20,14 @@ import EditorialShell from './EditorialShell.vue';
 import AdminPager from './AdminPager.vue';
 import AdminTagInput from './AdminTagInput.vue';
 import AdminConfirmButton from './AdminConfirmButton.vue';
+import KeywordSuggest from './KeywordSuggest.vue';
+import KeywordAudit from './KeywordAudit.vue';
 import SectionHeading from '../SectionHeading.vue';
 import { debounce } from '@/utils/debounce';
 import { errorText, notifyError, notifyOk, notifyWarn } from '@/tools/admin/notice';
 import { renderEffectPreview, formatTime } from '@/tools/admin/text';
+import { diffKeywords, suggestKeywords, type KeywordHit } from '@/tools/admin/keywords';
+import { consumeKeywordAuditIntent } from '@/tools/admin/keywordIntent';
 import {
   changedCardFields,
   createCard,
@@ -137,10 +141,82 @@ const dirtyFields = computed<Record<string, unknown>>(() => {
 const isDirty = computed(() => Object.keys(dirtyFields.value).length > 0);
 const dirtyKeys = computed(() => Object.keys(dirtyFields.value));
 
+/* ──────────────────────── 一键提取关键词 ──────────────────────── */
+
+/**
+ * 「从文本提取」的预览态。
+ * 点一下不直接写入 —— 提取会误伤(见 RAD-001 的「其具有{{部署}}」),
+ * 先出清单、带命中上下文、勾选后并入,人去判断语义。
+ */
+const suggest = ref<{
+  /** 全部建议,按卡面出现顺序(并入时用它定词序) */
+  all: KeywordHit[];
+  /** 需要新增的(预览面板里可勾选的部分) */
+  add: KeywordHit[];
+  /** 已有、且建议里也有的(保持不变) */
+  kept: string[];
+  /** 已有、但文本推不出来的(只提示,永不自动删) */
+  orphan: string[];
+} | null>(null);
+
+function openSuggest(): void {
+  const f = form.value;
+  if (!f) return;
+  const all = suggestKeywords(f);
+  const diff = diffKeywords(f.keyword, all);
+  suggest.value = { all, add: diff.add, kept: diff.kept, orphan: diff.orphan };
+}
+
+/**
+ * 并入勾选的词。**只加不删**:
+ * 建议顺序在前(贴合卡面词序),人工填的孤儿词追加在后。
+ * 改的是表单,仍需点「保存」才落库 —— 与逐字手输走同一条保存链路。
+ */
+function applySuggested(keywords: string[]): void {
+  const f = form.value;
+  const s = suggest.value;
+  if (!f || !s) return;
+  const current = f.keyword ?? [];
+  const finalSet = new Set([...current, ...keywords]);
+  const ordered: string[] = [];
+  for (const h of s.all) if (finalSet.has(h.keyword) && !ordered.includes(h.keyword)) ordered.push(h.keyword);
+  for (const k of current) if (!ordered.includes(k)) ordered.push(k);
+  f.keyword = ordered;
+  suggest.value = null;
+  notifyOk(
+    keywords.length ? `已并入 ${keywords.length} 个关键词` : '已并入(无新增)',
+    '还需点「保存」才落库'
+  );
+}
+
+/** 关键词体检抽屉 */
+const auditOpen = ref(false);
+
+/**
+ * 体检的扫描范围 = 列表页当前的筛选。
+ * 编务筛了哪个系列就只扫哪个系列 —— 全表 1016 张里绝大多数本来就没问题,
+ * 全量扫反而淹没了真正要处理的那几十张。
+ */
+const auditFilter = computed(() => ({
+  search: search.value,
+  series: filterSeries.value,
+  rarity: filterRarity.value
+}));
+
+/** 只刷新关键词候选值(体检写完之后词表会变) */
+async function refreshKeywordOptions(): Promise<void> {
+  try {
+    arrayOptions.keyword = await loadArrayFieldOptions('keyword');
+  } catch {
+    /* 候选值拿不到不影响使用,静默 */
+  }
+}
+
 async function selectCard(id: string): Promise<void> {
   if (isDirty.value) {
     notifyWarn('当前卡牌有未保存的修改,已切换;如需保留请先保存。');
   }
+  suggest.value = null; // 换卡即丢弃上一张的提取预览,避免误并入
   selectedId.value = id;
   detailLoading.value = true;
   try {
@@ -458,6 +534,8 @@ function downloadLua(): void {
 /* ──────────────────────── 启动 ──────────────────────── */
 
 onMounted(async () => {
+  // 同步页刚落完新卡时会置这个意图:直接开体检抽屉,省一步点击
+  if (consumeKeywordAuditIntent()) auditOpen.value = true;
   await loadList();
   try {
     const [series, rarities] = await Promise.all([loadSeriesOptions(), loadRarityOptions()]);
@@ -525,6 +603,15 @@ onMounted(async () => {
         </button>
         <button class="btn-ghost px-3 py-1.5 text-xs" :disabled="listLoading" @click="loadList">
           刷新
+        </button>
+        <button
+          type="button"
+          class="btn-ghost px-3 py-1.5 text-xs"
+          title="扫全表，列出正文能提取出关键词、而库里还没记的卡"
+          data-testid="keyword-audit"
+          @click="auditOpen = true"
+        >
+          关键词体检
         </button>
         <button
           type="button"
@@ -788,7 +875,18 @@ onMounted(async () => {
                 </div>
               </div>
               <div>
-                <span class="text-[11px] tracking-[0.14em] text-ink-faint">关键词</span>
+                <div class="flex items-baseline justify-between gap-2">
+                  <span class="text-[11px] tracking-[0.14em] text-ink-faint">关键词</span>
+                  <button
+                    type="button"
+                    class="text-[11px] text-brand hover:text-ink transition-colors"
+                    title="从本卡的效果文本里提取关键词,勾选后并入"
+                    data-testid="keyword-suggest-open"
+                    @click="openSuggest()"
+                  >
+                    从文本提取
+                  </button>
+                </div>
                 <div class="mt-1.5">
                   <AdminTagInput v-model="form.keyword" :options="arrayOptions.keyword" />
                 </div>
@@ -800,6 +898,17 @@ onMounted(async () => {
                 </div>
               </div>
             </div>
+
+            <!-- 提取预览:放网格外,免得挤在半栏里看不清命中上下文 -->
+            <KeywordSuggest
+              v-if="suggest"
+              :hits="suggest.add"
+              :kept="suggest.kept"
+              :orphan="suggest.orphan"
+              class="border-l-2 border-brand"
+              @apply="applySuggested"
+              @cancel="suggest = null"
+            />
 
             <div class="hairline my-6"></div>
 
@@ -1142,6 +1251,14 @@ onMounted(async () => {
         </div>
       </div>
     </Teleport>
+
+    <!-- 关键词体检:只扫列表当前筛选出来的卡 -->
+    <KeywordAudit
+      v-model:open="auditOpen"
+      :filter="auditFilter"
+      :vocabulary="arrayOptions.keyword"
+      @applied="refreshKeywordOptions"
+    />
   </EditorialShell>
 </template>
 

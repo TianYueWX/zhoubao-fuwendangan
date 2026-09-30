@@ -15,6 +15,8 @@ import { fetchDataset, type SyncDataset } from '@/tools/sync/run';
 import { datasetFromPull, parsePullPackage, type PullSummary } from '@/tools/sync/importPull';
 import { cacheCount, clearDetailCache, loadDetailCache } from '@/tools/sync/cache';
 import { downloadText } from '@/tools/sync/exporters';
+import { requestKeywordAudit } from '@/tools/admin/keywordIntent';
+import { navigate } from '@/router/hash';
 import {
   SNAPSHOT_TARGET,
   cardPrintsSnapshotCsv,
@@ -323,6 +325,24 @@ function clearCache(notify = true): void {
   if (notify) notifyOk('已清空详情缓存');
 }
 
+/* ══════════════════ 落地后的关键词引导 ══════════════════ */
+
+/**
+ * keyword 是**人工维护列** —— 同步只写 effect_cn(见 src/tools/sync/review.ts 的
+ * UPDATE_FIELDS.cards_base),所以新卡落地后关键词一定是空的。
+ * 这里不做自动填:编务要的是「写入前审核」,清单一律在卡片页的体检抽屉里过。
+ */
+const landedCards = ref(0);
+
+function onSyncApplied(cards: number): void {
+  if (cards > 0) landedCards.value = cards;
+}
+
+function goKeywordAudit(): void {
+  requestKeywordAudit();
+  navigate({ view: 'editorial-cards' });
+}
+
 /* ══════════════════ 站点卡表快照(P5b) ══════════════════ */
 
 const snapshotBusy = ref(false);
@@ -600,8 +620,26 @@ onMounted(async () => {
         </div>
       </section>
 
+      <!-- 落地后的关键词引导:keyword 是人工列,同步永远不写,所以新卡必然是空的 -->
+      <section v-if="landedCards" class="card p-4 mb-6 border-l-2 border-accent" data-testid="keyword-hint">
+        <div class="flex items-center justify-between gap-4 flex-wrap">
+          <div class="min-w-0">
+            <p class="text-[13px] text-ink">
+              本次落地 <b class="tabular-nums">{{ landedCards }}</b> 张基础卡
+            </p>
+            <p class="text-[11px] text-ink-faint mt-1 leading-relaxed">
+              关键词是人工维护列（同步不会写它），这些卡的关键词还是空的 ——
+              去卡片页跑一次体检，把正文里能提取的词列出来，你勾选后再写入。
+            </p>
+          </div>
+          <button class="btn-brand px-3.5 py-1.5 text-xs shrink-0" @click="goKeywordAudit">
+            去关键词体检
+          </button>
+        </div>
+      </section>
+
       <SyncReview v-if="dataset && existing" ref="syncReview" :dataset="dataset" :existing="existing" :loading="existingLoading"
-        @reload="loadExistingRows(true)" @busy="reviewBusy = $event" />
+        @reload="loadExistingRows(true)" @busy="reviewBusy = $event" @applied="onSyncApplied" />
 
       <AdminQaSync ref="qaSync" :api-base="apiBase" @busy="qaBusy = $event" />
 
