@@ -312,6 +312,40 @@ const newPrintOp = buildOperation(newRows[1], newRows, existing([oldBase]));
 await assert.rejects(executeOperation(newPrintOp, { ...transport, select: async () => [{ ...oldPrint, card_no_extend: 'ARC·001a' }] }), /印刷版本已存在/);
 passed++; console.log('✓ 提交前检查规范化印刷编号，防止重复插入');
 
+/* 「照样当作新的基础卡」必须一路贯通到落库层:审核层放行、落库层也放行。
+   线上真实事故:RAD-R03 在界面放行后提交失败「同名同副标题基础卡已存在」。 */
+{
+  const rows = createReview(dataset());
+  const ex = existing([oldBase, { ...oldBase, id: 'base-2' }]);
+  rows[0].newBaseInstead = true;
+  const op = buildOperation(rows[0], rows, ex);
+  assert.equal(op.kind, 'insert');
+  assert.equal(op.allowSameNameBase, true, '豁免标记要挂到 operation 上');
+  // 库内已有同名卡 → 仍应放行并真的插入(沿用默认 insert mock,它会补 id)
+  const inserted = await executeOperation(op, { ...transport, select: async () => [oldBase] });
+  assert.equal(inserted.card_no, op.payload.card_no);
+  passed++; console.log('✓ 选了「当作新卡」后，落库层的同名复检不再拦截');
+}
+{
+  // 没选豁免时,同名复检照旧拦截
+  const rows = createReview(dataset());
+  const op = buildOperation(rows[0], rows, existing());
+  assert.equal(op.allowSameNameBase, false);
+  await assert.rejects(executeOperation(op, { ...transport, select: async () => [oldBase] }), /同名同副标题基础卡已存在/);
+  passed++; console.log('✓ 未选「当作新卡」时，同名复检照旧拦截');
+}
+{
+  // 豁免只针对同名,卡号占用仍然无条件拦截 —— 重复提交靠这条兜住
+  const rows = createReview(dataset());
+  rows[0].newBaseInstead = true;
+  const op = buildOperation(rows[0], rows, existing([oldBase, { ...oldBase, id: 'base-2' }]));
+  await assert.rejects(
+    executeOperation(op, { ...transport, select: async () => [{ ...oldBase, card_no: op.payload.card_no }] }),
+    /基础编号已被占用/
+  );
+  passed++; console.log('✓ 豁免不覆盖编号占用：卡号被占仍被拦下');
+}
+
 // Exercise fetch orchestration: fresh errata invalidates old details and print images come from the list version.
 const seriesOp = { table: 'series', kind: 'insert', payload: { code: 'NEW', name_cn: '新系列' }, expected: {} };
 const seriesResult = await executeOperation(seriesOp, { ...transport, insert: async (_table, payload) => [payload] });

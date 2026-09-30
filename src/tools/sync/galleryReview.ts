@@ -304,7 +304,19 @@ export function buildGalleryOperation(
     kind: state.kind === 'new' ? 'insert' : 'update',
     id: state.before?.id as string | undefined,
     payload,
-    expected: state.before ? pick(state.before, fields) : {}
+    expected: state.before ? pick(state.before, fields) : {},
+    /**
+     * 官网链路的基础卡身份是**卡号**(上面按 basesByNumber 匹配,不做中文名身份匹配),
+     * 所以同名同副标题在这里是常态而非异常 —— 线上就有 20 组 / 54 张,几乎全是
+     * 跨系列重印(比如每系列一张的「炽烈符文」)。
+     *
+     * 因此必须豁免 write.ts 的同名复检,否则像 RAD-R03 这种「编号没占、名字撞车」
+     * 的新卡会永远提交不上去(报「同名同副标题基础卡已存在,请重新读取后关联」,
+     * 而这条链路根本没有可选关联的入口)。
+     *
+     * 完整性不受影响:卡号唯一性由 write.ts 里**无条件执行**的编号占用复检把关。
+     */
+    allowSameNameBase: row.table === 'cards_base'
   }
 }
 

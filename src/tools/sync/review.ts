@@ -53,6 +53,17 @@ export interface ReviewOperation {
   payload: Values
   /** Fields read during review; checked again before an update. */
   expected: Values
+  /**
+   * 新增 cards_base 时豁免「同名同副标题已存在」这道落库前复检。
+   *
+   * 由 ReviewRow.newBaseInstead 派生 —— 审核层已经问过编务「这照样是一张新卡」,
+   * 落库层必须认这个决定,否则界面放行了、写库又被拦下(线上真实事故:
+   * RAD-R03 提交失败「同名同副标题基础卡已存在，请重新读取后关联」)。
+   *
+   * 只豁免同名,不豁免卡号:executeOperation 里的编号占用复检照常执行,
+   * 所以重复提交仍会被拦下(那种情况下 card_no 已被占)。
+   */
+  allowSameNameBase?: boolean
 }
 export const INSERT_FIELDS: Record<ReviewTable, readonly string[]> = {
   cards_base: CARDS_BASE_COLUMNS,
@@ -247,7 +258,9 @@ export function buildOperation(row: ReviewRow, rows: ReviewRow[], ex: ExistingSn
   if (row.table === 'cards_base' && state.kind === 'new' && normalizeCardNo(String(payload.card_no)).error) throw new Error('基础编号格式错误')
   return { table: row.table, kind: state.kind === 'new' ? 'insert' : 'update',
     id: state.before?.id as string | undefined, payload,
-    expected: state.before ? pick(state.before, fields) : {} }
+    expected: state.before ? pick(state.before, fields) : {},
+    // 把「照样当作新的基础卡」的决定带到落库层,否则 write.ts 的同名复检会推翻它
+    allowSameNameBase: row.table === 'cards_base' && row.newBaseInstead }
 }
 
 /** Whitelist is applied again at the write/export boundary. */

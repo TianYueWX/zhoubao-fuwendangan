@@ -240,7 +240,9 @@ async function waitFor(expression, tries = 40) {
 
 console.log('\n== 1. 首页小按钮入口 ==');
 await cdp('Page.navigate', { url: APP });
-await sleep(2600);
+// 首页是 Vue 挂载后渲染的,固定 sleep 在机器忙时会偶发落空 —— 改为轮询
+await waitFor(`!!document.querySelector('.shortcut-btn')`);
+await sleep(300);
 
 check('首页出现小工具入口条', await evalJs(`!!document.querySelector('.home-shortcuts')`));
 check(

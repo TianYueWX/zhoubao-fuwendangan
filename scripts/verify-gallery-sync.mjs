@@ -29,6 +29,7 @@ import {
 } from '../src/tools/sync/fieldSelection.ts';
 import { normalizeCardNo, baseCardNo } from '../src/tools/sync/normalize.ts';
 import { validateOperation, reviewSql, reviewCsv } from '../src/tools/sync/review.ts';
+import { executeOperation } from '../src/tools/sync/write.ts';
 import {
   parseGalleryQuery, galleryUpstreamUrl, GALLERY_LOCALES
 } from '../functions/api/riftbound/gallery/_upstream.ts';
@@ -502,6 +503,53 @@ test('星号印刷：按英文名＋副标题回找原作基础卡', () => {
   const op = buildGalleryOperation(print, rows, ex, index);
   assert.equal(op.payload.card_id, 'base-2');
   validateOperation(op);
+});
+
+await asyncTest('官网中文同步：编号没占但名字撞车的新卡，不再被同名复检拦死', async () => {
+  // 官网链路的基础卡身份是卡号；同名同副标题在这里是常态（二十组跨系列重印）
+  const dataset = baseDataset({
+    option: { id: 'zh_CN', label: '简体中文', target: 'cn', writable: true },
+    bases: [{
+      card_no: 'UNL-999', name: '阿狸', subtitle: null, effect: '新效果',
+      card_name_en: 'Ahri', sub_title_en: null, series_name: 'UNL', rarity_name: '异画',
+      energy: 3, card_category: ['单位'], localized: true, source_id: 'unl-999-999'
+    }],
+    prints: []
+  });
+  const ex = existingSnapshot();
+  const rows = createGalleryReview(dataset);
+  const index = makeIndex(ex, rows);
+  const base = rows.find((r) => r.table === 'cards_base');
+  assert.equal(galleryState(base, rows, ex, index).kind, 'new');
+  const op = buildGalleryOperation(base, rows, ex, index);
+  assert.equal(op.kind, 'insert');
+  assert.equal(op.allowSameNameBase, true, '官网链路必须豁免同名复检');
+  // 库内已有两条「阿狸 / 副标题为空」——没有豁免时这里会抛「同名同副标题基础卡已存在」
+  const inserted = await executeOperation(op, {
+    select: async () => [{ id: 'base-2', card_no: 'OGN-119', card_name_cn: '阿狸', sub_title_cn: null }],
+    insert: async (_table, payload) => [{ id: 'created', ...payload }],
+    update: async () => []
+  });
+  assert.equal(inserted.id, 'created');
+  assert.equal(inserted.card_no, 'UNL-999');
+});
+
+test('官网链路仍然拒绝占用中的编号（豁免只针对同名）', () => {
+  const dataset = baseDataset({
+    option: { id: 'zh_CN', label: '简体中文', target: 'cn', writable: true },
+    bases: [{
+      card_no: 'OGN-119', name: '别的卡', subtitle: null, effect: 'x',
+      card_name_en: 'Other', sub_title_en: null, series_name: 'OGN', rarity_name: '普通',
+      energy: 1, card_category: ['单位'], localized: true, source_id: 'ogn-119-1'
+    }],
+    prints: []
+  });
+  const ex = existingSnapshot();
+  const rows = createGalleryReview(dataset);
+  const index = makeIndex(ex, rows);
+  const base = rows.find((r) => r.table === 'cards_base');
+  // 编号已在库里 → 不是 new，而是 update，绝不会插出重复编号
+  assert.equal(galleryState(base, rows, ex, index).kind, 'update');
 });
 
 test('英文身份多个候选时必须手选，手选后可提交', () => {

@@ -27,7 +27,11 @@ export async function executeOperation(op: ReviewOperation, transport: ReviewTra
         existing.push(...page)
         if (page.length < 1000) break
       }
-      if (existing.some((r) => identity(r.card_name_cn, r.sub_title_cn) === identity(op.payload.card_name_cn, op.payload.sub_title_cn))) throw new Error('同名同副标题基础卡已存在，请重新读取后关联')
+      // 同名复检:挡的是「快照读完之后库里又冒出同名卡」这类陈旧审核。
+      // 但编务在审核层明确说过「这照样是一张新卡」时(op.allowSameNameBase),
+      // 必须认这个决定 —— 否则界面放行、写库又被拦,功能等于没做。
+      // 只豁免同名:下一行的编号占用复检无条件执行,重复提交仍会被拦。
+      if (!op.allowSameNameBase && existing.some((r) => identity(r.card_name_cn, r.sub_title_cn) === identity(op.payload.card_name_cn, op.payload.sub_title_cn))) throw new Error('同名同副标题基础卡已存在，请重新读取后关联')
       if (existing.some((r) => r.card_no === op.payload.card_no)) throw new Error('基础编号已被占用，请重新审核')
     }
     if (op.table === 'card_prints') {
