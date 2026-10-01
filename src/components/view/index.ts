@@ -22,6 +22,7 @@ import RegionView from "./RegionView.vue";
 import DecksView from "./DecksView.vue";
 import ChainBoardView from "./ChainBoardView.vue";
 import RankLadderView from "./RankLadderView.vue";
+import RulesQaView from "./RulesQaView.vue";
 import ToolPlaceholder from "./ToolPlaceholder.vue";
 import EditorialHub from "../admin/EditorialHub.vue";
 import AdminCardEditor from "../admin/AdminCardEditor.vue";
@@ -52,12 +53,12 @@ export const ViewComponents: Record<string, unknown> = {
   region: RegionView,
   decks: DecksView,
 
-  /* 云端内容(待接入 Supabase) */
+  /* 云端内容 */
   blog: placeholder,
-  qa: placeholder,
+  qa: RulesQaView,
 
-  /* 静态资料(随站点发布) */
-  rules: placeholder,
+  /* 规则与 QA 共用一张公开检索桌 */
+  rules: RulesQaView,
   carddex: CarddexView,
 
   /* 小工具:结算链推演(卡池来自内置卡表,无需数据包) */
@@ -90,6 +91,7 @@ export {
   DecksView,
   ChainBoardView,
   RankLadderView,
+  RulesQaView,
   ToolPlaceholder,
   EditorialHub,
   AdminCardEditor,

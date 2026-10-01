@@ -213,11 +213,12 @@ export const TOOLS: readonly ToolDef[] = Object.freeze([
   },
   {
     code: "rules",
-    label: "规则查询",
-    desc: "官方规则与裁定条文",
+    label: "规则与 QA 查询",
+    desc: "规则书、赛事判例与卡牌问答检索",
     group: "reference",
-    source: "static",
+    source: "supabase",
     badge: "资料",
+    unavailableHint: "配置 VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY 后可用",
   },
   {
     code: "carddex",

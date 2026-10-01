@@ -1,26 +1,15 @@
 <script setup lang="ts">
-import { onUnmounted, ref } from "vue";
+import { onUnmounted } from "vue";
 import { navigate } from "@/router/hash";
 import { editorialUnlocked, knock, resetKnock } from "@/tools/editorialAccess";
 
 const titleCharacters = ["符", "文", "档", "案"];
-const notice = ref("");
-let noticeTimer: ReturnType<typeof setTimeout> | undefined;
 
 function onTitleClick(index: number): void {
   knock(index);
 }
 
-function comingSoon(): void {
-  notice.value = "敬请期待";
-  clearTimeout(noticeTimer);
-  noticeTimer = setTimeout(() => {
-    notice.value = "";
-  }, 2400);
-}
-
 onUnmounted(() => {
-  clearTimeout(noticeTimer);
   resetKnock();
 });
 </script>
@@ -75,7 +64,11 @@ onUnmounted(() => {
           <span class="entry-label font-display">周报分析</span>
           <span class="entry-arrow" aria-hidden="true">↗</span>
         </button>
-        <button type="button" class="entry-card" @click="comingSoon">
+        <button
+          type="button"
+          class="entry-card"
+          @click="navigate({ view: 'rules' })"
+        >
           <svg
             class="entry-art"
             viewBox="0 0 160 104"
@@ -92,7 +85,7 @@ onUnmounted(() => {
             <path class="art-accent" d="M108 16v29l7-5 7 5V16" />
           </svg>
           <span class="entry-label font-display">规则与 QA 查询</span>
-          <span class="entry-status">未开发</span>
+          <span class="entry-arrow" aria-hidden="true">↗</span>
         </button>
         <button
           type="button"
@@ -199,14 +192,6 @@ onUnmounted(() => {
           积分榜速查
         </button>
       </div>
-    </div>
-    <div
-      class="home-notice"
-      role="status"
-      aria-live="polite"
-      aria-atomic="true"
-    >
-      <span v-if="notice">{{ notice }}</span>
     </div>
   </section>
 </template>
@@ -414,13 +399,6 @@ onUnmounted(() => {
   line-height: 1;
   align-self: center;
 }
-.entry-status {
-  color: var(--color-text-subtle);
-  font-size: 10px;
-  align-self: center;
-  white-space: nowrap;
-}
-
 /* ── 小工具入口条 ──
  * 大卡片下方的一排紧凑按钮。收录不成栏目的单点工具,
  * 保持首页的呼吸感,新增小工具只需在这里再加一个按钮。 */
@@ -545,9 +523,6 @@ onUnmounted(() => {
   }
   .has-editorial .entry-label {
     font-size: 16px;
-  }
-  .has-editorial .entry-status {
-    font-size: 9px;
   }
   .archive-watermark {
     font-size: 65vh;

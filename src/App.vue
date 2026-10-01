@@ -110,7 +110,7 @@ const activeViewComponent = computed(
 );
 
 /** 占位/云端工具需要 code 作为 prop(其余视图忽略) */
-const PLACEHOLDER_CODES = ["blog", "qa", "rules"];
+const PLACEHOLDER_CODES = ["blog"];
 const needsCodeProp = computed(() =>
   PLACEHOLDER_CODES.includes(store.currentView),
 );
