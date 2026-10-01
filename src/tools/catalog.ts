@@ -239,6 +239,18 @@ export const TOOLS: readonly ToolDef[] = Object.freeze([
     // 卡池来自随站点预加载的内置卡表,因此不依赖数据包
     needsData: false,
   },
+  {
+    code: "rank",
+    short: "积分榜",
+    label: "积分榜速查",
+    desc: "官方玩家端积分排行榜只读查询:搜昵称或 uid 看名次、积分与段位",
+    group: "reference",
+    // 直连官方网关(该端点带 CORS 头),不走 Supabase,也不走同源转发函数
+    source: "static",
+    badge: "小工具",
+    // 只依赖网络与浏览器本地快照,与已载入的数据包无关
+    needsData: false,
+  },
 
   /* ── 编辑部(隐藏栏目:连点报头刊名解锁,且必须管理员登录) ──
    * editorial 是栏目首页(hub),其余 5 个工具各自独立成页。

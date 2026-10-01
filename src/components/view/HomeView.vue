@@ -186,6 +186,18 @@ onUnmounted(() => {
           </svg>
           结算链推演
         </button>
+        <button
+          type="button"
+          class="shortcut-btn"
+          title="积分榜速查 · 官方玩家端积分排行榜只读查询"
+          @click="navigate({ view: 'rank' })"
+        >
+          <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+            <path d="M4 16.5h12" stroke-width="1.5" stroke-linecap="round" />
+            <path d="M6 16.5v-4.2M10 16.5v-7.4M14 16.5v-10.6" stroke-width="1.5" stroke-linecap="round" />
+          </svg>
+          积分榜速查
+        </button>
       </div>
     </div>
     <div

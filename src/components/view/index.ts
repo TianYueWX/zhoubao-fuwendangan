@@ -21,6 +21,7 @@ import CarddexView from "./CarddexView.vue";
 import RegionView from "./RegionView.vue";
 import DecksView from "./DecksView.vue";
 import ChainBoardView from "./ChainBoardView.vue";
+import RankLadderView from "./RankLadderView.vue";
 import ToolPlaceholder from "./ToolPlaceholder.vue";
 import EditorialHub from "../admin/EditorialHub.vue";
 import AdminCardEditor from "../admin/AdminCardEditor.vue";
@@ -62,6 +63,9 @@ export const ViewComponents: Record<string, unknown> = {
   /* 小工具:结算链推演(卡池来自内置卡表,无需数据包) */
   chain: ChainBoardView,
 
+  /* 小工具:积分榜速查(直连官方网关,只落本机快照,无需数据包) */
+  rank: RankLadderView,
+
   /* 编辑部(隐藏栏目:连点报头刊名解锁 + 管理员门禁) */
   editorial: EditorialHub,
   "editorial-cards": AdminCardEditor,
@@ -85,6 +89,7 @@ export {
   RegionView,
   DecksView,
   ChainBoardView,
+  RankLadderView,
   ToolPlaceholder,
   EditorialHub,
   AdminCardEditor,
