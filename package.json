@@ -30,6 +30,7 @@
     "verify:qa-sync": "node --experimental-strip-types --import ./scripts/register-hooks.mjs scripts/verify-qa-sync.mjs",
     "verify:carddex-qa": "node --experimental-strip-types --import ./scripts/register-hooks.mjs scripts/verify-carddex-qa.mjs",
     "verify:carddex-query": "node --experimental-strip-types --import ./scripts/register-hooks.mjs scripts/verify-carddex-query.mjs",
+    "verify:carddex-scroll": "node scripts/verify-carddex-scroll.mjs",
     "verify:sync-review-ui": "node scripts/verify-sync-review-ui.mjs",
     "verify:sync-review-perf": "node scripts/verify-sync-review-ui.mjs --perf --assert-fast"
   },

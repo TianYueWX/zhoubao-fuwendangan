@@ -68,12 +68,13 @@ const detailList = ref<DisplayCard[]>([]);
 const teleportReady = ref(false);
 const shareCopied = ref(false);
 const incoming = ref<CarddexQueryState | null>(null);
-const showTop = ref(false);
 const viewerKey = ref("");
 const suggestionIndex = ref(-1);
 const detailFromPins = ref(false);
-const resultsScroll = ref<HTMLElement | null>(null);
+/** 吸顶基准 = 报头(含栏目条)的实测高度，经 CSS 变量 --carddex-top 下发 */
+const stickyTop = ref(104);
 let sentinelObserver: IntersectionObserver | null = null;
+let headerObserver: ResizeObserver | null = null;
 
 const zh = computed(() => ui.locale === "zh");
 const labels = computed(() =>
@@ -194,17 +195,23 @@ watch(ui, () => saveUi(clone(ui)), { deep: true });
 watch(pins, (v) => savePins(v), { deep: true });
 watch(results, () => {
   visibleCount.value = 48;
-  showTop.value = false;
-  resultsScroll.value?.scrollTo({ top: 0 });
+  window.scrollTo({ top: 0 });
   nextTick(observeSentinel);
 });
 watch(suggestions, () => {
   suggestionIndex.value = -1;
 });
 watch(
-  () => [detailItem.value, pinnedOpen.value, mobileFilterOpen.value],
-  ([detail, pinned, filter]) => {
-    document.body.style.overflow = detail || pinned || filter ? "hidden" : "";
+  () => [
+    detailItem.value,
+    pinnedOpen.value,
+    mobileFilterOpen.value,
+    viewerItem.value,
+  ],
+  ([detail, pinned, filter, viewer]) => {
+    // 整页滚动后这句才真正生效：弹层打开时冻结背后的页面滚动
+    document.body.style.overflow =
+      detail || pinned || filter || viewer ? "hidden" : "";
   },
 );
 
@@ -379,11 +386,26 @@ async function clearImages(): Promise<void> {
   if (confirm(zh.value ? "清除已经缓存的卡图？" : "Clear cached card images?"))
     await clearCardImageCache();
 }
-function backTop(): void {
-  resultsScroll.value?.scrollTo({ top: 0, behavior: "smooth" });
+/**
+ * 吸顶基准跟随报头实测高度：
+ * 报头 = sticky top-0 的 56px 主条 + 可能存在的 48px 栏目条，而栏目条按
+ * 栏目与权限显隐（真实浏览器实测 `#/carddex` 下就不渲染，报头只有 57px）。
+ * 写死 104px 会露出 47px 的缝或钻到报头下面，所以量多少算多少。
+ */
+function measureHeader(): void {
+  const header = document.querySelector("header.masthead-solid");
+  if (!(header instanceof HTMLElement)) return;
+  const height = Math.round(header.getBoundingClientRect().height);
+  if (height > 0) stickyTop.value = height;
 }
-function onResultsScroll(): void {
-  showTop.value = (resultsScroll.value?.scrollTop ?? 0) > 550;
+function watchHeader(): void {
+  measureHeader();
+  headerObserver?.disconnect();
+  const header = document.querySelector("header.masthead-solid");
+  if (!(header instanceof HTMLElement)) return;
+  // 与 useChart / ChartCard 同口径：直接依赖 ResizeObserver，不做降级分支
+  headerObserver = new ResizeObserver(measureHeader);
+  headerObserver.observe(header);
 }
 function keydown(e: KeyboardEvent): void {
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
@@ -405,7 +427,7 @@ function observeSentinel(): void {
       if (entries.some((e) => e.isIntersecting) && hasMore.value)
         visibleCount.value += 48;
     },
-    { root: resultsScroll.value, rootMargin: "500px 0px" },
+    { root: null, rootMargin: "500px 0px" },
   );
   sentinelObserver.observe(el);
 }
@@ -433,6 +455,7 @@ async function load(): Promise<void> {
 onMounted(() => {
   teleportReady.value = true;
   window.addEventListener("keydown", keydown);
+  watchHeader();
   const raw = location.hash.split("?")[1] ?? "";
   const params = new URLSearchParams(raw);
   viewerKey.value = params.get("viewer") ?? "";
@@ -442,6 +465,7 @@ onMounted(() => {
 });
 onBeforeUnmount(() => {
   sentinelObserver?.disconnect();
+  headerObserver?.disconnect();
   window.removeEventListener("keydown", keydown);
   document.body.style.overflow = "";
 });
@@ -449,7 +473,11 @@ onBeforeUnmount(() => {
 
 <template>
   <CardImageViewer v-if="viewerItem" :item="viewerItem" :locale="ui.locale" />
-  <div v-else class="carddex-page fade-in">
+  <div
+    v-else
+    class="carddex-page fade-in"
+    :style="{ '--carddex-top': `${stickyTop}px` }"
+  >
     <Teleport v-if="teleportReady" to="#global-page-actions">
       <div class="global-actions">
         <button @click="pinnedOpen = true">
@@ -587,11 +615,7 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <div
-          ref="resultsScroll"
-          class="results-scroll"
-          @scroll.passive="onResultsScroll"
-        >
+        <div class="results">
           <div v-if="loading" class="state">
             <i></i>
             <p>{{ labels.loading }}</p>
@@ -623,14 +647,6 @@ onBeforeUnmount(() => {
             </div>
           </template>
         </div>
-        <button
-          v-if="showTop"
-          class="inside-top"
-          :aria-label="zh ? '回到顶部' : 'Back to top'"
-          @click="backTop"
-        >
-          ↑
-        </button>
       </main>
 
       <div v-if="ui.sidebarOpen" class="desktop-filter">
@@ -728,49 +744,47 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+/*
+ * 整页(window)滚动：本页不再自建高度链，滚动的只有浏览器那一条。
+ * 搜索栏与筛选栏各自 sticky，吸附基准 --carddex-top 由报头实测高度注入。
+ */
 .carddex-page {
-  height: 100%;
-  min-height: 0;
+  --carddex-top: 104px; /* 报头(56) + 栏目条(48) 的兜底值 */
 }
 .workspace {
-  height: 100%;
-  min-height: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr) clamp(300px, 30%, 420px);
   gap: 22px;
-  align-items: stretch;
+  align-items: start;
 }
 .workspace.collapsed {
   grid-template-columns: minmax(0, 1fr);
 }
 .result-column {
-  position: relative;
   min-width: 0;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
 }
 .desktop-filter {
+  position: sticky;
+  top: var(--carddex-top);
+  align-self: start;
+  /* 视口高度减去吸顶基准与 main 的 py-4 下边距 */
+  height: calc(100vh - var(--carddex-top) - 32px);
   min-height: 0;
 }
 .desktop-filter :deep(.filter-panel) {
   height: 100%;
 }
 .search-tools {
-  position: relative;
-  flex: none;
+  position: sticky;
+  top: var(--carddex-top);
   z-index: 30;
-  margin-bottom: 12px;
-  padding: 0;
+  /* 底边留白一并上底色：卡片从下面滚过时不会从缝隙里露出来 */
+  padding: 0 0 12px;
+  background: var(--color-header-bg);
+  backdrop-filter: blur(10px);
 }
-.results-scroll {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  overflow-x: hidden;
-  overscroll-behavior: contain;
-  scrollbar-gutter: stable;
-  padding-right: 7px;
+.results {
+  min-width: 0;
 }
 .search-row {
   display: flex;
@@ -969,18 +983,6 @@ onBeforeUnmount(() => {
   font-size: 10px;
   letter-spacing: 0.12em;
 }
-.inside-top {
-  position: absolute;
-  z-index: 45;
-  right: 20px;
-  bottom: 18px;
-  width: 40px;
-  height: 40px;
-  border-radius: 999px;
-  background: var(--color-brand);
-  color: var(--color-brand-ink);
-  box-shadow: 0 7px 22px rgba(30, 20, 10, 0.25);
-}
 .global-actions {
   display: flex;
   align-items: center;
@@ -1081,9 +1083,6 @@ onBeforeUnmount(() => {
 @media (max-width: 1023px) {
   .workspace {
     display: block;
-  }
-  .result-column {
-    height: 100%;
   }
   .desktop-filter {
     display: none;

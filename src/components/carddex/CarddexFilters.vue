@@ -281,7 +281,8 @@ function applyDraft(): void {
 
 <style scoped>
 .filter-panel {
-  height: calc(100vh - 130px);
+  /* 高度由父级给：桌面是 sticky 的 .desktop-filter，移动端是 100dvh 全屏浮层 */
+  height: 100%;
   display: flex;
   flex-direction: column;
   overflow: hidden;

@@ -169,10 +169,12 @@ function onWeekChange(e: Event): void {
 </script>
 
 <template>
-  <div
-    class="flex flex-col"
-    :class="isCarddex ? 'h-screen overflow-hidden' : 'min-h-screen'"
-  >
+  <!--
+    全站统一文档流滚动：carddex 不再自建 h-screen 内滚骨架。
+    任一祖先出现 overflow:hidden 都会吃掉后代的 position:sticky，
+    所以这里的 overflow 一律不加。
+  -->
+  <div class="flex flex-col min-h-screen">
     <header
       v-if="!isHome && store.currentView !== 'chain'"
       class="masthead-solid sticky top-0 z-50 shrink-0"
@@ -320,7 +322,7 @@ function onWeekChange(e: Event): void {
         isHome
           ? 'w-full'
           : isCarddex
-            ? 'flex-1 min-h-0 w-full max-w-[1720px] mx-auto px-4 lg:px-8 py-4 overflow-hidden'
+            ? 'flex-1 w-full max-w-[1720px] mx-auto px-4 lg:px-8 py-4'
             : 'flex-1 w-full max-w-[1720px] mx-auto px-4 lg:px-8 py-8'
       "
     >
@@ -344,9 +346,9 @@ function onWeekChange(e: Event): void {
       </div>
     </footer>
 
-    <!-- 回到顶部 FAB -->
+    <!-- 回到顶部 FAB(carddex 也走这条，页面内不再自建局部回顶) -->
     <button
-      v-if="!isHome && store.currentView !== 'carddex' && showTop"
+      v-if="!isHome && showTop"
       class="fixed bottom-6 right-6 z-50 w-11 h-11 rounded-full bg-brand text-brand-ink shadow-lg flex items-center justify-center text-lg leading-none transition-transform hover:scale-110 fade-in"
       aria-label="回到顶部"
       title="回到顶部"

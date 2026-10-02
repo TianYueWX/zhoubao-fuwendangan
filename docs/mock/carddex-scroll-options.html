@@ -1,0 +1,386 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Carddex 滚动方案对比 · 线框</title>
+    <style>
+      :root {
+        --bar: 54px; /* 顶部切换条 */
+        --head: 56px; /* masthead 56px (h-14) */
+        --nav: 48px; /* 栏目二级条 48px (h-12) */
+        --gap: 22px; /* workspace gap */
+        --maxw: 1720px;
+        --px: 32px; /* lg:px-8 */
+        --sidebar: clamp(300px, 30%, 420px);
+        --line: #d8d2c6;
+        --panel: #faf7f1;
+        --bg: #f2ede4;
+        --brand: #8c5a2b;
+        --ink: #2f2a24;
+        --muted: #7a7268;
+        --mark: #c0392b;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; }
+      body {
+        font: 12px/1.5 system-ui, "Segoe UI", "Microsoft YaHei", sans-serif;
+        color: var(--ink);
+        background: var(--bg);
+      }
+
+      /* ── 顶部方案切换条（固定，等效于“浏览器外部”） ── */
+      .modebar {
+        position: fixed;
+        top: 0; left: 0; right: 0;
+        height: var(--bar);
+        z-index: 900;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 0 14px;
+        background: #1e1b17;
+        color: #f4efe6;
+      }
+      .modebar b { font-weight: 600; letter-spacing: 0.04em; }
+      .modebar button {
+        height: 30px;
+        padding: 0 12px;
+        border: 1px solid #4a423a;
+        border-radius: 7px;
+        background: #2a2520;
+        color: #cfc7bb;
+        font-size: 11px;
+        cursor: pointer;
+      }
+      .modebar button.on { background: var(--brand); border-color: var(--brand); color: #fff; }
+      .modebar .spacer { flex: 1; }
+      .modebar .readout { font-size: 11px; color: #b9b0a4; font-variant-numeric: tabular-nums; }
+      .modebar .readout em { color: #f0a58c; font-style: normal; }
+
+      /* ── 面板通用 ── */
+      .pane { display: none; }
+      body.m-current .pane-current,
+      body.m-a .pane-a,
+      body.m-b .pane-b { display: block; }
+
+      /* 现状 / B：整屏骨架，窗口不滚 */
+      body.m-current, body.m-b { height: 100vh; overflow: hidden; }
+      /* A：让 body 真正滚动 */
+      body.m-a { overflow-y: scroll; }
+
+      .masthead {
+        height: var(--head);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 var(--px);
+        background: #fffdf9;
+        border-bottom: 1px solid var(--line);
+      }
+      .masthead .act { display: flex; gap: 6px; }
+      .masthead .act i {
+        height: 26px; padding: 0 8px; display: inline-grid; place-items: center;
+        border: 1px solid var(--line); border-radius: 6px; color: var(--muted); font-style: normal;
+      }
+      .subnav {
+        height: var(--nav);
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        padding: 0 var(--px);
+        background: #fffdf9;
+        border-bottom: 1px solid var(--line);
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .subnav u { text-decoration: none; color: var(--brand); }
+
+      .wrap { max-width: var(--maxw); margin: 0 auto; padding: 16px var(--px); }
+      .workspace { display: grid; grid-template-columns: minmax(0, 1fr) var(--sidebar); gap: var(--gap); align-items: start; }
+
+      .search-row { display: flex; align-items: center; gap: 8px; }
+      .search-box {
+        flex: 1; min-width: 220px; height: 38px; display: flex; align-items: center; gap: 8px;
+        padding: 0 11px; border: 1px solid var(--line); border-radius: 9px; background: #fff;
+      }
+      .search-box span { color: var(--brand); font-size: 15px; }
+      .search-box input { flex: 1; border: 0; outline: 0; background: transparent; font-size: 12px; }
+      .chip {
+        height: 38px; padding: 0 10px; display: inline-grid; place-items: center;
+        border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--muted); white-space: nowrap;
+      }
+      .chip.on { background: var(--brand); border-color: var(--brand); color: #fff; }
+      .count { color: var(--muted); font-size: 10px; white-space: nowrap; }
+
+      .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 22px 14px; margin-top: 12px; }
+      @media (min-width: 1500px) { .grid { grid-template-columns: repeat(auto-fill, minmax(138px, 1fr)); } }
+      .tile { border: 1px solid var(--line); border-radius: 8px; background: #fff; overflow: hidden; }
+      .tile .art {
+        aspect-ratio: 3 / 4;
+        display: grid; place-items: center;
+        background: repeating-linear-gradient(135deg, #f6f1e8, #f6f1e8 8px, #efe8db 8px, #efe8db 16px);
+        color: #b9ad99; font-size: 10px; letter-spacing: 0.1em;
+      }
+      .tile .cap { padding: 4px 6px; font-size: 9px; color: var(--muted); display: flex; justify-content: space-between; }
+      .sentinel { min-height: 70px; display: grid; place-items: center; color: var(--muted); font-size: 10px; letter-spacing: 0.12em; }
+
+      .filters {
+        border: 1px solid var(--line); border-radius: 9px; background: #fffdf9; overflow: hidden;
+      }
+      .filters .fh { padding: 9px 11px; border-bottom: 1px solid var(--line); font-weight: 650; color: var(--brand); }
+      .filters .fb { padding: 8px 11px 4px; font-size: 10px; color: var(--muted); }
+      .filters .fr { height: 22px; margin: 0 11px 6px; border-radius: 5px; background: #f3eee5; }
+
+      /* ═══ 现状：卡片列内部滚动 + 筛选栏独立滚动 ═══ */
+      .pane-current { height: 100vh; display: flex; flex-direction: column; padding-top: var(--bar); }
+      .pane-current .masthead, .pane-current .subnav { flex: none; }
+      .pane-current .body { flex: 1; min-height: 0; overflow: hidden; }
+      .pane-current .col { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+      .pane-current .tools { flex: none; margin-bottom: 12px; }
+      .pane-current .scroller { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding-right: 7px; }
+      .pane-current .inner { max-width: var(--maxw); margin: 0 auto; padding: 16px var(--px); height: 100%; min-height: 0; }
+      .pane-current .filters { max-height: calc(100vh - var(--bar) - 130px); overflow-y: auto; }
+
+      /* ═══ A：window 整页滚动（搜索栏 sticky 吸顶） ═══ */
+      .pane-a { padding-top: var(--bar); }
+      .pane-a .masthead { position: sticky; top: var(--bar); z-index: 50; }
+      .pane-a .subnav { position: sticky; top: calc(var(--bar) + var(--head)); z-index: 49; }
+      .pane-a .tools {
+        position: sticky;
+        top: calc(var(--bar) + var(--head) + var(--nav));
+        z-index: 40;
+        padding: 10px 0 12px;
+        background: linear-gradient(var(--bg) 78%, rgba(242, 237, 228, 0));
+      }
+      .pane-a .filters { position: sticky; top: calc(var(--bar) + var(--head) + var(--nav) + 60px); max-height: calc(100vh - var(--bar) - var(--head) - var(--nav) - 76px); overflow-y: auto; }
+
+      /* ═══ B：满宽容器滚动（骨架不动，只有一条滚动条） ═══ */
+      .pane-b { height: 100vh; display: flex; flex-direction: column; padding-top: var(--bar); }
+      .pane-b .masthead, .pane-b .subnav { flex: none; }
+      .pane-b .scroller { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; }
+      .pane-b .tools {
+        position: sticky; top: 0; z-index: 40;
+        padding: 10px 0 12px;
+        margin-top: -10px;
+        background: linear-gradient(var(--bg) 78%, rgba(242, 237, 228, 0));
+      }
+      .pane-b .filters { position: sticky; top: 66px; max-height: calc(100vh - var(--bar) - 82px); overflow-y: auto; }
+
+      /* ── 滚动条落点标记 ── */
+      #marker {
+        position: fixed; top: var(--bar); bottom: 0; width: 0;
+        border-left: 2px dashed var(--mark); z-index: 800; pointer-events: none;
+      }
+      #marker::after {
+        content: attr(data-label);
+        position: absolute; top: 8px; right: 6px;
+        padding: 2px 6px; border-radius: 5px;
+        background: var(--mark); color: #fff; font-size: 10px; white-space: nowrap;
+      }
+      .hint {
+        margin: 0 0 12px; padding: 9px 12px; border-radius: 8px;
+        background: #fff6ee; border: 1px solid #e7d3c0; color: #6b5340; font-size: 11px;
+      }
+      #shotinfo {
+        position: fixed; left: 14px; bottom: 14px; z-index: 850;
+        max-width: 460px; padding: 9px 12px; border-radius: 9px;
+        background: rgba(30, 27, 23, 0.93); color: #ded6ca;
+        font-size: 11px; line-height: 1.6; font-variant-numeric: tabular-nums;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+      }
+      #shotinfo b { color: #f0a58c; }
+      #shotinfo .ok { color: #8fd4a8; }
+      #shotinfo .no { color: #f0a58c; }
+    </style>
+  </head>
+  <body class="m-current">
+    <div class="modebar">
+      <b>Carddex 滚动方案 · 线框</b>
+      <button data-mode="m-current" class="on">① 现状：内层滚动</button>
+      <button data-mode="m-a">② 方案 A：window 整页滚动</button>
+      <button data-mode="m-b">③ 方案 B：满宽容器滚动</button>
+      <span class="spacer"></span>
+      <span class="readout" id="readout"></span>
+    </div>
+    <div id="marker" data-label="滚动条在这里"></div>
+    <div id="shotinfo"></div>
+
+    <!-- ══════════ ① 现状 ══════════ -->
+    <div class="pane pane-current">
+      <header class="masthead">
+        <span>← 返回首页</span>
+        <span class="act"><i>◆ 收藏</i><i>↗ 分享</i><i>EN</i><i>⌫</i></span>
+      </header>
+      <nav class="subnav"><u>卡牌图鉴</u><span>规则速查</span><span>赛后判例</span></nav>
+      <div class="body">
+        <div class="inner col">
+          <div class="tools">
+            <div class="search-row">
+              <div class="search-box"><span>⌕</span><input placeholder="搜索卡名 / 卡号 / 关键词…" /></div>
+              <span class="count">1234 张</span>
+              <span class="chip on">基础</span><span class="chip">异画</span>
+              <span class="chip">⊘ 全部</span><span class="chip">↕ 排序 0</span><span class="chip">☷ 筛选</span>
+            </div>
+          </div>
+          <div class="workspace" style="flex:1; min-height:0">
+            <div class="col">
+              <div class="scroller" id="sc-current">
+                <div class="grid" data-grid></div>
+                <div class="sentinel">— 已经到底 —</div>
+              </div>
+            </div>
+            <div class="filters" id="f-current"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════ ② 方案 A ══════════ -->
+    <div class="pane pane-a">
+      <header class="masthead">
+        <span>← 返回首页</span>
+        <span class="act"><i>◆ 收藏</i><i>↗ 分享</i><i>EN</i><i>⌫</i></span>
+      </header>
+      <nav class="subnav"><u>卡牌图鉴</u><span>规则速查</span><span>赛后判例</span></nav>
+      <div class="wrap">
+        <div class="hint">
+          window 滚动：顶栏(104px) + 搜索栏(约 60px) sticky 吸顶后长期占掉约 <b>164px</b>，
+          与现状占地相同但只有一条滚动条。滚动条 = 浏览器最右侧那条。
+        </div>
+        <div class="tools">
+          <div class="search-row">
+            <div class="search-box"><span>⌕</span><input placeholder="搜索卡名 / 卡号 / 关键词…" /></div>
+            <span class="count">1234 张</span>
+            <span class="chip on">基础</span><span class="chip">异画</span>
+            <span class="chip">⊘ 全部</span><span class="chip">↕ 排序 0</span><span class="chip">☷ 筛选</span>
+          </div>
+        </div>
+        <div class="workspace">
+          <div>
+            <div class="grid" data-grid></div>
+            <div class="sentinel">— 已经到底 —</div>
+          </div>
+          <div class="filters" id="f-a"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════ ③ 方案 B ══════════ -->
+    <div class="pane pane-b">
+      <header class="masthead">
+        <span>← 返回首页</span>
+        <span class="act"><i>◆ 收藏</i><i>↗ 分享</i><i>EN</i><i>⌫</i></span>
+      </header>
+      <nav class="subnav"><u>卡牌图鉴</u><span>规则速查</span><span>赛后判例</span></nav>
+      <div class="scroller" id="sc-b">
+        <div class="wrap">
+          <div class="hint">
+            满宽容器滚动：外层滚动条贴窗口右缘，内容仍居中在 1720px 内；
+            骨架保持 <b>h-screen</b> 不变，滚动条只有一条。
+          </div>
+          <div class="tools">
+            <div class="search-row">
+              <div class="search-box"><span>⌕</span><input placeholder="搜索卡名 / 卡号 / 关键词…" /></div>
+              <span class="count">1234 张</span>
+              <span class="chip on">基础</span><span class="chip">异画</span>
+              <span class="chip">⊘ 全部</span><span class="chip">↕ 排序 0</span><span class="chip">☷ 筛选</span>
+            </div>
+          </div>
+          <div class="workspace">
+            <div>
+              <div class="grid" data-grid></div>
+              <div class="sentinel">— 已经到底 —</div>
+            </div>
+            <div class="filters" id="f-b"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // 卡片瓦片
+      for (const g of document.querySelectorAll("[data-grid]")) {
+        let html = "";
+        for (let i = 1; i <= 96; i++) {
+          const no = String(i).padStart(3, "0");
+          html +=
+            '<div class="tile"><div class="art">CARD</div>' +
+            '<div class="cap"><span>#' + no + "</span><span>◆</span></div></div>";
+        }
+        g.innerHTML = html;
+      }
+      // 筛选栏骨架
+      for (const id of ["f-current", "f-a", "f-b"]) {
+        const el = document.getElementById(id);
+        if (!el) continue;
+        let html = '<div class="fh">☷ 筛选</div><div class="fb">势力 · 类型 · 关键词 · 数值</div>';
+        for (let i = 0; i < 26; i++) html += '<div class="fr"></div>';
+        el.innerHTML = html;
+      }
+
+      const body = document.body;
+      const marker = document.getElementById("marker");
+      const readout = document.getElementById("readout");
+      const shotinfo = document.getElementById("shotinfo");
+
+      function paint() {
+        const wide = innerWidth;
+        let right = wide; // 滚动条所在容器的右缘（视口坐标）
+        let where = "";
+        let innerScreens = 0; // 内层滚动容器的内容高度（屏）
+        if (body.classList.contains("m-current")) {
+          const el = document.getElementById("sc-current");
+          right = el.getBoundingClientRect().right;
+          where = "卡片列内层滚动条";
+          innerScreens = el.scrollHeight / innerHeight;
+        } else if (body.classList.contains("m-a")) {
+          where = "浏览器窗口滚动条";
+        } else {
+          const el = document.getElementById("sc-b");
+          right = el.getBoundingClientRect().right;
+          where = "满宽容器滚动条";
+          innerScreens = el.scrollHeight / innerHeight;
+        }
+        marker.style.left = right - 2 + "px";
+        marker.dataset.label = where;
+        const dist = Math.round(wide - right);
+        readout.innerHTML =
+          "视口 " + wide + "px · " + where +
+          (dist > 1 ? " · 距窗口右缘 <em>" + dist + "px</em>" : " · 贴窗口右缘");
+
+        // 长截图诊断：整页长截图只认 document.scrollingElement.scrollHeight
+        const docScreens =
+          Math.max(document.documentElement.scrollHeight, document.body.scrollHeight) / innerHeight;
+        const docTxt = docScreens.toFixed(1) + " 屏";
+        if (docScreens < 1.05) {
+          shotinfo.innerHTML =
+            "整页长截图能拍到的上限 = 文档高度 <b class='no'>" + docTxt + "</b>（被 h-screen 钉死）<br>" +
+            "卡片列内层内容实际有 <b>" + innerScreens.toFixed(1) + " 屏</b>，" +
+            "<span class='no'>长截图里被容器边缘硬切，只出一屏</span>";
+        } else {
+          shotinfo.innerHTML =
+            "整页长截图能拍到的上限 = 文档高度 <b class='ok'>" + docTxt + "</b><br>" +
+            "但列表是增量渲染：长截图一次成像不触发滚动，" +
+            "<span class='no'>超出「已渲染」的卡片与未解码的图仍然是占位块</span>";
+        }
+      }
+
+      for (const b of document.querySelectorAll(".modebar button")) {
+        b.addEventListener("click", () => {
+          body.className = b.dataset.mode;
+          for (const o of document.querySelectorAll(".modebar button")) o.classList.toggle("on", o === b);
+          scrollTo(0, 0);
+          requestAnimationFrame(paint);
+          setTimeout(paint, 80);
+        });
+      }
+      addEventListener("resize", paint);
+      // 内层滚动时标记不用动，但窗口尺寸/滚动高度变化时重算
+      for (const id of ["sc-current", "sc-b"]) {
+        document.getElementById(id)?.addEventListener("scroll", paint, { passive: true });
+      }
+      paint();
+    </script>
+  </body>
+</html>
