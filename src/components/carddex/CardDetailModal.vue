@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import CarddexImage from "./CarddexImage.vue";
 import { printKey } from "./data";
+import { richEffectText } from "./richText";
 import { segmentQaText } from "@/tools/sync/qa";
 import type {
   CardIcon,
@@ -115,53 +116,6 @@ function toggleQa(id: string): void {
   if (next.has(id)) next.delete(id);
   else next.add(id);
   expandedQa.value = next;
-}
-
-function esc(s: string): string {
-  return s.replace(
-    /[&<>"']/g,
-    (c) =>
-      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
-        c
-      ] ?? c,
-  );
-}
-function rich(raw: string): string {
-  if (!raw) return "";
-  const iconMap = new Map(props.icons.map((i) => [i.name, i]));
-  const hasHtml = /<\/?[a-z][\s\S]*>/i.test(raw);
-  let safe = esc(raw).replace(/\n/g, "<br>");
-  if (hasHtml) {
-    const doc = new DOMParser().parseFromString(raw, "text/html");
-    const allowed = new Set([
-      "P",
-      "BR",
-      "STRONG",
-      "EM",
-      "B",
-      "I",
-      "UL",
-      "OL",
-      "LI",
-    ]);
-    for (const el of [...doc.body.querySelectorAll("*")]) {
-      if (!allowed.has(el.tagName))
-        el.replaceWith(document.createTextNode(el.textContent ?? ""));
-      else for (const attr of [...el.attributes]) el.removeAttribute(attr.name);
-    }
-    safe = doc.body.innerHTML;
-  }
-  safe = safe.replace(/\{\{([^}]+)\}\}/g, (_m, name: string) => {
-    const clean = name.trim();
-    const icon = iconMap.get(clean);
-    const iconClass = icon?.isWhite
-      ? "effect-icon white-source"
-      : "effect-icon";
-    return icon
-      ? `<img class="${iconClass}" src="${esc(icon.url)}" alt="${esc(clean)}">`
-      : `<strong>${esc(clean)}</strong>`;
-  });
-  return safe;
 }
 
 function onKey(e: KeyboardEvent): void {
@@ -412,22 +366,22 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey));
             <div
               v-if="item.base.effectCn"
               class="effect"
-              v-html="rich(item.base.effectCn)"
+              v-html="richEffectText(item.base.effectCn, icons)"
             ></div>
             <div
               v-if="item.base.effectEn"
               class="effect secondary"
-              v-html="rich(item.base.effectEn)"
+              v-html="richEffectText(item.base.effectEn, icons)"
             ></div>
             <div
               v-if="item.base.effectKr"
               class="effect secondary"
-              v-html="rich(item.base.effectKr)"
+              v-html="richEffectText(item.base.effectKr, icons)"
             ></div>
             <div
               v-if="item.base.effectTw"
               class="effect secondary"
-              v-html="rich(item.base.effectTw)"
+              v-html="richEffectText(item.base.effectTw, icons)"
             ></div>
           </section>
           <section
