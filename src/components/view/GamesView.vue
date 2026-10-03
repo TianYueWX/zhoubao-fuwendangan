@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
-import { store } from "@/store/analysis";
+import { computed, onMounted, ref, watch } from "vue";
+import { restSelectAll } from "@/tools/sources/rest";
 import type { RawCardBaseRow, RawCardPrintRow } from "@/types";
 
 type Mode = "text" | "image";
@@ -40,6 +40,10 @@ const rulesOpen = ref(false);
 const storageTick = ref(0);
 const session = ref<GameSession | null>(null);
 const notice = ref("");
+const imageStatus = ref<"idle" | "loading" | "loaded" | "error">("idle");
+const cardDataLoading = ref(false);
+const cardDataError = ref("");
+const cardItems = ref<GameItem[]>([]);
 
 function cell(row: RawCardBaseRow | RawCardPrintRow, key: string): string {
   const value = row[key];
@@ -57,38 +61,7 @@ function listCell(value: string): string[] {
   return [];
 }
 
-const baseById = computed(() => {
-  const map = new Map<string, RawCardBaseRow>();
-  for (const base of store.cardBase ?? []) {
-    const id = cell(base, "id");
-    if (id) map.set(id, base);
-  }
-  return map;
-});
-
-const allItems = computed<GameItem[]>(() => {
-  const output: GameItem[] = [];
-  for (const print of store.cardPrints ?? []) {
-    if (cell(print, "language").toUpperCase() !== "SC") continue;
-    const printId = cell(print, "id");
-    const cardId = cell(print, "card_id");
-    const base = baseById.value.get(cardId);
-    const series = cell(print, "series") || (base ? cell(base, "series_name") : "");
-    if (!printId || !base || !series) continue;
-    output.push({
-      printId,
-      cardId,
-      cardNo: cell(print, "card_no_extend") || cell(base, "card_no"),
-      name: cell(base, "card_name_cn"),
-      subtitle: cell(base, "sub_title_cn"),
-      flavor: cell(print, "flavor_text_cn"),
-      image: cell(print, "img_cdn"),
-      series,
-      base,
-    });
-  }
-  return output;
-});
+const allItems = computed(() => cardItems.value);
 
 const eligibleItems = computed(() =>
   allItems.value.filter((item) =>
@@ -108,6 +81,26 @@ const currentItem = computed(() => {
   const id = session.value?.deck[session.value.currentIndex];
   return id ? allItems.value.find((item) => item.printId === id) ?? null : null;
 });
+watch(() => {
+  const item = currentItem.value;
+  const shouldLoad = mode.value === "image" || (mode.value === "text" && session.value?.answerRevealed);
+  return shouldLoad ? item?.image : undefined;
+}, (url) => {
+  if (!url) {
+    imageStatus.value = "idle";
+    return;
+  }
+  imageStatus.value = "loading";
+  const image = new Image();
+  image.onload = () => {
+    if (currentItem.value?.image === url) imageStatus.value = "loaded";
+  };
+  image.onerror = () => {
+    if (currentItem.value?.image === url) imageStatus.value = "error";
+  };
+  image.src = url;
+  if (image.complete && image.naturalWidth > 0) imageStatus.value = "loaded";
+}, { immediate: true });
 const currentTiles = computed(() => {
   const count = session.value?.currentGridSize ?? 4;
   return Array.from({ length: count * count }, (_, index) => index);
@@ -126,7 +119,7 @@ const clueOptions = computed(() => {
   if (!item) return [];
   const base = item.base;
   const categories = listCell(cell(base, "card_category"));
-  const colors = listCell(cell(base, "card_color_list")).map((color) => COLOR_LABELS[color] ?? color);
+  const colors = listCell(cell(base, "card_color_list"));
   const regions = listCell(cell(base, "region"));
   const hints = [
     categories.length ? `卡牌类别：${categories.join("、")}` : "",
@@ -143,10 +136,42 @@ const canResumeText = computed(() => hasStoredSession("text"));
 const canResumeImage = computed(() => hasStoredSession("image"));
 const cardPrintCount = computed(() => allItems.value.length);
 
-const COLOR_LABELS: Record<string, string> = {
-  red: "狂怒", green: "平静", blue: "心灵", yellow: "躯体",
-  purple: "混沌", orange: "秩序", colorless: "无色",
-};
+async function loadCards(): Promise<void> {
+  cardDataLoading.value = true;
+  cardDataError.value = "";
+  try {
+    const [bases, prints] = await Promise.all([
+      restSelectAll<RawCardBaseRow>("cards_base", { order: "card_no.asc,id.asc" }),
+      restSelectAll<RawCardPrintRow>("card_prints", { order: "card_no_extend.asc,id.asc" }),
+    ]);
+    const baseById = new Map(bases.map((base) => [cell(base, "id"), base]));
+    cardItems.value = prints.flatMap((print) => {
+      if (cell(print, "language").toUpperCase() !== "SC") return [];
+      const printId = cell(print, "id");
+      const cardId = cell(print, "card_id");
+      const base = baseById.get(cardId);
+      const series = cell(print, "series") || (base ? cell(base, "series_name") : "");
+      if (!printId || !base || !series) return [];
+      return [{
+        printId,
+        cardId,
+        cardNo: cell(print, "card_no_extend") || cell(base, "card_no"),
+        name: cell(base, "card_name_cn"),
+        subtitle: cell(base, "sub_title_cn"),
+        flavor: cell(print, "flavor_text_cn"),
+        image: cell(print, "img_cdn"),
+        series,
+        base,
+      }];
+    });
+  } catch (error) {
+    cardDataError.value = error instanceof Error ? error.message : String(error);
+  } finally {
+    cardDataLoading.value = false;
+  }
+}
+
+onMounted(() => { void loadCards(); });
 
 function sessionKey(which: Mode): string {
   return `${STORAGE_PREFIX}:session:${which}`;
@@ -292,7 +317,7 @@ function revealClue(): void {
 
 function openTile(index: number): void {
   const current = session.value;
-  if (!current || current.answerRevealed || current.openTiles.includes(index)) return;
+  if (!current || imageStatus.value !== "loaded" || current.answerRevealed || current.openTiles.includes(index)) return;
   current.openTiles.push(index);
 }
 
@@ -424,12 +449,14 @@ const nextLabel = computed(() => {
             <button type="button" @click="clearSeries">清空</button>
           </div>
         </div>
-        <div v-if="allSeries.length" class="series-list">
+        <p v-if="cardDataLoading" class="games-empty" role="status">正在从 Supabase 读取卡牌资料…</p>
+        <p v-else-if="cardDataError" class="games-empty" role="alert">读取卡牌资料失败：{{ cardDataError }} <button class="inline-retry" type="button" @click="loadCards">重试</button></p>
+        <div v-else-if="allSeries.length" class="series-list">
           <button v-for="series in allSeries" :key="series" type="button" class="series-chip"
             :class="{ 'is-selected': selectedSeries.includes(series) }" :aria-pressed="selectedSeries.includes(series)"
             @click="toggleSeries(series)">{{ series }}</button>
         </div>
-        <p v-else class="games-empty">{{ store.cardDataStatus === 'loading' ? '正在载入卡牌资料…' : '暂时没有符合条件的印版数据。' }}</p>
+        <p v-else class="games-empty">暂时没有符合条件的印版数据。</p>
         <p class="setup-selection">已选 {{ selectedSeries.length }} / {{ allSeries.length }} 个系列 · {{ selectedItems.length }} 张可用题目</p>
       </div>
 
@@ -485,9 +512,13 @@ const nextLabel = computed(() => {
               <button v-for="tile in currentTiles" :key="tile" type="button" class="reveal-tile"
                 :class="{ 'is-open': session.openTiles.includes(tile) || session.answerRevealed }"
                 :style="tileStyle(tile)" :aria-label="session.openTiles.includes(tile) || session.answerRevealed ? `第 ${tile + 1} 格已揭开` : `揭开第 ${tile + 1} 格`"
-                :disabled="session.openTiles.includes(tile) || session.answerRevealed" @click="openTile(tile)">
+                :disabled="imageStatus !== 'loaded' || session.openTiles.includes(tile) || session.answerRevealed" @click="openTile(tile)">
                 <span v-if="!session.openTiles.includes(tile) && !session.answerRevealed">＋</span>
               </button>
+              <div v-if="imageStatus !== 'loaded'" class="image-loading" role="status" aria-live="polite">
+                <span v-if="imageStatus === 'error'">卡图载入失败，请检查网络后重试。</span>
+                <span v-else>卡图载入中…</span>
+              </div>
             </div>
           </article>
 
@@ -507,6 +538,11 @@ const nextLabel = computed(() => {
                 <h2>{{ currentItem.name }}</h2>
                 <p v-if="currentItem.subtitle" class="answer-subtitle">{{ currentItem.subtitle }}</p>
                 <p class="answer-series">{{ currentItem.series }} · {{ currentItem.cardNo }}</p>
+                <div v-if="session.mode === 'text' && currentItem.image" class="answer-card-image" role="status" aria-live="polite">
+                  <img v-if="imageStatus === 'loaded'" :src="currentItem.image" :alt="`${currentItem.name} 卡图`" />
+                  <span v-else-if="imageStatus === 'error'">卡图载入失败</span>
+                  <span v-else>卡图载入中…</span>
+                </div>
               </template>
               <template v-else>
                 <p class="answer-hidden">先猜一猜，再自己揭晓。</p>
@@ -630,6 +666,7 @@ const nextLabel = computed(() => {
 .series-chip.is-selected { border-color: var(--game-ink); background: var(--game-ink); color: #f8f4e8; }
 .setup-selection { margin: 12px 0 0; color: var(--game-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
 .games-empty { color: var(--game-muted); font-size: 13px; }
+.inline-retry { margin-left: 8px; border: 0; padding: 0; background: transparent; color: var(--game-cinnabar); text-decoration: underline; cursor: pointer; }
 .setup-section--difficulty { padding-bottom: 23px; }
 .difficulty-options { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 15px; }
 .difficulty-options > button { display: grid; grid-template-columns: 42px auto; grid-template-rows: auto auto; align-items: center; gap: 0 11px; min-width: 130px; border: 1px solid var(--game-line); padding: 10px 13px; background: transparent; text-align: left; cursor: pointer; }
@@ -671,6 +708,8 @@ const nextLabel = computed(() => {
 .clue-action > span { font-size: 14px; }
 .answer-box { min-height: 133px; border-top: 2px solid var(--game-cinnabar); }
 .answer-box h2 { margin: 13px 0 0; font: 800 21px/1.35 "Noto Serif SC", "Songti SC", serif; }
+.answer-card-image { display: grid; min-height: 120px; place-items: center; margin-top: 13px; overflow: hidden; border: 1px solid var(--game-line); background: rgba(0, 0, 0, .04); color: var(--game-muted); font-size: 11px; }
+.answer-card-image img { display: block; width: auto; max-width: 100%; max-height: 290px; object-fit: contain; }
 .answer-subtitle { margin: 4px 0 0; color: var(--game-cinnabar); font: 600 14px "Noto Serif SC", "Songti SC", serif; }
 .answer-series { margin: 12px 0 0; color: var(--game-muted); font: 10px ui-monospace, SFMono-Regular, Menlo, monospace; }
 .answer-hidden { margin: 9px 0 0; color: var(--game-muted); font-size: 12px; }
@@ -685,7 +724,8 @@ const nextLabel = computed(() => {
 .difficulty-live > span { margin-right: 3px; color: var(--game-muted); font-size: 9px; }
 .difficulty-live button { border: 1px solid var(--game-line); padding: 4px 6px; background: transparent; color: var(--game-muted); font: 10px ui-monospace, SFMono-Regular, Menlo, monospace; cursor: pointer; }
 .difficulty-live button.is-selected { border-color: var(--game-cinnabar); color: var(--game-cinnabar); }
-.reveal-card { display: grid; grid-template-columns: repeat(var(--tile-count), 1fr); grid-template-rows: repeat(var(--tile-count), 1fr); width: min(100%, 475px); aspect-ratio: 744 / 1039; margin: 0 auto; overflow: hidden; border: 5px solid #2c2b27; background: #3b3932; box-shadow: 0 15px 28px -19px rgba(30, 20, 10, .7); }
+.reveal-card { position: relative; display: grid; grid-template-columns: repeat(var(--tile-count), 1fr); grid-template-rows: repeat(var(--tile-count), 1fr); width: min(100%, 475px); aspect-ratio: 744 / 1039; margin: 0 auto; overflow: hidden; border: 5px solid #2c2b27; background: #3b3932; box-shadow: 0 15px 28px -19px rgba(30, 20, 10, .7); }
+.image-loading { position: absolute; z-index: 2; inset: 0; display: grid; place-items: center; padding: 20px; background: rgba(39, 37, 32, .86); color: #f1ead9; font-size: 13px; text-align: center; }
 .reveal-tile { position: relative; min-width: 0; min-height: 0; border: 1px solid rgba(247, 239, 218, .18); padding: 0; background-color: #aaa084; background-repeat: no-repeat; cursor: pointer; transition: opacity 240ms, transform 240ms, filter 240ms; }
 .reveal-tile:not(.is-open) { background-image: none !important; background: repeating-linear-gradient(135deg, #403e37 0 8px, #4a473f 8px 10px); color: #d3c9af; }
 .reveal-tile:not(.is-open):hover { background: #5b5548; }
