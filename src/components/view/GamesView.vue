@@ -310,6 +310,11 @@ function revealAnswer(): void {
   session.value.answerRevealed = true;
 }
 
+function hideAnswer(): void {
+  if (!session.value) return;
+  session.value.answerRevealed = false;
+}
+
 function revealClue(): void {
   if (!session.value || session.value.clueCount >= clueOptions.value.length) return;
   session.value.clueCount += 1;
@@ -543,6 +548,7 @@ const nextLabel = computed(() => {
                   <span v-else-if="imageStatus === 'error'">卡图载入失败</span>
                   <span v-else>卡图载入中…</span>
                 </div>
+                <button class="games-button games-button--quiet answer-hide" type="button" @click="hideAnswer">收起答案</button>
               </template>
               <template v-else>
                 <p class="answer-hidden">先猜一猜，再自己揭晓。</p>
@@ -710,6 +716,7 @@ const nextLabel = computed(() => {
 .answer-box h2 { margin: 13px 0 0; font: 800 21px/1.35 "Noto Serif SC", "Songti SC", serif; }
 .answer-card-image { display: grid; min-height: 120px; place-items: center; margin-top: 13px; overflow: hidden; border: 1px solid var(--game-line); background: rgba(0, 0, 0, .04); color: var(--game-muted); font-size: 11px; }
 .answer-card-image img { display: block; width: auto; max-width: 100%; max-height: 290px; object-fit: contain; }
+.answer-hide { width: 100%; margin-top: 14px; }
 .answer-subtitle { margin: 4px 0 0; color: var(--game-cinnabar); font: 600 14px "Noto Serif SC", "Songti SC", serif; }
 .answer-series { margin: 12px 0 0; color: var(--game-muted); font: 10px ui-monospace, SFMono-Regular, Menlo, monospace; }
 .answer-hidden { margin: 9px 0 0; color: var(--game-muted); font-size: 12px; }
