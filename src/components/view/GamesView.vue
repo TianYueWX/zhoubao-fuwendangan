@@ -342,7 +342,7 @@ function tileStyle(index: number): Record<string, string> {
   const posX = size === 1 ? 50 : (col / (size - 1)) * 100;
   const posY = size === 1 ? 50 : (row / (size - 1)) * 100;
   return {
-    backgroundImage: `url("${item.image.replaceAll('"', "%22")}")`,
+    backgroundImage: `url("${item.image.replace(/"/g, "%22")}")`,
     backgroundSize: `${size * 100}% ${size * 100}%`,
     backgroundPosition: `${posX}% ${posY}%`,
   };
