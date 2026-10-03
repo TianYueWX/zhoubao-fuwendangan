@@ -305,6 +305,19 @@ function clearSeries(): void {
   selectedSeries.value = [];
 }
 
+function setGridSize(value: string): void {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return;
+  gridSize.value = Math.min(10, Math.max(2, Math.round(parsed)));
+}
+
+function setSessionGridSize(value: string): void {
+  if (!session.value) return;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return;
+  session.value.gridSize = Math.min(10, Math.max(2, Math.round(parsed)));
+}
+
 function revealAnswer(): void {
   if (!session.value) return;
   session.value.answerRevealed = true;
@@ -476,6 +489,10 @@ const nextLabel = computed(() => {
             <small>{{ size === 3 ? '轻松' : size === 4 ? '适中' : '挑战' }}</small>
           </button>
         </div>
+        <label class="grid-custom">每行格数
+          <input type="number" min="2" max="10" step="1" :value="gridSize" aria-label="自定义每行格数，范围 2 到 10" @input="setGridSize(($event.target as HTMLInputElement).value)" />
+          <span>{{ gridSize }}×{{ gridSize }}，共 {{ gridSize * gridSize }} 格</span>
+        </label>
       </div>
 
       <p v-if="notice" class="games-notice" role="status">{{ notice }}</p>
@@ -511,6 +528,7 @@ const nextLabel = computed(() => {
               <div class="difficulty-live" role="group" aria-label="设置下一张卡的难度">
                 <span>下一张</span>
                 <button v-for="size in [3, 4, 5]" :key="size" type="button" :class="{ 'is-selected': session.gridSize === size }" @click="session.gridSize = size">{{ size }}×{{ size }}</button>
+                <input type="number" min="2" max="10" step="1" :value="session.gridSize" aria-label="自定义下一张卡每行格数，范围 2 到 10" @input="setSessionGridSize(($event.target as HTMLInputElement).value)" />
               </div>
             </div>
             <div class="reveal-card" :style="{ '--tile-count': session.currentGridSize }" aria-label="被遮住的卡牌图片">
@@ -681,6 +699,9 @@ const nextLabel = computed(() => {
 .difficulty-grid i { background: #b9ad92; }
 .difficulty-options strong { font-size: 12px; }
 .difficulty-options small { color: var(--game-muted); font-size: 10px; }
+.grid-custom { display: flex; align-items: center; gap: 10px; margin-top: 15px; color: var(--game-muted); font-size: 12px; }
+.grid-custom input, .difficulty-live input { width: 62px; border: 1px solid var(--game-line); border-radius: 0; padding: 6px 7px; background: transparent; color: var(--game-ink); font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; }
+.grid-custom span { color: var(--game-cinnabar); font-variant-numeric: tabular-nums; }
 .games-notice { margin: 16px 0 0; color: var(--game-cinnabar); font-size: 12px; }
 .setup-footer { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding-top: 20px; }
 .setup-footer > span { max-width: 490px; color: var(--game-muted); font-size: 11px; line-height: 1.7; }
@@ -731,6 +752,7 @@ const nextLabel = computed(() => {
 .difficulty-live > span { margin-right: 3px; color: var(--game-muted); font-size: 9px; }
 .difficulty-live button { border: 1px solid var(--game-line); padding: 4px 6px; background: transparent; color: var(--game-muted); font: 10px ui-monospace, SFMono-Regular, Menlo, monospace; cursor: pointer; }
 .difficulty-live button.is-selected { border-color: var(--game-cinnabar); color: var(--game-cinnabar); }
+.difficulty-live input { width: 48px; padding: 4px 3px; font-size: 10px; }
 .reveal-card { position: relative; display: grid; grid-template-columns: repeat(var(--tile-count), 1fr); grid-template-rows: repeat(var(--tile-count), 1fr); width: min(100%, 475px); aspect-ratio: 744 / 1039; margin: 0 auto; overflow: hidden; border: 5px solid #2c2b27; background: #3b3932; box-shadow: 0 15px 28px -19px rgba(30, 20, 10, .7); }
 .image-loading { position: absolute; z-index: 2; inset: 0; display: grid; place-items: center; padding: 20px; background: rgba(39, 37, 32, .86); color: #f1ead9; font-size: 13px; text-align: center; }
 .reveal-tile { position: relative; min-width: 0; min-height: 0; border: 1px solid rgba(247, 239, 218, .18); padding: 0; background-color: #aaa084; background-repeat: no-repeat; cursor: pointer; transition: opacity 240ms, transform 240ms, filter 240ms; }
