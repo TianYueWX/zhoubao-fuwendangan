@@ -22,6 +22,7 @@ import RegionView from "./RegionView.vue";
 import DecksView from "./DecksView.vue";
 import ChainBoardView from "./ChainBoardView.vue";
 import RankLadderView from "./RankLadderView.vue";
+import GamesView from "./GamesView.vue";
 import RulesQaView from "./RulesQaView.vue";
 import ToolPlaceholder from "./ToolPlaceholder.vue";
 import EditorialHub from "../admin/EditorialHub.vue";
@@ -67,6 +68,9 @@ export const ViewComponents: Record<string, unknown> = {
   /* 小工具:积分榜速查(直连官方网关,只落本机快照,无需数据包) */
   rank: RankLadderView,
 
+  /* 小工具:小游戏(使用站点内置的 SC 印版卡表) */
+  games: GamesView,
+
   /* 编辑部(隐藏栏目:连点报头刊名解锁 + 管理员门禁) */
   editorial: EditorialHub,
   "editorial-cards": AdminCardEditor,
@@ -91,6 +95,7 @@ export {
   DecksView,
   ChainBoardView,
   RankLadderView,
+  GamesView,
   RulesQaView,
   ToolPlaceholder,
   EditorialHub,

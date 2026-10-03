@@ -252,6 +252,16 @@ export const TOOLS: readonly ToolDef[] = Object.freeze([
     // 只依赖网络与浏览器本地快照,与已载入的数据包无关
     needsData: false,
   },
+  {
+    code: "games",
+    short: "小游戏",
+    label: "小游戏",
+    desc: "趣味文本与猜卡图，翻翻卡牌的另一面",
+    group: "reference",
+    source: "static",
+    badge: "小工具",
+    needsData: false,
+  },
 
   /* ── 编辑部(隐藏栏目:连点报头刊名解锁,且必须管理员登录) ──
    * editorial 是栏目首页(hub),其余 5 个工具各自独立成页。

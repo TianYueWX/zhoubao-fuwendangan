@@ -191,6 +191,18 @@ onUnmounted(() => {
           </svg>
           积分榜速查
         </button>
+        <button
+          type="button"
+          class="shortcut-btn"
+          title="小游戏 · 趣味文本与猜卡图"
+          @click="navigate({ view: 'games' })"
+        >
+          <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+            <rect x="4" y="2.5" width="12" height="15" rx="1.5" stroke-width="1.4" />
+            <path d="M7 6.5h6M7 9.5h3M7 13l1.5 1.5L13.5 10" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+          小游戏
+        </button>
       </div>
     </div>
   </section>
