@@ -177,6 +177,10 @@ export const store = reactive({
   sourceLabel: '',
 
   currentView: 'home' as ViewName,
+  /** 当前阅读的规则书(仅 currentView === 'rulebook' 时有意义) */
+  currentRuleBook: '',
+  /** 深链定位的规则编号 */
+  currentRuleTarget: '',
 
   /** 内容层当前期号(仅 currentView === 'issue' 时有意义) */
   currentIssueId: '',

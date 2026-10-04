@@ -25,6 +25,7 @@ import RankLadderView from "./RankLadderView.vue";
 import GamesView from "./GamesView.vue";
 import BoosterOpeningView from "./BoosterOpeningView.vue";
 import RulesQaView from "./RulesQaView.vue";
+import RuleBookView from "./RuleBookView.vue";
 import ToolPlaceholder from "./ToolPlaceholder.vue";
 import EditorialHub from "../admin/EditorialHub.vue";
 import AdminCardEditor from "../admin/AdminCardEditor.vue";
@@ -61,6 +62,7 @@ export const ViewComponents: Record<string, unknown> = {
 
   /* 规则与 QA 共用一张公开检索桌 */
   rules: RulesQaView,
+  rulebook: RuleBookView,
   carddex: CarddexView,
 
   /* 小工具:结算链推演(卡池来自内置卡表,无需数据包) */
@@ -102,6 +104,7 @@ export {
   GamesView,
   BoosterOpeningView,
   RulesQaView,
+  RuleBookView,
   ToolPlaceholder,
   EditorialHub,
   AdminCardEditor,

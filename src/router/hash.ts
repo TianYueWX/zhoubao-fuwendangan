@@ -34,6 +34,10 @@ export interface Route {
   view: string;
   /** view === 'issue' 时的数据包 id */
   issueId?: string;
+  /** view === 'rulebook' 时的规则书名称 */
+  ruleBook?: string;
+  /** 可选的规则书内定位编号 */
+  ruleNumber?: string;
 }
 
 export function parseHash(hash: string): Route {
@@ -48,6 +52,16 @@ export function parseHash(hash: string): Route {
   // 内容层特例:期号正文
   if (head === 'issue') {
     return tail ? { view: 'issue', issueId: decodeURIComponent(tail) } : { view: 'archive' };
+  }
+  // 规则书正文:#/rules/{规则书名称}/{可选规则编号}
+  if (raw.startsWith('rules/')) {
+    const parts = raw.slice('rules/'.length).split('/');
+    try {
+      const [name, number] = parts.map((part) => decodeURIComponent(part));
+      return name ? { view: 'rulebook', ruleBook: name, ruleNumber: number ?? '' } : { view: 'rules' };
+    } catch {
+      return { view: 'rules' };
+    }
   }
   // 内容层次级路由:往期归档不是工具 code,但合法
   if (head === 'archive') return { view: 'archive' };
@@ -71,6 +85,11 @@ export function routeToHash(route: Route): string {
   if (route.view === 'issue') {
     return route.issueId ? `#/issue/${encodeURIComponent(route.issueId)}` : '#/archive';
   }
+  if (route.view === 'rulebook') {
+    return route.ruleBook
+      ? `#/rules/${encodeURIComponent(route.ruleBook)}${route.ruleNumber ? `/${encodeURIComponent(route.ruleNumber)}` : ''}`
+      : '#/rules';
+  }
   if (route.view === HOME_CODE) return '#/';
   // 内容层次级路由不是工具 code,需原样映射(否则会被误判为非法而回落工具台)
   if (route.view === 'archive') return '#/archive';
@@ -88,6 +107,9 @@ export function currentRoute(): Route {
   if (store.currentView === 'issue') {
     return { view: 'issue', issueId: store.currentIssueId };
   }
+  if (store.currentView === 'rulebook') {
+    return { view: 'rulebook', ruleBook: store.currentRuleBook, ruleNumber: store.currentRuleTarget };
+  }
   return { view: store.currentView };
 }
 
@@ -104,6 +126,18 @@ export function applyRoute(route: Route): void {
       return;
     }
     store.currentView = HOME_CODE;
+    return;
+  }
+  if (route.view === 'rulebook') {
+    if (!route.ruleBook) {
+      store.currentView = 'rules';
+      store.currentRuleBook = '';
+      store.currentRuleTarget = '';
+      return;
+    }
+    store.currentView = 'rulebook';
+    store.currentRuleBook = route.ruleBook;
+    store.currentRuleTarget = route.ruleNumber ?? '';
     return;
   }
   store.currentView =
