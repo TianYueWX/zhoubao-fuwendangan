@@ -358,8 +358,8 @@ function cardFinishLabel(card: OpenedPack["cards"][number]): string {
                 <span class="card-face card-face--back"><b>R</b><i>RIFTBOUND</i><small>{{ String(index + 1).padStart(2, '0') }}</small></span>
                 <span class="card-face card-face--front">
                   <CarddexImage :src="card.imageUrl" :fallback="card.fallbackUrl" :alt="card.name" :eager="index < 3" />
-                  <span class="card-caption"><b>{{ card.name }}</b><small>{{ card.cardNo }} · {{ cardFinishLabel(card) }}</small></span>
-                  <span class="slot-label">{{ card.slot }}</span>
+                  <span v-if="!card.revealed" class="card-caption"><b>{{ card.name }}</b><small>{{ card.cardNo }} · {{ cardFinishLabel(card) }}</small></span>
+                  <span v-if="!card.revealed" class="slot-label">{{ card.slot }}</span>
                 </span>
               </button>
             </div>
