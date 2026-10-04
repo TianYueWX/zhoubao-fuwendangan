@@ -133,6 +133,16 @@ export async function loadCarddexData(): Promise<CarddexData> {
         order: "qa_id.asc",
       }).catch(() => []),
     ]);
+  return buildCarddexData(baseRows, printRows, iconRows, qaEntryRows, qaLinkRows);
+}
+
+export function buildCarddexData(
+  baseRows: Row[],
+  printRows: Row[],
+  iconRows: Row[],
+  qaEntryRows: Row[],
+  qaLinkRows: Row[],
+): CarddexData {
   const printsByCard = new Map<string, CardPrint[]>();
   for (const raw of printRows) {
     const p = printFromRow(raw);

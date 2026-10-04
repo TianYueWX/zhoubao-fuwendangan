@@ -1,25 +1,40 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from "vue";
-import { navigate } from "@/router/hash";
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
+import QRCode from "qrcode";
+import { navigate, routeToHash } from "@/router/hash";
 import { store } from "@/store/analysis";
 import { listAllRules } from "@/tools/admin/rules";
+import { useVersionedResource } from "@/tools/sources/versionedCache";
+import CacheSyncStatus from "@/components/CacheSyncStatus.vue";
 import { buildRuleTree, matchRules } from "@/tools/admin/rulesTree";
 import type { Rule } from "@/tools/admin/types";
 
 type LanguageMode = "zh" | "en" | "both";
+type ReaderTheme = "paper" | "warm" | "dark";
+type PopupMode = "none" | "search" | "favorites" | "settings" | "share" | "cross-favorite";
 interface FlatRule { item: Rule; depth: number }
 interface TextPart { text: string; book?: string; number?: string }
+interface Favorite { book: string; number: string }
 
 const allRules = ref<Rule[]>([]);
 const loading = ref(true);
 const error = ref("");
+const rulesResource = useVersionedResource("rules", listAllRules);
 const query = ref("");
-const searchOpen = ref(false);
-const searchDialog = ref<HTMLDialogElement | null>(null);
 const searchInput = ref<HTMLInputElement | null>(null);
+const popupDialog = ref<HTMLDialogElement | null>(null);
+const popupMode = ref<PopupMode>("none");
 const language = ref<LanguageMode>("zh");
 const selected = ref<Set<string>>(new Set());
+const selectionMode = ref(false);
+const pressing = ref(false);
 const notice = ref("");
+const favorites = ref<Favorite[]>([]);
+const favoriteTarget = ref<Favorite | null>(null);
+const shareUrl = ref("");
+const shareQr = ref("");
+const readerTheme = ref<ReaderTheme>("paper");
+const fontScale = ref(1);
 const bookName = computed(() => store.currentRuleBook);
 const bookRules = computed(() => allRules.value.filter((rule) => (rule.rules_book || "（未分类）") === bookName.value));
 const ruleIndexes = computed(() => {
@@ -52,6 +67,11 @@ function flattenTree(rules: Rule[]): FlatRule[] {
 const flatRules = computed(() => flattenTree(bookRules.value));
 const hits = computed(() => query.value.trim() ? matchRules(bookRules.value, query.value) : []);
 const selectedRules = computed(() => flatRules.value.map(({ item }) => item).filter((item) => selected.value.has(item.rule_number)));
+const favoriteItems = computed(() => favorites.value.map((favorite) => ({
+  ...favorite,
+  rule: ruleIndexes.value.byBookAndNumber.get(`${favorite.book}\u0000${favorite.number}`),
+})));
+const shareRule = computed(() => selectedRules.value.length === 1 ? selectedRules.value[0] : null);
 const renderedRules = computed(() => flatRules.value.map(({ item, depth }) => ({
   item,
   depth,
@@ -68,6 +88,72 @@ function toggleSelected(number: string): void {
   const next = new Set(selected.value);
   if (next.has(number)) next.delete(number); else next.add(number);
   selected.value = next;
+}
+
+let pressTimer: ReturnType<typeof setTimeout> | null = null;
+let activePointer: number | null = null;
+let pointerStart = { x: 0, y: 0 };
+let suppressNextClick = false;
+
+function clearPressTimer(): void {
+  if (pressTimer) clearTimeout(pressTimer);
+  pressTimer = null;
+}
+
+function finishPointer(): void {
+  clearPressTimer();
+  pressing.value = false;
+  activePointer = null;
+  window.removeEventListener("pointermove", onGlobalPointerMove);
+  window.removeEventListener("pointerup", finishPointer);
+  window.removeEventListener("pointercancel", finishPointer);
+  if (suppressNextClick) window.setTimeout(() => { suppressNextClick = false; }, 0);
+}
+
+function cancelPointer(): void {
+  clearPressTimer();
+  pressing.value = false;
+  activePointer = null;
+  window.removeEventListener("pointermove", onGlobalPointerMove);
+  window.removeEventListener("pointerup", finishPointer);
+  window.removeEventListener("pointercancel", finishPointer);
+}
+
+function onGlobalPointerMove(event: PointerEvent): void {
+  if (activePointer !== event.pointerId) return;
+  if (Math.abs(event.clientX - pointerStart.x) > 10 || Math.abs(event.clientY - pointerStart.y) > 10) cancelPointer();
+}
+
+function onRulePointerDown(event: PointerEvent, number: string): void {
+  if (!event.isPrimary || event.button !== 0 || selectionMode.value) return;
+  activePointer = event.pointerId;
+  pointerStart = { x: event.clientX, y: event.clientY };
+  pressing.value = true;
+  clearPressTimer();
+  pressTimer = setTimeout(() => {
+    selectionMode.value = true;
+    selected.value = new Set([number]);
+    suppressNextClick = true;
+  }, 520);
+  window.addEventListener("pointermove", onGlobalPointerMove, { passive: true });
+  window.addEventListener("pointerup", finishPointer, { once: true });
+  window.addEventListener("pointercancel", cancelPointer, { once: true });
+}
+
+function onRuleClick(event: MouseEvent, number: string): void {
+  if (suppressNextClick) {
+    suppressNextClick = false;
+    event.preventDefault();
+    return;
+  }
+  if (!selectionMode.value) return;
+  event.preventDefault();
+  toggleSelected(number);
+}
+
+function completeSelection(): void {
+  selectionMode.value = false;
+  selected.value = new Set();
 }
 
 function scrollToRule(number: string): void {
@@ -124,16 +210,11 @@ function textParts(text: string): TextPart[] {
 
 function openSearch(): void {
   query.value = "";
-  searchOpen.value = true;
-  nextTick(() => {
-    searchDialog.value?.showModal();
-    searchInput.value?.focus();
-  });
+  openPopup("search");
 }
 
 function closeSearch(): void {
-  searchOpen.value = false;
-  if (searchDialog.value?.open) searchDialog.value.close();
+  closePopup();
 }
 
 function chooseSearchHit(number: string): void {
@@ -141,10 +222,137 @@ function chooseSearchHit(number: string): void {
   nextTick(() => scrollToRule(number));
 }
 
+function openPopup(mode: Exclude<PopupMode, "none">): void {
+  popupMode.value = mode;
+  nextTick(() => {
+    if (popupDialog.value && !popupDialog.value.open) popupDialog.value.showModal();
+    if (mode === "search") searchInput.value?.focus();
+  });
+}
+
+function closePopup(): void {
+  popupMode.value = "none";
+  if (popupDialog.value?.open) popupDialog.value.close();
+}
+
+function loadPreferences(): void {
+  try {
+    const savedFavorites = JSON.parse(localStorage.getItem("rulebook:favorites") || "[]") as unknown;
+    if (Array.isArray(savedFavorites)) {
+      favorites.value = savedFavorites.filter((item): item is Favorite =>
+        item && typeof item.book === "string" && typeof item.number === "string",
+      );
+    }
+    const savedTheme = localStorage.getItem("rulebook:theme");
+    if (savedTheme === "paper" || savedTheme === "warm" || savedTheme === "dark") readerTheme.value = savedTheme;
+    const savedScale = Number(localStorage.getItem("rulebook:font-scale"));
+    if (Number.isFinite(savedScale) && savedScale >= 0.85 && savedScale <= 1.5) fontScale.value = savedScale;
+  } catch { /* 本机存储不可用时维持默认设置 */ }
+}
+
+function savePreferences(): void {
+  try {
+    localStorage.setItem("rulebook:favorites", JSON.stringify(favorites.value));
+    localStorage.setItem("rulebook:theme", readerTheme.value);
+    localStorage.setItem("rulebook:font-scale", String(fontScale.value));
+  } catch { notice.value = "浏览器未允许保存本机阅读设置"; }
+}
+
+function addSelectedToFavorites(): void {
+  const next = [...favorites.value];
+  for (const rule of selectedRules.value) {
+    const favorite = { book: rule.rules_book || "（未分类）", number: rule.rule_number };
+    if (!next.some((item) => item.book === favorite.book && item.number === favorite.number)) next.push(favorite);
+  }
+  favorites.value = next;
+  savePreferences();
+  notice.value = `已收藏 ${selectedRules.value.length} 条规则`;
+  window.setTimeout(() => { notice.value = ""; }, 2200);
+}
+
+function removeFavorite(book: string, number: string): void {
+  favorites.value = favorites.value.filter((item) => item.book !== book || item.number !== number);
+  savePreferences();
+}
+
+function openFavorite(favorite: Favorite): void {
+  if (favorite.book !== bookName.value) {
+    favoriteTarget.value = favorite;
+    closePopup();
+    nextTick(() => openPopup("cross-favorite"));
+    return;
+  }
+  closePopup();
+  nextTick(() => scrollToRule(favorite.number));
+}
+
+function jumpToFavorite(newPage: boolean): void {
+  const favorite = favoriteTarget.value;
+  if (!favorite) return;
+  const route = { view: "rulebook", ruleBook: favorite.book, ruleNumber: favorite.number } as const;
+  if (newPage) {
+    const url = new URL(window.location.href);
+    url.hash = routeToHash(route);
+    window.open(url.toString(), "_blank", "noopener,noreferrer");
+  } else {
+    navigate(route);
+  }
+  favoriteTarget.value = null;
+  closePopup();
+}
+
+async function openSharePopup(): Promise<void> {
+  if (!shareRule.value) return;
+  const targetBook = shareRule.value.rules_book || bookName.value;
+  const url = new URL(window.location.href);
+  url.hash = routeToHash({ view: "rulebook", ruleBook: targetBook, ruleNumber: shareRule.value.rule_number });
+  shareUrl.value = url.toString();
+  shareQr.value = "";
+  openPopup("share");
+  try {
+    shareQr.value = await QRCode.toDataURL(shareUrl.value, { errorCorrectionLevel: "M", width: 240, margin: 2 });
+  } catch { notice.value = "二维码生成失败"; }
+}
+
+async function copyShareUrl(): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(shareUrl.value);
+    notice.value = "链接已复制";
+  } catch { notice.value = "复制失败，请检查剪贴板权限"; }
+  window.setTimeout(() => { notice.value = ""; }, 2200);
+}
+
+function changeFont(delta: number): void {
+  fontScale.value = Math.max(0.85, Math.min(1.5, Math.round((fontScale.value + delta) * 100) / 100));
+  savePreferences();
+}
+
+function setTheme(theme: ReaderTheme): void {
+  readerTheme.value = theme;
+  savePreferences();
+}
+
 function openReference(part: TextPart): void {
   if (!part.book || !part.number) return;
   navigate({ view: "rulebook", ruleBook: part.book, ruleNumber: part.number });
   if (part.book === bookName.value) nextTick(() => scrollToRule(part.number!));
+}
+
+function onReferenceClick(event: MouseEvent, part: TextPart, rowNumber: string): void {
+  if (suppressNextClick) {
+    suppressNextClick = false;
+    event.preventDefault();
+    event.stopPropagation();
+    return;
+  }
+  if (selectionMode.value) {
+    event.preventDefault();
+    event.stopPropagation();
+    toggleSelected(rowNumber);
+    return;
+  }
+  event.stopPropagation();
+  openReference(part);
 }
 
 function contentForCopy(rule: Rule): string {
@@ -219,7 +427,8 @@ async function load(): Promise<void> {
   loading.value = true;
   error.value = "";
   try {
-    allRules.value = await listAllRules();
+    const rows = await rulesResource.load();
+    allRules.value = rows ?? [];
     if (!allRules.value.some((rule) => (rule.rules_book || "（未分类）") === bookName.value)) {
       error.value = `找不到规则书“${bookName.value}”`;
     } else if (store.currentRuleTarget) {
@@ -233,135 +442,230 @@ async function load(): Promise<void> {
   }
 }
 
-onMounted(() => void load());
+watch(rulesResource.data, (rows) => {
+  if (rows) {
+    allRules.value = rows;
+    loading.value = false;
+  }
+}, { immediate: true });
+
+async function refreshRules(): Promise<void> {
+  try {
+    const rows = await rulesResource.load(true);
+    if (rows) allRules.value = rows;
+  } catch (cause) {
+    error.value = cause instanceof Error ? cause.message : "规则书更新失败";
+  }
+}
+
+onMounted(() => {
+  loadPreferences();
+  void load();
+});
+onUnmounted(() => cancelPointer());
 watch(() => store.currentRuleTarget, (number) => {
   if (number) nextTick(() => scrollToRule(number));
 });
 watch(bookName, () => {
   selected.value = new Set();
+  selectionMode.value = false;
   query.value = "";
 });
 </script>
 
 <template>
-  <div class="rulebook-page">
-    <header class="rulebook-head">
-      <div>
-        <button class="back-link" type="button" @click="navigate({ view: 'rules' })">← 返回规则目录</button>
-        <p class="rulebook-kicker">RIFTBOUND · OFFICIAL RULES</p>
-        <h1>{{ bookName }}</h1>
-        <p class="book-description">按原有章节与规则编号编排 · 共 {{ flatRules.length.toLocaleString() }} 条</p>
-      </div>
-      <div class="language-switch" aria-label="语言模式">
-        <button v-for="option in [{ id: 'zh', label: '中文' }, { id: 'en', label: 'English' }, { id: 'both', label: '中英对照' }]" :key="option.id" :class="{ active: language === option.id }" @click="language = option.id as LanguageMode">{{ option.label }}</button>
-      </div>
-    </header>
-
+  <div class="reader-screen" :class="[`theme-${readerTheme}`, { 'is-pressing': pressing }]" :style="{ '--reader-font-scale': fontScale }">
     <div v-if="loading" class="state-card">正在加载规则书…</div>
     <div v-else-if="error" class="state-card error">{{ error }}</div>
     <template v-else>
-      <section class="reader-tools" aria-label="规则书工具">
-        <button class="search-launch" @click="openSearch"><span aria-hidden="true">⌕</span> 搜索规则</button>
-        <span class="match-count">{{ flatRules.length.toLocaleString() }} 条</span>
-        <span class="tool-spacer"></span>
-        <button class="tool-action" :disabled="!selected.size" @click="copySelected">复制选中条目 <b v-if="selected.size">{{ selected.size }}</b></button>
-        <button class="tool-action" :disabled="!selected.size" @click="exportSelectedImage">导出图片</button>
-      </section>
-      <p v-if="notice" class="notice" role="status">{{ notice }}</p>
-      <main class="book-stage">
-        <div class="book-page">
-          <div class="running-head"><span>{{ bookName }}</span><span>规则书 · {{ language === 'zh' ? '中文版' : language === 'en' ? 'ENGLISH EDITION' : '中英对照' }}</span></div>
-          <div class="book-rule-list">
-            <article v-for="{ item, depth, lines } in renderedRules" :id="ruleId(item.rule_number)" :key="item.id" class="rule-entry" :class="{ selected: selected.has(item.rule_number), chapter: item.is_heading }" :style="{ '--depth': depth }">
-              <label class="select-entry" :aria-label="`选择规则 ${item.rule_number}`"><input type="checkbox" :checked="selected.has(item.rule_number)" @change="toggleSelected(item.rule_number)" /></label>
-              <div class="entry-copy">
-                <h2 :class="{ heading: item.is_heading }"><span class="entry-number">{{ item.rule_number }}</span></h2>
-                <p v-for="(parts, lineIndex) in lines" :key="lineIndex" class="entry-text">
-                  <template v-for="(part, partIndex) in parts" :key="partIndex"><button v-if="part.book" class="rule-reference" @click="openReference(part)">{{ part.text }}</button><span v-else>{{ part.text }}</span></template>
-                </p>
-              </div>
-            </article>
-          </div>
-          <footer class="book-folio"><span>符文战场 · 规则档案</span><span>{{ flatRules.length }} 条</span></footer>
+      <div class="reader-controls" aria-label="阅读设置">
+        <button class="icon-control" aria-label="搜索规则" title="搜索规则" @click="openSearch">⌕</button>
+        <div class="language-switch" aria-label="语言模式">
+          <button v-for="option in [{ id: 'zh', label: '中' }, { id: 'en', label: '英' }, { id: 'both', label: '中英' }]" :key="option.id" :class="{ active: language === option.id }" @click="language = option.id as LanguageMode">{{ option.label }}</button>
         </div>
+        <button class="icon-control" aria-label="收藏夹" title="收藏夹" @click="openPopup('favorites')">☆</button>
+        <button class="icon-control settings-trigger" aria-label="页面设置" title="页面设置" @click="openPopup('settings')">⋮</button>
+      </div>
+      <p v-if="notice" class="notice" role="status">{{ notice }}</p>
+      <main class="reader-document">
+        <article
+          v-for="{ item, depth, lines } in renderedRules"
+          :id="ruleId(item.rule_number)"
+          :key="item.id"
+          class="rule-row"
+          :class="{ selected: selected.has(item.rule_number), chapter: item.is_heading }"
+          :style="{ '--depth': depth }"
+          @pointerdown="onRulePointerDown($event, item.rule_number)"
+          @click="onRuleClick($event, item.rule_number)"
+          @contextmenu.prevent
+        >
+          <div class="rule-copy">
+            <p v-for="(parts, lineIndex) in lines" :key="lineIndex" class="rule-line" :class="{ 'english-line': language === 'both' && lineIndex > 0 }">
+              <span v-if="lineIndex === 0" class="rule-number">{{ item.rule_number }}</span>
+              <span class="rule-text">
+                <template v-for="(part, partIndex) in parts" :key="partIndex"><button v-if="part.book" class="rule-reference" @click="onReferenceClick($event, part, item.rule_number)">{{ part.text }}</button><span v-else>{{ part.text }}</span></template>
+              </span>
+            </p>
+          </div>
+        </article>
       </main>
 
-      <dialog ref="searchDialog" class="search-dialog" @close="searchOpen = false">
-        <div class="search-modal-head"><div><span class="modal-kicker">本书检索</span><h2>查找规则</h2></div><button class="modal-close" aria-label="关闭搜索" @click="closeSearch">×</button></div>
-        <label class="modal-search-field"><span aria-hidden="true">⌕</span><input ref="searchInput" v-model="query" type="search" placeholder="输入规则编号或正文内容" @keydown.esc="closeSearch" /><kbd>ESC</kbd></label>
-        <div class="search-results" aria-live="polite">
-          <p v-if="!query.trim()" class="search-prompt">搜索范围：{{ bookName }}</p>
-          <p v-else-if="!hits.length" class="search-prompt">没有找到匹配的规则</p>
-          <button v-for="hit in hits.slice(0, 80)" :key="hit.id" class="search-result" @click="chooseSearchHit(hit.rule_number)">
-            <span class="result-number">{{ hit.rule_number }}</span><span class="result-copy"><strong>{{ hit.is_heading ? '章节' : '规则' }}</strong>{{ hit.text_zh || hit.text_en || '暂无正文' }}</span><span class="result-arrow">↗</span>
-          </button>
-          <p v-if="hits.length > 80" class="search-limit">显示前 80 条，请输入更具体的编号或内容。</p>
-        </div>
+      <div v-if="selectionMode" class="selection-bar" role="toolbar" aria-label="已选规则操作">
+        <span class="selection-count">已选 {{ selected.size }} 条</span>
+        <button v-if="selected.size === 1" @click="openSharePopup">分享链接</button>
+        <button @click="copySelected">复制段落</button>
+        <button @click="exportSelectedImage">导出图片</button>
+        <button @click="addSelectedToFavorites">收藏</button>
+        <button class="finish-selection" @click="completeSelection">完成</button>
+      </div>
+
+      <dialog ref="popupDialog" class="reader-popup" @close="popupMode = 'none'">
+        <template v-if="popupMode === 'search'">
+          <div class="popup-title-row"><h2>搜索本书</h2><button class="popup-x" aria-label="关闭" @click="closeSearch">×</button></div>
+          <label class="popup-search"><span>⌕</span><input ref="searchInput" v-model="query" type="search" placeholder="输入规则编号或正文内容" @keydown.esc="closeSearch" /></label>
+          <div class="popup-results" aria-live="polite">
+            <p v-if="!query.trim()" class="popup-hint">搜索当前规则书</p>
+            <p v-else-if="!hits.length" class="popup-hint">没有匹配的规则</p>
+            <button v-for="hit in hits.slice(0, 80)" :key="hit.id" class="popup-result" @click="chooseSearchHit(hit.rule_number)">
+              <span class="popup-number">{{ hit.rule_number }}</span><span>{{ hit.text_zh || hit.text_en || '暂无正文' }}</span>
+            </button>
+            <p v-if="hits.length > 80" class="popup-hint">显示前 80 条，请缩小检索范围。</p>
+          </div>
+        </template>
+
+        <template v-else-if="popupMode === 'favorites'">
+          <div class="popup-title-row"><h2>收藏</h2><button class="popup-x" aria-label="关闭" @click="closePopup">×</button></div>
+          <div v-if="!favoriteItems.length" class="popup-hint empty-favorites">还没有收藏规则</div>
+          <div v-else class="popup-results favorites-results">
+            <div v-for="favorite in favoriteItems" :key="`${favorite.book}/${favorite.number}`" class="favorite-row">
+              <button class="favorite-open" @click="openFavorite(favorite)">
+                <span class="favorite-book">{{ favorite.book }}</span>
+                <span class="popup-number">{{ favorite.number }}</span>
+                <span class="favorite-title">{{ favorite.rule?.text_zh || favorite.rule?.text_en || '规则条目' }}</span>
+              </button>
+              <button class="favorite-remove" :aria-label="`移除收藏 ${favorite.number}`" @click="removeFavorite(favorite.book, favorite.number)">×</button>
+            </div>
+          </div>
+        </template>
+
+        <template v-else-if="popupMode === 'settings'">
+          <div class="popup-title-row"><h2>页面设置</h2><button class="popup-x" aria-label="关闭" @click="closePopup">×</button></div>
+          <section class="setting-section"><h3>主题颜色</h3><div class="theme-options">
+            <button v-for="theme in [{ id: 'paper', label: '纸白' }, { id: 'warm', label: '暖纸' }, { id: 'dark', label: '深色' }]" :key="theme.id" :class="['theme-option', `sample-${theme.id}`, { active: readerTheme === theme.id }]" @click="setTheme(theme.id as ReaderTheme)">{{ theme.label }}</button>
+          </div></section>
+          <section class="setting-section"><h3>字体大小</h3><div class="font-setting"><button aria-label="减小字号" :disabled="fontScale <= 0.85" @click="changeFont(-0.1)">−</button><span>{{ Math.round(fontScale * 100) }}%</span><button aria-label="增大字号" :disabled="fontScale >= 1.5" @click="changeFont(0.1)">＋</button></div></section>
+          <section class="setting-section"><h3>规则资料</h3><CacheSyncStatus :checking="rulesResource.checking.value" :stale="rulesResource.stale.value" :saved-at="rulesResource.savedAt.value" :error="rulesResource.error.value" :disabled="rulesResource.loading.value" @refresh="refreshRules" /></section>
+        </template>
+
+        <template v-else-if="popupMode === 'share' && shareRule">
+          <div class="popup-title-row"><h2>分享规则 {{ shareRule.rule_number }}</h2><button class="popup-x" aria-label="关闭" @click="closePopup">×</button></div>
+          <p class="share-rule-name">{{ shareRule.text_zh || shareRule.text_en || shareRule.rule_number }}</p>
+          <div class="share-link-row"><input :value="shareUrl" readonly aria-label="规则定位链接" /><button @click="copyShareUrl">复制链接</button></div>
+          <div class="share-qr-wrap"><img v-if="shareQr" :src="shareQr" :alt="`规则 ${shareRule.rule_number} 的二维码`" /><span v-else>正在生成二维码…</span></div>
+        </template>
+
+        <template v-else-if="popupMode === 'cross-favorite' && favoriteTarget">
+          <div class="popup-title-row"><h2>打开收藏规则</h2><button class="popup-x" aria-label="关闭" @click="closePopup">×</button></div>
+          <p class="cross-book-label">{{ favoriteTarget.book }} · {{ favoriteTarget.number }}</p>
+          <div class="cross-book-actions"><button @click="jumpToFavorite(false)">当前页面跳转</button><button @click="jumpToFavorite(true)">新页面打开</button></div>
+        </template>
       </dialog>
     </template>
   </div>
 </template>
 
 <style scoped>
-.rulebook-page { width: min(100%, 1340px); margin: 0 auto; padding: 0 20px 70px; color: var(--color-text-primary); }
-.rulebook-head { display: flex; justify-content: space-between; align-items: end; gap: 24px; padding: 22px 0 20px; }
-.back-link { color: var(--color-text-muted); font-size: 12px; }
-.back-link:hover { color: var(--color-brand); }
-.rulebook-kicker { margin-top: 19px; color: var(--color-brand); font: 10px ui-monospace, monospace; letter-spacing: .18em; }
-h1 { margin-top: 6px; font: 700 clamp(28px, 4vw, 42px)/1.2 "Noto Serif SC", "Songti SC", Georgia, serif; letter-spacing: .035em; }
-.book-description { margin-top: 7px; color: var(--color-text-subtle); font: 11px/1.5 ui-monospace, monospace; }
-.language-switch { display: flex; gap: 2px; padding: 3px; border: 1px solid var(--color-card-border); background: #ede8db; }
-.language-switch button { padding: 8px 12px; color: var(--color-text-muted); font-size: 12px; white-space: nowrap; }
-.language-switch button.active { color: #fff8f0; background: var(--color-brand); }
-.state-card { width: min(100%, 900px); margin: 28px auto; padding: 32px; border: 1px solid var(--color-card-border); background: var(--color-card-bg); color: var(--color-text-muted); }
+.reader-screen { --paper: #fff; --ink: #252525; --muted-ink: #626262; min-height: 100vh; padding: 8px 18px 96px; background: #f4f1ea; color: var(--ink); transition: background-color .2s, color .2s; }
+.reader-screen.theme-paper { --paper: #fff; --ink: #252525; --muted-ink: #626262; background: #f4f1ea; }
+.reader-screen.theme-warm { --paper: #f7f0df; --ink: #342d22; --muted-ink: #716553; background: #e9e1d0; }
+.reader-screen.theme-dark { --paper: #252525; --ink: #e9e5dc; --muted-ink: #b9b2a6; background: #191919; color-scheme: dark; }
+.reader-controls { position: sticky; top: 8px; z-index: 20; display: flex; justify-content: flex-end; align-items: center; gap: 8px; width: min(100%, 940px); margin: 0 auto; }
+.icon-control { display: grid; place-items: center; width: 38px; height: 38px; color: var(--muted-ink); background: color-mix(in srgb, var(--paper) 90%, transparent); border-radius: 50%; font: 22px/1 system-ui, sans-serif; }
+.icon-control:hover { color: var(--ink); background: var(--paper); }
+.settings-trigger { font-size: 27px; }
+.language-switch { display: flex; gap: 1px; padding: 3px; background: color-mix(in srgb, var(--paper) 90%, transparent); border-radius: 999px; }
+.language-switch button { min-width: 34px; padding: 6px 9px; border-radius: 999px; color: var(--muted-ink); font-size: 11px; }
+.language-switch button.active { color: var(--paper); background: var(--ink); }
+.reader-document { width: min(100%, 860px); min-height: calc(100vh - 54px); margin: 16px auto 0; padding: 48px clamp(25px, 8vw, 92px) 100px; background: var(--paper); color: var(--ink); font-size: calc(16px * var(--reader-font-scale)); transition: background-color .2s, color .2s; }
+.rule-row { margin-top: 1.25em; margin-left: calc(min(var(--depth), 5) * 1.25em); padding: .12em .35em; border-radius: 2px; scroll-margin-top: 80px; content-visibility: auto; contain-intrinsic-size: auto 90px; touch-action: pan-y; cursor: text; }
+.rule-row.chapter { margin-top: 2.4em; }
+.rule-row.selected { background: #f7e7a7; color: #242018; }
+.theme-dark .rule-row.selected { background: #594b26; color: #fff8e7; }
+.rule-copy { font-family: "Noto Serif SC", "Songti SC", "Noto Serif", Georgia, serif; }
+.rule-line { display: grid; grid-template-columns: 4.7em minmax(0, 1fr); align-items: baseline; margin: 0; font: 400 1em/1.95 "Noto Serif SC", "Songti SC", "Noto Serif", Georgia, serif; overflow-wrap: anywhere; white-space: pre-wrap; }
+.rule-row.chapter .rule-line { font-weight: 700; }
+.rule-row.chapter .rule-line:first-child { font-size: 1.12em; }
+.rule-number { color: #8a7652; font: 600 .8em/1.6 ui-monospace, monospace; white-space: nowrap; }
+.theme-dark .rule-number { color: #cbb887; }
+.rule-text { min-width: 0; }
+.english-line .rule-text { grid-column: 2; color: var(--muted-ink); font-size: .92em; }
+.rule-row.selected .english-line .rule-text { color: inherit; }
+.rule-reference { color: #a33224; font: inherit; text-decoration: underline; text-decoration-color: color-mix(in srgb, currentColor 45%, transparent); text-decoration-thickness: 1px; text-underline-offset: 3px; cursor: pointer; }
+.theme-dark .rule-reference { color: #e59b86; }
+.rule-reference:hover { text-decoration-color: currentColor; }
+.reader-screen.is-pressing .rule-text { user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.selection-bar { position: fixed; z-index: 40; left: 50%; bottom: max(18px, env(safe-area-inset-bottom)); transform: translateX(-50%); display: flex; align-items: center; gap: 5px; max-width: calc(100vw - 24px); padding: 7px; color: #fff; background: #292929; border-radius: 7px; box-shadow: 0 8px 28px #0003; white-space: nowrap; }
+.selection-bar button { padding: 8px 10px; color: #f6f2e9; border-radius: 4px; font-size: 12px; }
+.selection-bar button:hover { background: #ffffff1a; }
+.selection-bar .finish-selection { color: #fff; background: #8e3428; }
+.selection-count { padding: 0 8px; color: #c9c3b7; font-size: 11px; }
+.state-card { width: min(100%, 760px); margin: 20vh auto 0; padding: 24px; color: var(--muted-ink); background: var(--paper); }
 .state-card.error { color: #9e493b; }
-.reader-tools { display: flex; align-items: center; gap: 10px; min-height: 54px; border-top: 1px solid var(--color-panel-border); border-bottom: 1px solid var(--color-panel-border); }
-.search-launch { display: inline-flex; align-items: center; gap: 9px; padding: 8px 12px; border: 1px solid var(--color-card-border); background: var(--color-card-bg); color: var(--color-text-muted); font-size: 12px; }
-.search-launch > span { color: var(--color-brand); font-size: 20px; line-height: .8; }
-kbd { padding: 2px 5px; border: 1px solid var(--color-card-border); color: var(--color-text-subtle); font: 10px ui-monospace, monospace; }
-.match-count { color: var(--color-text-subtle); font: 11px ui-monospace, monospace; white-space: nowrap; }
-.tool-spacer { flex: 1; }
-.tool-action { padding: 8px 11px; border: 1px solid var(--color-card-border); color: var(--color-text-muted); font-size: 11px; white-space: nowrap; }
-.tool-action:not(:disabled):hover { border-color: var(--color-brand-faint); color: var(--color-brand); }
-.tool-action:disabled { opacity: .4; cursor: not-allowed; }
-.tool-action b { margin-left: 4px; color: var(--color-brand); }
-.notice { position: fixed; z-index: 80; right: 24px; bottom: 24px; padding: 12px 16px; color: white; background: #343b34; box-shadow: 0 8px 30px #0002; font-size: 13px; }
-.book-stage { width: min(100%, 1040px); margin: 24px auto 0; padding-left: 9px; background: linear-gradient(90deg, #9c8765 0 5px, #d8c8a9 5px 9px, transparent 9px); filter: drop-shadow(0 12px 22px rgba(49, 39, 22, .13)); }
-.book-page { position: relative; min-height: 75vh; padding: 40px clamp(24px, 7vw, 86px) 28px; background: #fffdf6; border: 1px solid #e7dfce; border-left: 0; }
-.book-page::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 22px; background: linear-gradient(90deg, rgba(67, 49, 27, .08), transparent); pointer-events: none; }
-.running-head { display: flex; justify-content: space-between; gap: 12px; padding-bottom: 13px; border-bottom: 1px solid #d9cfbc; color: #857a68; font: 10px/1.4 ui-monospace, monospace; letter-spacing: .08em; }
-.book-rule-list { width: min(100%, 72ch); margin: 22px auto 50px; }
-.rule-entry { position: relative; display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 10px; padding: 8px 8px 8px calc(8px + min(var(--depth), 5) * 15px); scroll-margin-top: 100px; content-visibility: auto; contain-intrinsic-size: auto 112px; }
-.rule-entry.selected { background: rgba(178, 58, 39, .07); }
-.rule-entry.chapter { margin-top: 24px; padding-top: 18px; border-top: 1px solid #c7b89e; }
-.select-entry { padding-top: 3px; opacity: .24; transition: opacity .15s; }
-.rule-entry:hover .select-entry, .rule-entry.selected .select-entry, .select-entry:focus-within { opacity: 1; }
-.select-entry input { accent-color: var(--color-brand); width: 14px; height: 14px; cursor: pointer; }
-.entry-copy h2 { min-height: 18px; line-height: 1.6; }
-.entry-number { color: #927a55; font: 600 11px ui-monospace, monospace; }
-.entry-copy h2.heading .entry-number { color: var(--color-brand); font-weight: 800; font-size: 14px; }
-.entry-text { margin-top: 3px; color: #37332b; font: 15px/2 "Noto Serif SC", "Songti SC", "Noto Serif", Georgia, serif; white-space: pre-wrap; overflow-wrap: anywhere; }
-.entry-copy h2.heading + .entry-text { margin-top: 7px; font-size: 17px; font-weight: 700; line-height: 1.8; }
-.rule-reference { color: #9f3021; font: inherit; text-decoration: underline; text-decoration-color: rgba(159, 48, 33, .45); text-decoration-thickness: 1px; text-underline-offset: 3px; }
-.rule-reference:hover { color: #6f2118; text-decoration-color: currentColor; }
-.book-folio { display: flex; justify-content: space-between; width: min(100%, 72ch); margin: 0 auto; padding-top: 12px; border-top: 1px solid #d9cfbc; color: #8d826f; font: 10px ui-monospace, monospace; }
-.search-dialog { width: min(650px, calc(100vw - 30px)); max-height: min(76vh, 760px); padding: 0; border: 1px solid #c9bca5; background: #fbf8ef; color: var(--color-text-primary); box-shadow: 0 28px 90px rgba(25, 20, 12, .32); }
-.search-dialog::backdrop { background: rgba(35, 31, 25, .54); backdrop-filter: blur(3px); }
-.search-modal-head { display: flex; align-items: center; justify-content: space-between; padding: 22px 24px 15px; }
-.modal-kicker { color: var(--color-brand); font: 10px ui-monospace, monospace; letter-spacing: .15em; }
-.search-modal-head h2 { margin-top: 4px; font: 700 24px/1.25 "Noto Serif SC", Georgia, serif; }
-.modal-close { width: 34px; height: 34px; color: #756c5c; font-size: 25px; line-height: 1; }
-.modal-search-field { display: flex; align-items: center; gap: 10px; height: 50px; margin: 0 24px; padding: 0 12px; border: 1px solid #c9bca5; background: #fffdf7; color: var(--color-brand); }
-.modal-search-field:focus-within { outline: 2px solid rgba(178, 58, 39, .18); border-color: var(--color-brand); }
-.modal-search-field > span { font-size: 25px; }
-.modal-search-field input { flex: 1; min-width: 0; outline: none; background: transparent; color: var(--color-text-primary); font-size: 14px; }
-.search-results { max-height: calc(min(76vh, 760px) - 140px); overflow-y: auto; margin-top: 12px; border-top: 1px solid #ded5c5; }
-.search-prompt, .search-limit { padding: 18px 24px; color: #827969; font-size: 12px; }
-.search-result { display: flex; align-items: flex-start; gap: 14px; width: 100%; padding: 13px 24px; border-bottom: 1px solid #e8e0d2; text-align: left; }
-.search-result:hover { background: #f0eadc; }
-.result-number { flex: 0 0 68px; color: var(--color-brand); font: 700 12px ui-monospace, monospace; }
-.result-copy { display: grid; gap: 3px; color: #4c463c; font: 13px/1.6 "Noto Serif SC", Georgia, serif; }
-.result-copy strong { color: #978a74; font: 10px ui-monospace, monospace; }
-.result-arrow { margin-left: auto; color: #a39884; }
-@media (max-width: 650px) { .rulebook-page { padding-inline: 12px; } .rulebook-head { align-items: flex-start; flex-direction: column; } .language-switch { align-self: stretch; } .language-switch button { flex: 1; } .reader-tools { flex-wrap: wrap; padding: 9px 0; } .tool-spacer { display: none; } .search-launch { flex: 1; } .book-stage { margin-top: 14px; } .book-page { padding: 24px 14px 22px 20px; } .running-head { font-size: 8px; } .rule-entry { padding-left: 5px; padding-right: 4px; } .entry-text { font-size: 14px; } .result-number { flex-basis: 48px; } .search-result { gap: 8px; padding-inline: 15px; } .search-modal-head { padding-inline: 16px; } .modal-search-field { margin-inline: 16px; } }
+.notice { position: fixed; z-index: 80; left: 50%; bottom: 78px; transform: translateX(-50%); padding: 10px 15px; color: white; background: #343b34; border-radius: 4px; font-size: 12px; }
+.reader-popup { width: min(560px, calc(100vw - 28px)); max-height: min(78vh, 700px); padding: 0; border: 0; color: #292722; background: #fffefa; box-shadow: 0 18px 70px #0004; }
+.reader-popup::backdrop { background: #17151280; backdrop-filter: blur(2px); }
+.popup-title-row { display: flex; justify-content: space-between; align-items: center; padding: 20px 22px 14px; }
+.popup-title-row h2 { font: 600 19px/1.4 "Noto Serif SC", "Songti SC", Georgia, serif; }
+.popup-x { width: 32px; height: 32px; color: #777166; font-size: 23px; }
+.popup-search { display: flex; align-items: center; gap: 10px; margin: 0 22px 12px; padding: 0 12px; height: 46px; background: #f3f1eb; color: #8d382c; }
+.popup-search > span { font-size: 22px; }
+.popup-search input { flex: 1; min-width: 0; height: 100%; outline: 0; background: transparent; color: #292722; font-size: 14px; }
+.popup-results { max-height: min(56vh, 500px); overflow: auto; padding: 3px 12px 14px; }
+.popup-hint { padding: 16px 12px; color: #8c877d; font-size: 12px; }
+.popup-result { display: grid; grid-template-columns: 58px minmax(0, 1fr); gap: 12px; width: 100%; padding: 11px 10px; text-align: left; color: #48443d; font: 13px/1.7 "Noto Serif SC", "Songti SC", Georgia, serif; }
+.popup-result:hover, .favorite-open:hover { background: #f5f1e8; }
+.popup-number { color: #963b2d; font: 600 11px/1.8 ui-monospace, monospace; white-space: nowrap; }
+.favorites-results { padding-top: 5px; }
+.favorite-row { display: flex; align-items: center; gap: 6px; }
+.favorite-open { display: grid; grid-template-columns: minmax(0, 1fr) 55px minmax(0, 2fr); align-items: baseline; gap: 8px; flex: 1; min-width: 0; padding: 10px; text-align: left; }
+.favorite-book { overflow: hidden; color: #857d6e; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.favorite-title { overflow: hidden; color: #4c473d; font: 12px/1.6 "Noto Serif SC", "Songti SC", Georgia, serif; text-overflow: ellipsis; white-space: nowrap; }
+.favorite-remove { flex: 0 0 30px; height: 30px; color: #948b7d; font-size: 19px; }
+.favorite-remove:hover { color: #963b2d; }
+.empty-favorites { padding: 24px; }
+.setting-section { padding: 8px 22px 17px; }
+.setting-section + .setting-section { padding-top: 14px; border-top: 1px solid #eeece6; }
+.setting-section h3 { margin-bottom: 10px; color: #80796c; font-size: 11px; font-weight: 500; }
+.theme-options { display: flex; gap: 8px; }
+.theme-option { min-width: 90px; padding: 10px 13px; border: 1px solid #d9d5cb; border-radius: 3px; font-size: 12px; }
+.theme-option.active { outline: 2px solid #a44233; outline-offset: 1px; }
+.sample-paper { color: #292722; background: #fff; }
+.sample-warm { color: #342d22; background: #f7f0df; }
+.sample-dark { color: #e9e5dc; background: #252525; }
+.font-setting { display: flex; align-items: center; gap: 14px; }
+.font-setting button { width: 34px; height: 34px; background: #f1eee7; color: #38352e; font-size: 20px; }
+.font-setting button:disabled { opacity: .4; }
+.font-setting span { min-width: 46px; text-align: center; color: #706a60; font: 11px ui-monospace, monospace; }
+.share-rule-name { padding: 0 22px 12px; color: #676052; font: 13px/1.7 "Noto Serif SC", Georgia, serif; }
+.share-link-row { display: flex; gap: 8px; padding: 0 22px; }
+.share-link-row input { flex: 1; min-width: 0; padding: 10px; color: #615a4f; background: #f3f1eb; font-size: 11px; }
+.share-link-row button, .cross-book-actions button { padding: 9px 13px; color: #fff; background: #37352f; font-size: 12px; white-space: nowrap; }
+.share-qr-wrap { display: grid; place-items: center; min-height: 190px; padding: 18px; color: #81796c; font-size: 12px; }
+.share-qr-wrap img { width: 180px; height: 180px; image-rendering: pixelated; }
+.cross-book-label { padding: 2px 22px 18px; color: #736c60; font-size: 13px; }
+.cross-book-actions { display: flex; gap: 9px; justify-content: flex-end; padding: 0 22px 22px; }
+.cross-book-actions button:first-child { color: #39362f; background: #eeece5; }
+.cross-book-actions button:hover, .share-link-row button:hover { filter: brightness(.9); }
+@media (max-width: 640px) {
+  .reader-screen { padding: 5px 0 105px; }
+  .reader-controls { top: 5px; padding-right: 10px; }
+  .reader-document { width: 100%; min-height: calc(100vh - 48px); margin-top: 7px; padding: 28px 18px 90px; }
+  .rule-row { margin-left: calc(min(var(--depth), 4) * .55em); padding-inline: .2em; }
+  .rule-line { grid-template-columns: 3.8em minmax(0, 1fr); }
+  .selection-bar { gap: 0; width: calc(100vw - 16px); justify-content: space-between; padding: 5px 4px; }
+  .selection-bar button { padding: 9px 6px; font-size: 10px; }
+  .selection-count { padding: 0 5px; font-size: 10px; }
+  .favorite-open { grid-template-columns: minmax(0, 1fr) 45px minmax(0, 1.2fr); gap: 5px; }
+  .theme-option { min-width: 0; flex: 1; }
+}
 </style>

@@ -176,7 +176,7 @@ function onWeekChange(e: Event): void {
   -->
   <div class="flex flex-col min-h-screen">
     <header
-      v-if="!isHome && store.currentView !== 'chain'"
+      v-if="!isHome && store.currentView !== 'chain' && store.currentView !== 'rulebook'"
       class="masthead-solid sticky top-0 z-50 shrink-0"
     >
       <div class="px-4 lg:px-8 h-14 flex items-center justify-between gap-3">

@@ -1,12 +1,16 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
+import { useVersionedResource } from "@/tools/sources/versionedCache";
+import CacheSyncStatus from "@/components/CacheSyncStatus.vue";
 import CarddexImage from "@/components/carddex/CarddexImage.vue";
 import {
   BOOSTER_SETS,
   FINISH_LABELS,
   RARITY_LABELS,
   drawPack,
-  loadBoosterCards,
+  buildBoosterCards,
+  loadBoosterBases,
+  loadBoosterPrints,
   newId,
   setName,
   type BoosterCard,
@@ -29,6 +33,16 @@ const storageError = ref("");
 const expandedRecords = ref<string[]>([]);
 const clearPrompt = ref(false);
 const notice = ref("");
+const cardRows = useVersionedResource("cards", loadBoosterBases);
+const printRows = useVersionedResource("prints", loadBoosterPrints);
+const resources = [cardRows, printRows];
+const cacheChecking = computed(() => resources.some((resource) => resource.checking.value));
+const cacheStale = computed(() => resources.some((resource) => resource.stale.value));
+const cacheSavedAt = computed(() => {
+  const values = resources.map((resource) => resource.savedAt.value).filter(Boolean).sort();
+  return values[values.length - 1] ?? "";
+});
+const cacheError = computed(() => resources.find((resource) => resource.error.value)?.error.value ?? "");
 
 const activeRecord = computed(() => records.value.find((record) => record.id === activeRecordId.value) ?? null);
 const currentPack = computed(() => {
@@ -112,17 +126,26 @@ function loadSavedRecords(): void {
   }
 }
 
-async function loadCards(): Promise<void> {
-  loading.value = true;
+async function loadCards(force = false): Promise<void> {
+  loading.value = cardPool.value.length === 0;
   loadError.value = "";
   try {
-    cardPool.value = await loadBoosterCards();
+    const [bases, prints] = await Promise.all([cardRows.load(force), printRows.load(force)]);
+    if (!bases || !prints) throw new Error("卡牌资料不可用");
+    cardPool.value = buildBoosterCards(bases, prints);
   } catch (error) {
     loadError.value = error instanceof Error ? error.message : String(error);
   } finally {
     loading.value = false;
   }
 }
+
+watch([cardRows.data, printRows.data], ([bases, prints]) => {
+  if (bases && prints) {
+    cardPool.value = buildBoosterCards(bases, prints);
+    loading.value = false;
+  }
+}, { immediate: true });
 
 onMounted(() => {
   loadSavedRecords();
@@ -279,6 +302,7 @@ function cardFinishLabel(card: OpenedPack["cards"][number]): string {
         <h1>开卡包</h1>
         <p class="booster-subtitle">挑一个系列，撕开封口，看看这一包会带来什么。</p>
       </div>
+      <CacheSyncStatus :checking="cacheChecking" :stale="cacheStale" :saved-at="cacheSavedAt" :error="cacheError" :disabled="loading" @refresh="loadCards(true)" />
       <div class="booster-stamp" aria-hidden="true"><span>随机</span><b>开</b><span>模拟</span></div>
     </div>
 
@@ -292,7 +316,7 @@ function cardFinishLabel(card: OpenedPack["cards"][number]): string {
       <div v-if="loading" class="booster-state" role="status"><span class="state-spinner"></span>正在读取卡牌资料…</div>
       <div v-else-if="loadError" class="booster-state booster-state--error" role="alert">
         <p>读取卡牌资料失败：{{ loadError }}</p>
-        <button class="text-action" type="button" @click="loadCards">重新读取</button>
+        <button class="text-action" type="button" @click="loadCards()">重新读取</button>
       </div>
       <template v-else>
         <section v-if="!activeRecord" class="sealed-panel">

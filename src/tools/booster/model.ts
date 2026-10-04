@@ -95,11 +95,15 @@ function languageRank(language: string): number {
   return 2;
 }
 
-export async function loadBoosterCards(): Promise<BoosterCard[]> {
-  const [bases, prints] = await Promise.all([
-    restSelectAll<Row>("cards_base", { order: "id.asc" }),
-    restSelectAll<Row>("card_prints", { order: "id.asc" }),
-  ]);
+export async function loadBoosterBases(): Promise<Row[]> {
+  return restSelectAll<Row>("cards_base", { order: "id.asc" });
+}
+
+export async function loadBoosterPrints(): Promise<Row[]> {
+  return restSelectAll<Row>("card_prints", { order: "id.asc" });
+}
+
+export function buildBoosterCards(bases: Row[], prints: Row[]): BoosterCard[] {
   const baseById = new Map(bases.map((base) => [text(base.id), base]));
   const printGroups = new Map<string, { base: Row; prints: Row[]; series: BoosterSet; cardId: string; finish: BoosterFinish; cardNo: string }>();
 
@@ -142,6 +146,11 @@ export async function loadBoosterCards(): Promise<BoosterCard[]> {
     });
   }
   return cards;
+}
+
+export async function loadBoosterCards(): Promise<BoosterCard[]> {
+  const [bases, prints] = await Promise.all([loadBoosterBases(), loadBoosterPrints()]);
+  return buildBoosterCards(bases, prints);
 }
 
 export function newId(): string {
@@ -260,4 +269,3 @@ export const FINISH_LABELS: Record<BoosterFinish, string> = {
   signature: "签名超编",
   ultimate: "Ultimate",
 };
-

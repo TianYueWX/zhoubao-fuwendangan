@@ -14,7 +14,7 @@ import CarddexSortDialog from "@/components/carddex/CarddexSortDialog.vue";
 import CardDetailModal from "@/components/carddex/CardDetailModal.vue";
 import PinnedCardsModal from "@/components/carddex/PinnedCardsModal.vue";
 import CardImageViewer from "@/components/carddex/CardImageViewer.vue";
-import { loadCarddexData, printKey } from "@/components/carddex/data";
+import { buildCarddexData, printKey } from "@/components/carddex/data";
 import {
   buildDisplayCards,
   DEFAULT_QUERY,
@@ -22,6 +22,9 @@ import {
   numericBounds,
 } from "@/components/carddex/query";
 import { clearCardImageCache } from "@/components/carddex/imageCache";
+import { restSelectAll } from "@/tools/sources/rest";
+import { useVersionedResource } from "@/tools/sources/versionedCache";
+import CacheSyncStatus from "@/components/CacheSyncStatus.vue";
 import {
   decodeSharedState,
   encodeSharedState,
@@ -71,6 +74,31 @@ const incoming = ref<CarddexQueryState | null>(null);
 const viewerKey = ref("");
 const suggestionIndex = ref(-1);
 const detailFromPins = ref(false);
+type DataRow = Record<string, unknown>;
+const cardRows = useVersionedResource("cards", () =>
+  restSelectAll<DataRow>("cards_base", { order: "card_no.asc" }),
+);
+const printRows = useVersionedResource("prints", () =>
+  restSelectAll<DataRow>("card_prints", { order: "card_no_extend.asc" }),
+);
+const iconRows = useVersionedResource("icons", () =>
+  restSelectAll<DataRow>("card_icons", { order: "name_zh.asc" }).catch(() => []),
+);
+const qaRows = useVersionedResource("qa", async () => {
+  const [entries, links] = await Promise.all([
+    restSelectAll<DataRow>("qa_entries", { columns: "id,source_id,question,answer,question_en,answer_en", order: "id.asc" }).catch(() => []),
+    restSelectAll<DataRow>("qa_entry_cards", { columns: "qa_id,card_no,position", order: "qa_id.asc" }).catch(() => []),
+  ]);
+  return { entries, links };
+});
+const resources = [cardRows, printRows, iconRows, qaRows];
+const cacheChecking = computed(() => resources.some((resource) => resource.checking.value));
+const cacheStale = computed(() => resources.some((resource) => resource.stale.value));
+const cacheSavedAt = computed(() => {
+  const values = resources.map((resource) => resource.savedAt.value).filter(Boolean).sort();
+  return values[values.length - 1] ?? "";
+});
+const cacheError = computed(() => resources.find((resource) => resource.error.value)?.error.value ?? "");
 /** 吸顶基准 = 报头(含栏目条)的实测高度，经 CSS 变量 --carddex-top 下发 */
 const stickyTop = ref(104);
 let sentinelObserver: IntersectionObserver | null = null;
@@ -431,18 +459,11 @@ function observeSentinel(): void {
   );
   sentinelObserver.observe(el);
 }
-async function load(): Promise<void> {
-  loading.value = true;
+async function load(force = false): Promise<void> {
+  loading.value = records.value.length === 0;
   error.value = "";
   try {
-    const data = await loadCarddexData();
-    records.value = data.records;
-    icons.value = data.icons;
-    qaByCardNo.value = data.qaByCardNo;
-    const b = numericBounds(data.records);
-    for (const k of ["energy", "returnEnergy", "power"] as const) {
-      if (query.numeric[k].max === 99) query.numeric[k] = { ...b[k] };
-    }
+    await Promise.all(resources.map((resource) => resource.load(force)));
   } catch (e) {
     error.value = e instanceof Error ? e.message : String(e);
   } finally {
@@ -451,6 +472,19 @@ async function load(): Promise<void> {
     observeSentinel();
   }
 }
+
+watch([cardRows.data, printRows.data, iconRows.data, qaRows.data], ([bases, prints, iconData, qaData]) => {
+  if (!bases || !prints || !iconData || !qaData) return;
+  const data = buildCarddexData(bases, prints, iconData, qaData.entries, qaData.links);
+  records.value = data.records;
+  icons.value = data.icons;
+  qaByCardNo.value = data.qaByCardNo;
+  const bounds = numericBounds(data.records);
+  for (const key of ["energy", "returnEnergy", "power"] as const) {
+    if (query.numeric[key].max === 99) query.numeric[key] = { ...bounds[key] };
+  }
+  loading.value = false;
+}, { immediate: true });
 
 onMounted(() => {
   teleportReady.value = true;
@@ -480,6 +514,7 @@ onBeforeUnmount(() => {
   >
     <Teleport v-if="teleportReady" to="#global-page-actions">
       <div class="global-actions">
+        <CacheSyncStatus :checking="cacheChecking" :stale="cacheStale" :saved-at="cacheSavedAt" :error="cacheError" :disabled="loading" @refresh="load(true)" />
         <button @click="pinnedOpen = true">
           ◆ <span>{{ labels.pinned }}</span
           ><b>{{ pins.length }}</b>
@@ -622,7 +657,7 @@ onBeforeUnmount(() => {
           </div>
           <div v-else-if="error" class="state error">
             <p>{{ error }}</p>
-            <button @click="load">{{ labels.retry }}</button>
+            <button @click="load()">{{ labels.retry }}</button>
           </div>
           <template v-else>
             <div v-if="visible.length" class="card-grid">

@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
 import { restSelectAll } from "@/tools/sources/rest";
+import { useVersionedResource } from "@/tools/sources/versionedCache";
+import CacheSyncStatus from "@/components/CacheSyncStatus.vue";
 import type { RawCardBaseRow, RawCardPrintRow } from "@/types";
 
 type Mode = "text" | "image";
@@ -43,6 +45,20 @@ const notice = ref("");
 const imageStatus = ref<"idle" | "loading" | "loaded" | "error">("idle");
 const cardDataLoading = ref(false);
 const cardDataError = ref("");
+const cardRows = useVersionedResource<RawCardBaseRow[]>("cards", () =>
+  restSelectAll<RawCardBaseRow>("cards_base", { order: "card_no.asc,id.asc" }),
+);
+const printRows = useVersionedResource<RawCardPrintRow[]>("prints", () =>
+  restSelectAll<RawCardPrintRow>("card_prints", { order: "card_no_extend.asc,id.asc" }),
+);
+const resources = [cardRows, printRows];
+const cacheChecking = computed(() => resources.some((resource) => resource.checking.value));
+const cacheStale = computed(() => resources.some((resource) => resource.stale.value));
+const cacheSavedAt = computed(() => {
+  const values = resources.map((resource) => resource.savedAt.value).filter(Boolean).sort();
+  return values[values.length - 1] ?? "";
+});
+const cacheError = computed(() => resources.find((resource) => resource.error.value)?.error.value ?? "");
 const cardItems = ref<GameItem[]>([]);
 
 function cell(row: RawCardBaseRow | RawCardPrintRow, key: string): string {
@@ -136,14 +152,21 @@ const canResumeText = computed(() => hasStoredSession("text"));
 const canResumeImage = computed(() => hasStoredSession("image"));
 const cardPrintCount = computed(() => allItems.value.length);
 
-async function loadCards(): Promise<void> {
-  cardDataLoading.value = true;
+async function loadCards(force = false): Promise<void> {
+  cardDataLoading.value = cardItems.value.length === 0;
   cardDataError.value = "";
   try {
-    const [bases, prints] = await Promise.all([
-      restSelectAll<RawCardBaseRow>("cards_base", { order: "card_no.asc,id.asc" }),
-      restSelectAll<RawCardPrintRow>("card_prints", { order: "card_no_extend.asc,id.asc" }),
-    ]);
+    const [bases, prints] = await Promise.all([cardRows.load(force), printRows.load(force)]);
+    if (!bases || !prints) throw new Error("卡牌资料不可用");
+    buildGameCards(bases, prints);
+  } catch (error) {
+    cardDataError.value = error instanceof Error ? error.message : String(error);
+  } finally {
+    cardDataLoading.value = false;
+  }
+}
+
+function buildGameCards(bases: RawCardBaseRow[], prints: RawCardPrintRow[]): void {
     const baseById = new Map(bases.map((base) => [cell(base, "id"), base]));
     cardItems.value = prints.flatMap((print) => {
       if (cell(print, "language").toUpperCase() !== "SC") return [];
@@ -164,12 +187,14 @@ async function loadCards(): Promise<void> {
         base,
       }];
     });
-  } catch (error) {
-    cardDataError.value = error instanceof Error ? error.message : String(error);
-  } finally {
+}
+
+watch([cardRows.data, printRows.data], ([bases, prints]) => {
+  if (bases && prints) {
+    buildGameCards(bases, prints);
     cardDataLoading.value = false;
   }
-}
+}, { immediate: true });
 
 onMounted(() => { void loadCards(); });
 
@@ -405,6 +430,7 @@ const nextLabel = computed(() => {
   <main class="games-page">
     <div class="games-page__frame" aria-hidden="true"></div>
     <header class="games-heading">
+      <CacheSyncStatus :checking="cacheChecking" :stale="cacheStale" :saved-at="cacheSavedAt" :error="cacheError" :disabled="cardDataLoading" @refresh="loadCards(true)" />
       <button v-if="page !== 'menu'" class="games-back" type="button" @click="leaveToMenu">← 小游戏菜单</button>
       <p class="games-eyebrow">符文档案 · CARD PLAY</p>
       <h1 class="games-title">小游戏</h1>
@@ -468,7 +494,7 @@ const nextLabel = computed(() => {
           </div>
         </div>
         <p v-if="cardDataLoading" class="games-empty" role="status">正在从 Supabase 读取卡牌资料…</p>
-        <p v-else-if="cardDataError" class="games-empty" role="alert">读取卡牌资料失败：{{ cardDataError }} <button class="inline-retry" type="button" @click="loadCards">重试</button></p>
+        <p v-else-if="cardDataError" class="games-empty" role="alert">读取卡牌资料失败：{{ cardDataError }} <button class="inline-retry" type="button" @click="loadCards()">重试</button></p>
         <div v-else-if="allSeries.length" class="series-list">
           <button v-for="series in allSeries" :key="series" type="button" class="series-chip"
             :class="{ 'is-selected': selectedSeries.includes(series) }" :aria-pressed="selectedSeries.includes(series)"

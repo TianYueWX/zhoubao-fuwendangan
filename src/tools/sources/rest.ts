@@ -155,7 +155,20 @@ async function call<T>(table: string, opts: CallOptions): Promise<{ rows: T[]; t
   if (!text) return { rows: [], total };
   try {
     const parsed: unknown = JSON.parse(text);
-    return { rows: (Array.isArray(parsed) ? parsed : [parsed]) as T[], total };
+    const rows = (Array.isArray(parsed) ? parsed : [parsed]) as T[];
+    if (opts.method !== 'GET' && rows.length) {
+      const category = VERSION_FOR_TABLE[table];
+      if (category) {
+        try {
+          await touchVersion(category);
+        } catch (error) {
+          // Data has already been committed. Keep the successful write result visible;
+          // the next page load will retry the version check and can report stale cache.
+          console.warn(`[supabase] ${table} 已写入，但 version.${category} 更新失败`, error);
+        }
+      }
+    }
+    return { rows, total };
   } catch {
     return { rows: [], total };
   }
@@ -290,6 +303,16 @@ export async function restDelete<T = Record<string, unknown>>(
 
 /** 分类名与 version.name 一一对应 */
 export type VersionCategory = 'cards' | 'prints' | 'icons' | 'rules' | 'series' | 'qa';
+
+const VERSION_FOR_TABLE: Record<string, VersionCategory> = {
+  cards_base: 'cards',
+  card_prints: 'prints',
+  card_icons: 'icons',
+  rules: 'rules',
+  series: 'series',
+  qa_entries: 'qa',
+  qa_entry_cards: 'qa'
+};
 
 export const VERSION_CATEGORIES: readonly VersionCategory[] = [
   'cards',

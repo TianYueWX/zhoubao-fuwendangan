@@ -6,7 +6,9 @@ import { bookCounts, matchRules } from "@/tools/admin/rulesTree";
 import type { Rule } from "@/tools/admin/types";
 import { restSelectAll } from "@/tools/sources/rest";
 import { readSupabaseConfig } from "@/tools/sources/config";
+import { useVersionedResource } from "@/tools/sources/versionedCache";
 import QaRichText from "@/components/admin/QaRichText.vue";
+import CacheSyncStatus from "@/components/CacheSyncStatus.vue";
 
 type Scope = "all" | "rules" | "qa";
 
@@ -32,6 +34,11 @@ interface CardLabel {
   card_name_cn: string | null;
 }
 
+interface QaBundle {
+  entries: QaEntry[];
+  links: QaLink[];
+}
+
 interface QaDisplay extends QaEntry {
   cards: string[];
 }
@@ -45,6 +52,23 @@ const scope = ref<Scope>("all");
 const selectedBook = ref("");
 const browseMode = ref(false);
 const expandedQa = ref<Set<string>>(new Set());
+const rulesResource = useVersionedResource("rules", listAllRules);
+const qaResource = useVersionedResource<QaBundle>("qa", async () => {
+  const [entries, links] = await Promise.all([
+    restSelectAll<QaEntry>("qa_entries", {
+      columns: "id,source,source_id,question,answer,question_en,answer_en,updated_at",
+      order: "updated_at.desc,id.asc",
+    }),
+    restSelectAll<QaLink>("qa_entry_cards", {
+      columns: "qa_id,card_no,position",
+      order: "qa_id.asc,position.asc",
+    }),
+  ]);
+  return { entries, links };
+});
+const cardNamesResource = useVersionedResource("cards", () =>
+  restSelectAll<CardLabel>("cards_base", { order: "card_no.asc,id.asc" }),
+);
 
 const scopeOptions: Array<{ value: Scope; label: string }> = [
   { value: "all", label: "全部" },
@@ -106,6 +130,18 @@ const searchResults = computed(() => {
 
 const featuredQa = computed(() => qa.value.slice(0, 8));
 const isConfigured = computed(() => Boolean(readSupabaseConfig()));
+const resources = [rulesResource, qaResource, cardNamesResource];
+const cacheChecking = computed(() => resources.some((resource) => resource.checking.value));
+const cacheStale = computed(() => resources.some((resource) => resource.stale.value));
+const cacheSavedAt = computed(() => {
+  const values = resources.map((resource) => resource.savedAt.value).filter(Boolean).sort();
+  return values[values.length - 1] ?? "";
+});
+const cacheError = computed(() => resources.find((resource) => resource.error.value)?.error.value ?? "");
+
+async function refreshReferenceData(): Promise<void> {
+  await Promise.allSettled(resources.map((resource) => resource.load(true)));
+}
 
 function cardLabel(cardNo: string): string {
   return cardNo;
@@ -156,28 +192,15 @@ async function loadReferenceData(): Promise<void> {
   }
 
   try {
-    const [ruleRows, qaRows, linkRows, cardRows] = await Promise.all([
-      listAllRules(),
-      restSelectAll<QaEntry>("qa_entries", {
-        columns:
-          "id,source,source_id,question,answer,question_en,answer_en,updated_at",
-        order: "updated_at.desc,id.asc",
-      }),
-      restSelectAll<QaLink>("qa_entry_cards", {
-        columns: "qa_id,card_no,position",
-        order: "qa_id.asc,position.asc",
-      }),
-      restSelectAll<CardLabel>("cards_base", {
-        columns: "card_no,card_name_cn",
-        order: "card_no.asc",
-      }),
+    const [ruleRows, qaBundle, cardRows] = await Promise.all([
+      rulesResource.load(), qaResource.load(), cardNamesResource.load(),
     ]);
-
+    if (!ruleRows || !qaBundle || !cardRows) throw new Error("资料加载失败");
     const cardNameByNo = new Map(
       cardRows.map((card) => [card.card_no, card.card_name_cn || card.card_no]),
     );
     const cardsByQa = new Map<string, string[]>();
-    for (const link of linkRows) {
+    for (const link of qaBundle.links) {
       const cards = cardsByQa.get(link.qa_id) ?? [];
       const label = cardNameByNo.get(link.card_no);
       cards.push(label ? `${link.card_no} · ${label}` : link.card_no);
@@ -185,7 +208,7 @@ async function loadReferenceData(): Promise<void> {
     }
 
     rules.value = ruleRows;
-    qa.value = qaRows.map((item) => ({
+    qa.value = qaBundle.entries.map((item) => ({
       ...item,
       cards: cardsByQa.get(item.id) ?? [],
     }));
@@ -195,6 +218,22 @@ async function loadReferenceData(): Promise<void> {
     loading.value = false;
   }
 }
+
+// 订阅本地缓存：版本检查尚未完成时也能先渲染已有资料。
+watch(rulesResource.data, (rows) => { if (rows) rules.value = rows; }, { immediate: true });
+watch([qaResource.data, cardNamesResource.data], ([bundle, cards]) => {
+  if (!bundle || !cards) return;
+  const labels = new Map(cards.map((card) => [card.card_no, card.card_name_cn || card.card_no]));
+  const linksByQa = new Map<string, string[]>();
+  for (const link of bundle.links) {
+    const list = linksByQa.get(link.qa_id) ?? [];
+    const label = labels.get(link.card_no);
+    list.push(label ? `${link.card_no} · ${label}` : link.card_no);
+    linksByQa.set(link.qa_id, list);
+  }
+  qa.value = bundle.entries.map((entry) => ({ ...entry, cards: linksByQa.get(entry.id) ?? [] }));
+  loading.value = false;
+}, { immediate: true });
 
 onMounted(() => void loadReferenceData());
 </script>
@@ -223,6 +262,10 @@ onMounted(() => void loadReferenceData());
         <span class="reference-seal-caption">RULES / QA</span>
       </div>
     </header>
+
+    <div class="flex justify-end mt-3">
+      <CacheSyncStatus :checking="cacheChecking" :stale="cacheStale" :saved-at="cacheSavedAt" :error="cacheError" :disabled="loading" @refresh="refreshReferenceData" />
+    </div>
 
     <section class="reference-search card" aria-label="检索规则与 QA">
       <div class="reference-search-label">
