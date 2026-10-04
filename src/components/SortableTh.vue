@@ -9,6 +9,7 @@
  * 用法:<SortableTh :sort="sort" col-key="rate" label="携带率" align="right" class-name="w-[26%]" />
  */
 import { computed } from 'vue';
+import { ArrowDown, ArrowUp } from '@lucide/vue';
 import type { SortController } from '@/composables/useTableSort';
 
 interface Props {
@@ -59,9 +60,8 @@ function onSort(): void {
     @keydown.space.prevent="onSort"
   >
     <slot>{{ label }}</slot>
-    <span v-if="sortable && active" class="ml-1 text-xs" aria-hidden="true">
-      {{ sort.indicator(colKey) }}
-    </span>
+    <ArrowUp v-if="sortable && active && sort.indicator(colKey) === '↑'" class="ml-1 inline" :size="12" aria-hidden="true" />
+    <ArrowDown v-else-if="sortable && active" class="ml-1 inline" :size="12" aria-hidden="true" />
   </th>
 </template>
 

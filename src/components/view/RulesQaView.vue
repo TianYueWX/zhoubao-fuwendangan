@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
+import { ArrowLeft, ArrowRight, ChevronDown, ChevronRight, Minus, Plus, Search } from "@lucide/vue";
 import { navigate } from "@/router/hash";
 import { listAllRules } from "@/tools/admin/rules";
 import { bookCounts, matchRules } from "@/tools/admin/rulesTree";
@@ -244,7 +245,7 @@ onMounted(() => void loadReferenceData());
       <div class="reference-hero-copy">
         <div class="flex items-center gap-3 text-[11px] text-ink-faint">
           <button class="hover:text-brand transition-colors" @click="navigate({ view: 'home' })">
-            ← 返回首页
+            <ArrowLeft :size="14" aria-hidden="true" /> 返回首页
           </button>
           <span aria-hidden="true">/</span>
           <span class="font-latin tracking-[0.22em] uppercase">REFERENCE DESK</span>
@@ -275,7 +276,7 @@ onMounted(() => void loadReferenceData());
       <div class="reference-search-row">
         <label class="reference-search-box">
           <span class="sr-only">搜索规则编号、文本或 QA</span>
-          <span class="reference-search-icon" aria-hidden="true">⌕</span>
+          <Search class="reference-search-icon" aria-hidden="true" />
           <input
             v-model="query"
             type="search"
@@ -401,7 +402,7 @@ onMounted(() => void loadReferenceData());
               <button type="button" class="reference-qa-trigger" @click="toggleQa(result.item.id)">
                 <span class="result-type result-type-qa">QA</span>
                 <span class="reference-qa-question">{{ result.item.question }}</span>
-                <span class="reference-qa-chevron" :class="{ open: expandedQa.has(result.item.id) }">⌄</span>
+                <ChevronDown v-if="expandedQa.has(result.item.id)" class="reference-qa-chevron open" :size="15" aria-hidden="true" /><ChevronRight v-else class="reference-qa-chevron" :size="15" aria-hidden="true" />
               </button>
               <div v-if="expandedQa.has(result.item.id)" class="reference-qa-answer">
                 <div class="reference-answer-label">ANSWER</div>
@@ -437,7 +438,7 @@ onMounted(() => void loadReferenceData());
               <span class="reference-book-index">{{ String(books.indexOf(book) + 1).padStart(2, '0') }}</span>
               <span class="reference-book-name">{{ book.name }}</span>
               <span class="reference-book-count">{{ book.count }} 条</span>
-              <span class="reference-book-arrow" aria-hidden="true">↗</span>
+              <ArrowRight class="reference-book-arrow" :size="14" aria-hidden="true" />
             </button>
           </div>
         </section>
@@ -448,7 +449,7 @@ onMounted(() => void loadReferenceData());
               <p class="eyebrow">RECENT QA</p>
               <h2 class="font-display text-2xl font-black mt-1">常见问答</h2>
             </div>
-            <button class="text-xs text-brand hover:underline" @click="browseQa">查看全部 QA →</button>
+            <button class="text-xs text-brand hover:underline" @click="browseQa">查看全部 QA <ArrowRight :size="13" aria-hidden="true" /></button>
           </div>
           <div class="reference-qa-list">
             <article v-for="item in featuredQa" :key="item.id" class="reference-qa-row">
@@ -457,7 +458,7 @@ onMounted(() => void loadReferenceData());
                 <span>{{ item.question }}</span>
                 <span v-if="expandedQa.has(item.id)" class="reference-qa-row-answer"><QaRichText :text="item.answer" /></span>
               </button>
-              <span class="reference-qa-row-arrow" aria-hidden="true">{{ expandedQa.has(item.id) ? '−' : '+' }}</span>
+              <Minus v-if="expandedQa.has(item.id)" class="reference-qa-row-arrow" :size="14" aria-hidden="true" /><Plus v-else class="reference-qa-row-arrow" :size="14" aria-hidden="true" />
             </article>
             <p v-if="!featuredQa.length" class="text-sm text-ink-faint py-4">当前还没有已发布的 QA 条目。</p>
           </div>
@@ -507,7 +508,7 @@ onMounted(() => void loadReferenceData());
 .reference-search-row { display: flex; gap: 14px; align-items: center; margin-top: 13px; }
 .reference-search-box { display: flex; align-items: center; flex: 1; min-width: 0; height: 50px; padding: 0 14px; border: 1px solid var(--color-card-border); background: var(--color-page-bg); border-radius: 8px; }
 .reference-search-box:focus-within { border-color: var(--color-brand); box-shadow: 0 0 0 3px var(--color-brand-soft); }
-.reference-search-icon { font-size: 28px; line-height: 1; color: var(--color-brand); transform: rotate(-18deg); margin-right: 9px; }
+.reference-search-icon { width: 18px; height: 18px; flex: none; color: var(--color-brand); margin-right: 9px; }
 .reference-search-box input { flex: 1; min-width: 0; background: transparent; outline: none; font-size: 14px; color: var(--color-text-primary); }
 .reference-search-box input::placeholder { color: var(--color-text-subtle); }
 .reference-clear { font-size: 12px; color: var(--color-text-subtle); }

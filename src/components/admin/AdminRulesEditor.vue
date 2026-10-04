@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ArrowRight } from '@lucide/vue';
 /**
  * AdminRulesEditor.vue · 规则校勘(P3)
  *
@@ -322,14 +323,14 @@ onMounted(loadRules);
               {{ String(b.count).padStart(4, '0') }} 条
             </span>
             <h2 class="font-display font-bold text-ink text-[16px] mt-2.5">{{ b.name }}</h2>
-            <span class="inline-block mt-3 text-[12px] text-brand">进入 →</span>
+            <span class="inline-block mt-3 text-[12px] text-brand">进入 <ArrowRight :size="13" aria-hidden="true" /></span>
           </button>
           <button class="card card-hover text-left p-5 border-dashed" @click="openBook('')">
             <span class="font-latin text-[11px] tracking-[0.22em] text-ink-faint tabular-nums">
               {{ String(allRules.length).padStart(4, '0') }} 条
             </span>
             <h2 class="font-display font-bold text-ink text-[16px] mt-2.5">全部规则书</h2>
-            <span class="inline-block mt-3 text-[12px] text-brand">进入 →</span>
+            <span class="inline-block mt-3 text-[12px] text-brand">进入 <ArrowRight :size="13" aria-hidden="true" /></span>
           </button>
         </div>
       </section>

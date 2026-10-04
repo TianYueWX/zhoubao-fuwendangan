@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
+import { Circle, CircleDashed, CircleDot, CircleX, Minus, Plus, X } from "@lucide/vue";
 import type {
   ActiveFilter,
   CarddexLocale,
@@ -91,6 +92,23 @@ function reset(): void {
   draftFilters.value = [];
   draftNumeric.value = clone(props.bounds);
 }
+function rangeStyle(type: "energy" | "returnEnergy" | "power"): Record<string, string> {
+  const { min, max } = props.bounds[type];
+  const span = Math.max(1, max - min);
+  const selected = draftNumeric.value[type];
+  return {
+    "--range-start": `${((selected.min - min) / span) * 100}%`,
+    "--range-end": `${((selected.max - min) / span) * 100}%`,
+  };
+}
+function numericLabel(type: "energy" | "returnEnergy" | "power"): string {
+  if (type === "energy") return localeText("法力", "Energy");
+  if (type === "returnEnergy") return localeText("符能", "Rune");
+  return localeText("战力", "Power");
+}
+function localeText(zh: string, en: string): string {
+  return props.locale === "zh" ? zh : en;
+}
 function selectedCount(type: FilterType): number {
   return draftFilters.value.filter((f) => f.type === type).length;
 }
@@ -134,20 +152,66 @@ function applyDraft(): void {
       </div>
       <div class="legend">
         <span class="include"
-          ><b>○</b>{{ locale === "zh" ? "可有" : "Any" }}</span
+          ><b><Circle :size="13" /></b>{{ locale === "zh" ? "可有" : "Any" }}</span
         >
         <span class="require"
-          ><b>●</b>{{ locale === "zh" ? "必有" : "All" }}</span
+          ><b><CircleDot :size="13" /></b>{{ locale === "zh" ? "必有" : "All" }}</span
         >
         <span class="exclude"
-          ><b>×</b>{{ locale === "zh" ? "排除" : "Exclude" }}</span
+          ><b><CircleX :size="13" /></b>{{ locale === "zh" ? "排除" : "Exclude" }}</span
         >
       </div>
       <button type="button" class="mobile-close" @click="emit('close')">
-        ✕
+        <X :size="18" aria-hidden="true" />
       </button>
     </header>
     <div class="filter-scroll">
+      <section class="filter-section numeric-section">
+        <div
+          v-for="k in ['energy', 'returnEnergy', 'power'] as const"
+          :key="k"
+          class="range-row"
+          :style="rangeStyle(k)"
+        >
+          <label>{{ numericLabel(k) }}</label>
+          <div class="range-values">
+            <input
+              v-model.number="draftNumeric[k].min"
+              type="number"
+              :aria-label="`${numericLabel(k)} ${localeText('最小值', 'minimum')}`"
+              :min="bounds[k].min"
+              :max="draftNumeric[k].max"
+            /><span>—</span
+            ><input
+              v-model.number="draftNumeric[k].max"
+              type="number"
+              :aria-label="`${numericLabel(k)} ${localeText('最大值', 'maximum')}`"
+              :min="draftNumeric[k].min"
+              :max="bounds[k].max"
+            />
+          </div>
+          <div class="range-sliders">
+            <input
+              v-model.number="draftNumeric[k].min"
+              class="range-min"
+              type="range"
+              :aria-label="`${numericLabel(k)} ${localeText('最小值', 'minimum')}`"
+              :min="bounds[k].min"
+              :max="draftNumeric[k].max"
+              step="1"
+            />
+            <input
+              v-model.number="draftNumeric[k].max"
+              class="range-max"
+              type="range"
+              :aria-label="`${numericLabel(k)} ${localeText('最大值', 'maximum')}`"
+              :min="draftNumeric[k].min"
+              :max="bounds[k].max"
+              step="1"
+            />
+          </div>
+        </div>
+      </section>
       <section v-for="type in order" :key="type" class="filter-section">
         <button
           class="section-toggle"
@@ -156,7 +220,7 @@ function applyDraft(): void {
         >
           <span>{{ labels[type][locale === "zh" ? 0 : 1] }}</span>
           <small v-if="selectedCount(type)">{{ selectedCount(type) }}</small>
-          <b>{{ isOpen(type) ? "−" : "+" }}</b>
+          <b><Minus v-if="isOpen(type)" :size="14" /><Plus v-else :size="14" /></b>
         </button>
         <div v-if="isOpen(type)" class="filter-options">
           <button
@@ -199,68 +263,10 @@ function applyDraft(): void {
               v-else-if="option === 'colorless'"
               class="colorless-mark"
               aria-hidden="true"
-              >◌</span
+              ><CircleDashed :size="14" aria-hidden="true" /></span
             >
-            <em v-if="mode(type, option) && type !== 'color'">{{
-              mode(type, option) === "include"
-                ? "○"
-                : mode(type, option) === "require"
-                  ? "●"
-                  : "×"
-            }}</em>
+            <em v-if="mode(type, option) && type !== 'color'"><Circle v-if="mode(type, option) === 'include'" :size="12" /><CircleDot v-else-if="mode(type, option) === 'require'" :size="12" /><CircleX v-else :size="12" /></em>
           </button>
-        </div>
-      </section>
-      <section class="filter-section numeric-section">
-        <h3>{{ locale === "zh" ? "数值范围" : "Numeric ranges" }}</h3>
-        <div
-          v-for="k in ['energy', 'returnEnergy', 'power'] as const"
-          :key="k"
-          class="range-row"
-        >
-          <label>{{
-            k === "energy"
-              ? locale === "zh"
-                ? "法力"
-                : "Energy"
-              : k === "returnEnergy"
-                ? locale === "zh"
-                  ? "符能"
-                  : "Rune"
-                : locale === "zh"
-                  ? "战力"
-                  : "Power"
-          }}</label>
-          <div class="range-values">
-            <input
-              v-model.number="draftNumeric[k].min"
-              type="number"
-              :min="bounds[k].min"
-              :max="draftNumeric[k].max"
-            /><span>—</span
-            ><input
-              v-model.number="draftNumeric[k].max"
-              type="number"
-              :min="draftNumeric[k].min"
-              :max="bounds[k].max"
-            />
-          </div>
-          <div class="range-sliders">
-            <input
-              v-model.number="draftNumeric[k].min"
-              type="range"
-              :min="bounds[k].min"
-              :max="bounds[k].max"
-              step="1"
-            />
-            <input
-              v-model.number="draftNumeric[k].max"
-              type="range"
-              :min="bounds[k].min"
-              :max="bounds[k].max"
-              step="1"
-            />
-          </div>
         </div>
       </section>
     </div>
@@ -460,46 +466,116 @@ function applyDraft(): void {
   filter: brightness(0) invert(1);
 }
 .numeric-section {
-  padding: 15px 0 2px;
-}
-.numeric-section h3 {
-  margin-bottom: 14px;
-  color: var(--color-text-primary);
-  font-size: 13px;
-  font-weight: 700;
+  padding: 15px 0 9px;
 }
 .range-row {
-  margin-bottom: 20px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px 12px;
+  margin-bottom: 13px;
 }
 .range-row > label {
+  grid-column: 1;
   font-size: 12px;
   font-weight: 650;
   color: var(--color-text-muted);
 }
 .range-values {
-  float: right;
+  grid-column: 2;
   display: flex;
   align-items: center;
   gap: 5px;
 }
 .range-values input {
-  width: 49px;
-  padding: 3px 4px;
+  width: 54px;
+  height: 27px;
+  padding: 3px;
   border: 1px solid var(--color-card-border);
   border-radius: 5px;
   background: var(--color-page-bg);
   text-align: center;
   font-size: 12px;
 }
-.range-sliders {
-  clear: both;
-  display: grid;
-  gap: 2px;
-  padding-top: 6px;
+.range-values input:focus-visible {
+  border-color: var(--color-brand);
+  outline: 2px solid var(--color-brand-soft);
+  outline-offset: 1px;
 }
-.range-sliders input {
+.range-sliders {
+  position: relative;
+  grid-column: 1 / -1;
+  height: 20px;
+  margin: 0 7px;
+}
+.range-sliders::before,
+.range-sliders::after {
+  position: absolute;
+  top: 8px;
+  height: 4px;
+  border-radius: 99px;
+  content: "";
+  pointer-events: none;
+}
+.range-sliders::before {
+  right: 0;
+  left: 0;
+  background: var(--color-panel-border);
+}
+.range-sliders::after {
+  left: var(--range-start);
+  right: calc(100% - var(--range-end));
+  background: var(--color-brand);
+}
+.range-sliders input[type="range"] {
+  position: absolute;
+  inset: 0;
   width: 100%;
-  accent-color: var(--color-brand);
+  height: 20px;
+  margin: 0;
+  appearance: none;
+  background: transparent;
+  pointer-events: none;
+  outline: none;
+}
+.range-min {
+  z-index: 2;
+}
+.range-max {
+  z-index: 3;
+}
+.range-sliders input[type="range"]:focus-visible {
+  z-index: 4;
+}
+.range-sliders input[type="range"]::-webkit-slider-runnable-track {
+  height: 4px;
+  background: transparent;
+}
+.range-sliders input[type="range"]::-moz-range-track {
+  height: 4px;
+  background: transparent;
+}
+.range-sliders input[type="range"]::-webkit-slider-thumb {
+  width: 14px;
+  height: 14px;
+  margin-top: -5px;
+  appearance: none;
+  border: 2px solid var(--color-brand);
+  border-radius: 50%;
+  background: var(--color-card-bg);
+  box-shadow: 0 1px 4px var(--color-shadow);
+  pointer-events: auto;
+  cursor: grab;
+}
+.range-sliders input[type="range"]::-moz-range-thumb {
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--color-brand);
+  border-radius: 50%;
+  background: var(--color-card-bg);
+  box-shadow: 0 1px 4px var(--color-shadow);
+  pointer-events: auto;
+  cursor: grab;
 }
 .filter-foot {
   display: grid;

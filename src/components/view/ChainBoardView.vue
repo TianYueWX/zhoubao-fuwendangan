@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ArrowLeft } from '@lucide/vue';
 import ChainShareDialog from '../chain/ChainShareDialog.vue';
 /**
  * ChainBoardView.vue · 结算链推演(主视图)
@@ -819,7 +820,7 @@ function modeOf(area: ChainAreaKey): CardDisplayMode {
     </div>
 
     <!-- 返回首页:带上未保存拦截 -->
-    <button type="button" class="back-home" title="返回首页" @click="goHome">← 首页</button>
+    <button type="button" class="back-home" title="返回首页" @click="goHome"><ArrowLeft :size="14" aria-hidden="true" /> 首页</button>
   </div>
 </template>
 

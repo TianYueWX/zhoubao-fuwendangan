@@ -7,6 +7,7 @@
  * 无数据包时:给出「先载入数据包」的引导,并指向数据管理工具(上传只在工具内)。
  */
 import { computed } from 'vue';
+import { ArrowRight } from '@lucide/vue';
 import { store } from '@/store/analysis';
 import { navigate } from '@/router/hash';
 import { buildIssueArticle } from '@/core/issue';
@@ -72,7 +73,7 @@ function openIssue(id: string): void {
       </p>
       <button class="btn-brand mt-6 px-5 py-2.5 text-sm" @click="navigate({ view: 'import' })">
         进入数据管理
-        <span aria-hidden="true">→</span>
+        <ArrowRight :size="14" aria-hidden="true" />
       </button>
       <p class="text-[11px] text-ink-faint mt-4">数据仅存于本机浏览器,刷新后需重新载入</p>
     </section>
@@ -104,7 +105,7 @@ function openIssue(id: string): void {
         <div class="mt-6">
           <button class="btn-brand px-5 py-2 text-sm" @click="openIssue(current.id)">
             阅读本期周报
-            <span aria-hidden="true">→</span>
+            <ArrowRight :size="14" aria-hidden="true" />
           </button>
         </div>
       </section>
@@ -140,7 +141,7 @@ function openIssue(id: string): void {
             class="btn-ghost px-3 py-1.5 text-xs"
             @click="navigate({ view: 'archive' })"
           >
-            查看全部往期 →
+            查看全部往期 <ArrowRight :size="14" aria-hidden="true" />
           </button>
         </div>
         <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -182,7 +183,7 @@ function openIssue(id: string): void {
                 <span class="min-w-0">{{ bl.text }}</span>
               </li>
             </ul>
-            <span class="text-[11px] text-brand font-medium mt-3">阅读本期 →</span>
+            <span class="text-[11px] text-brand font-medium mt-3">阅读本期 <ArrowRight :size="12" aria-hidden="true" /></span>
           </article>
         </div>
       </section>

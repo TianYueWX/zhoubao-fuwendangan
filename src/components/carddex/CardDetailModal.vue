@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { ArrowLeft, ArrowRight, Bookmark, BookmarkCheck, MessageCircle, X } from "@lucide/vue";
 import CarddexImage from "./CarddexImage.vue";
 import { printKey } from "./data";
 import { richEffectText } from "./richText";
@@ -145,7 +146,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey));
         :aria-label="item.base.nameCn"
       >
         <header class="detail-mobile-head">
-          <button type="button" @click="emit('close')">←</button>
+          <button type="button" aria-label="关闭详情" @click="emit('close')"><ArrowLeft :size="18" /></button>
           <strong>{{
             locale === "zh"
               ? item.base.nameCn
@@ -160,15 +161,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey));
               :aria-pressed="panel === 'qa'"
               @click="togglePanel"
             >
-              <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
-                <path
-                  d="M2 3.1h12v7.1H6.4L3.1 13.5v-3.3H2z"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="1.3"
-                  stroke-linejoin="round"
-                />
-              </svg>
+              <MessageCircle :size="14" aria-hidden="true" />
               <span class="qa-badge">{{ qa.length }}</span>
             </button>
             <button
@@ -177,7 +170,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey));
               :class="{ pinned: isPinned(selected) }"
               @click="emit('pin', selected)"
             >
-              ◆
+              <BookmarkCheck v-if="isPinned(selected)" :size="16" aria-hidden="true" /><Bookmark v-else :size="16" aria-hidden="true" />
             </button>
           </div>
         </header>
@@ -249,19 +242,11 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey));
               :aria-pressed="panel === 'qa'"
               @click="togglePanel"
             >
-              <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
-                <path
-                  d="M2 3.1h12v7.1H6.4L3.1 13.5v-3.3H2z"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="1.3"
-                  stroke-linejoin="round"
-                />
-              </svg>
+              <MessageCircle :size="14" aria-hidden="true" />
               <span class="qa-badge">{{ qa.length }}</span>
             </button>
             <button type="button" :disabled="!canPrev || panel === 'qa'" @click="emit('prev')">
-              ← {{ locale === "zh" ? "上一张" : "Previous" }}
+              <ArrowLeft :size="14" aria-hidden="true" /> {{ locale === "zh" ? "上一张" : "Previous" }}
             </button>
             <button
               v-if="selected"
@@ -269,7 +254,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey));
               :class="{ pinned: isPinned(selected) }"
               @click="emit('pin', selected)"
             >
-              ◆
+              <BookmarkCheck v-if="isPinned(selected)" :size="15" aria-hidden="true" /><Bookmark v-else :size="15" aria-hidden="true" />
               {{
                 isPinned(selected)
                   ? locale === "zh"
@@ -279,10 +264,10 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey));
               }}
             </button>
             <button type="button" :disabled="!canNext || panel === 'qa'" @click="emit('next')">
-              {{ locale === "zh" ? "下一张" : "Next" }} →
+              {{ locale === "zh" ? "下一张" : "Next" }} <ArrowRight :size="14" aria-hidden="true" />
             </button>
             <button class="close" type="button" @click="emit('close')">
-              ✕
+              <X :size="17" aria-hidden="true" />
             </button>
           </div>
           <template v-if="panel === 'info'">
@@ -826,6 +811,13 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey));
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+  .detail-mobile-head > button {
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    padding: 0;
   }
   .detail-art-column {
     padding: 16px;

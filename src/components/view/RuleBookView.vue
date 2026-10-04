@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import QRCode from "qrcode";
+import { Minus, MoreVertical, Plus, Search, Star, X } from "@lucide/vue";
 import { navigate, routeToHash } from "@/router/hash";
 import { store } from "@/store/analysis";
 import { listAllRules } from "@/tools/admin/rules";
@@ -479,12 +480,12 @@ watch(bookName, () => {
     <div v-else-if="error" class="state-card error">{{ error }}</div>
     <template v-else>
       <div class="reader-controls" aria-label="阅读设置">
-        <button class="icon-control" aria-label="搜索规则" title="搜索规则" @click="openSearch">⌕</button>
+        <button class="icon-control" aria-label="搜索规则" title="搜索规则" @click="openSearch"><Search :size="18" aria-hidden="true" /></button>
         <div class="language-switch" aria-label="语言模式">
           <button v-for="option in [{ id: 'zh', label: '中' }, { id: 'en', label: '英' }, { id: 'both', label: '中英' }]" :key="option.id" :class="{ active: language === option.id }" @click="language = option.id as LanguageMode">{{ option.label }}</button>
         </div>
-        <button class="icon-control" aria-label="收藏夹" title="收藏夹" @click="openPopup('favorites')">☆</button>
-        <button class="icon-control settings-trigger" aria-label="页面设置" title="页面设置" @click="openPopup('settings')">⋮</button>
+        <button class="icon-control" aria-label="收藏夹" title="收藏夹" @click="openPopup('favorites')"><Star :size="18" aria-hidden="true" /></button>
+        <button class="icon-control settings-trigger" aria-label="页面设置" title="页面设置" @click="openPopup('settings')"><MoreVertical :size="20" aria-hidden="true" /></button>
       </div>
       <p v-if="notice" class="notice" role="status">{{ notice }}</p>
       <main class="reader-document">
@@ -521,8 +522,8 @@ watch(bookName, () => {
 
       <dialog ref="popupDialog" class="reader-popup" @close="popupMode = 'none'">
         <template v-if="popupMode === 'search'">
-          <div class="popup-title-row"><h2>搜索本书</h2><button class="popup-x" aria-label="关闭" @click="closeSearch">×</button></div>
-          <label class="popup-search"><span>⌕</span><input ref="searchInput" v-model="query" type="search" placeholder="输入规则编号或正文内容" @keydown.esc="closeSearch" /></label>
+          <div class="popup-title-row"><h2>搜索本书</h2><button class="popup-x" aria-label="关闭" @click="closeSearch"><X :size="20" /></button></div>
+          <label class="popup-search"><Search :size="17" aria-hidden="true" /><input ref="searchInput" v-model="query" type="search" placeholder="输入规则编号或正文内容" @keydown.esc="closeSearch" /></label>
           <div class="popup-results" aria-live="polite">
             <p v-if="!query.trim()" class="popup-hint">搜索当前规则书</p>
             <p v-else-if="!hits.length" class="popup-hint">没有匹配的规则</p>
@@ -534,7 +535,7 @@ watch(bookName, () => {
         </template>
 
         <template v-else-if="popupMode === 'favorites'">
-          <div class="popup-title-row"><h2>收藏</h2><button class="popup-x" aria-label="关闭" @click="closePopup">×</button></div>
+          <div class="popup-title-row"><h2>收藏</h2><button class="popup-x" aria-label="关闭" @click="closePopup"><X :size="20" /></button></div>
           <div v-if="!favoriteItems.length" class="popup-hint empty-favorites">还没有收藏规则</div>
           <div v-else class="popup-results favorites-results">
             <div v-for="favorite in favoriteItems" :key="`${favorite.book}/${favorite.number}`" class="favorite-row">
@@ -543,29 +544,29 @@ watch(bookName, () => {
                 <span class="popup-number">{{ favorite.number }}</span>
                 <span class="favorite-title">{{ favorite.rule?.text_zh || favorite.rule?.text_en || '规则条目' }}</span>
               </button>
-              <button class="favorite-remove" :aria-label="`移除收藏 ${favorite.number}`" @click="removeFavorite(favorite.book, favorite.number)">×</button>
+              <button class="favorite-remove" :aria-label="`移除收藏 ${favorite.number}`" @click="removeFavorite(favorite.book, favorite.number)"><X :size="16" /></button>
             </div>
           </div>
         </template>
 
         <template v-else-if="popupMode === 'settings'">
-          <div class="popup-title-row"><h2>页面设置</h2><button class="popup-x" aria-label="关闭" @click="closePopup">×</button></div>
+          <div class="popup-title-row"><h2>页面设置</h2><button class="popup-x" aria-label="关闭" @click="closePopup"><X :size="20" /></button></div>
           <section class="setting-section"><h3>主题颜色</h3><div class="theme-options">
             <button v-for="theme in [{ id: 'paper', label: '纸白' }, { id: 'warm', label: '暖纸' }, { id: 'dark', label: '深色' }]" :key="theme.id" :class="['theme-option', `sample-${theme.id}`, { active: readerTheme === theme.id }]" @click="setTheme(theme.id as ReaderTheme)">{{ theme.label }}</button>
           </div></section>
-          <section class="setting-section"><h3>字体大小</h3><div class="font-setting"><button aria-label="减小字号" :disabled="fontScale <= 0.85" @click="changeFont(-0.1)">−</button><span>{{ Math.round(fontScale * 100) }}%</span><button aria-label="增大字号" :disabled="fontScale >= 1.5" @click="changeFont(0.1)">＋</button></div></section>
+          <section class="setting-section"><h3>字体大小</h3><div class="font-setting"><button aria-label="减小字号" :disabled="fontScale <= 0.85" @click="changeFont(-0.1)"><Minus :size="16" /></button><span>{{ Math.round(fontScale * 100) }}%</span><button aria-label="增大字号" :disabled="fontScale >= 1.5" @click="changeFont(0.1)"><Plus :size="16" /></button></div></section>
           <section class="setting-section"><h3>规则资料</h3><CacheSyncStatus :checking="rulesResource.checking.value" :stale="rulesResource.stale.value" :saved-at="rulesResource.savedAt.value" :error="rulesResource.error.value" :disabled="rulesResource.loading.value" @refresh="refreshRules" /></section>
         </template>
 
         <template v-else-if="popupMode === 'share' && shareRule">
-          <div class="popup-title-row"><h2>分享规则 {{ shareRule.rule_number }}</h2><button class="popup-x" aria-label="关闭" @click="closePopup">×</button></div>
+          <div class="popup-title-row"><h2>分享规则 {{ shareRule.rule_number }}</h2><button class="popup-x" aria-label="关闭" @click="closePopup"><X :size="20" /></button></div>
           <p class="share-rule-name">{{ shareRule.text_zh || shareRule.text_en || shareRule.rule_number }}</p>
           <div class="share-link-row"><input :value="shareUrl" readonly aria-label="规则定位链接" /><button @click="copyShareUrl">复制链接</button></div>
           <div class="share-qr-wrap"><img v-if="shareQr" :src="shareQr" :alt="`规则 ${shareRule.rule_number} 的二维码`" /><span v-else>正在生成二维码…</span></div>
         </template>
 
         <template v-else-if="popupMode === 'cross-favorite' && favoriteTarget">
-          <div class="popup-title-row"><h2>打开收藏规则</h2><button class="popup-x" aria-label="关闭" @click="closePopup">×</button></div>
+          <div class="popup-title-row"><h2>打开收藏规则</h2><button class="popup-x" aria-label="关闭" @click="closePopup"><X :size="20" /></button></div>
           <p class="cross-book-label">{{ favoriteTarget.book }} · {{ favoriteTarget.number }}</p>
           <div class="cross-book-actions"><button @click="jumpToFavorite(false)">当前页面跳转</button><button @click="jumpToFavorite(true)">新页面打开</button></div>
         </template>
@@ -616,9 +617,9 @@ watch(bookName, () => {
 .reader-popup::backdrop { background: #17151280; backdrop-filter: blur(2px); }
 .popup-title-row { display: flex; justify-content: space-between; align-items: center; padding: 20px 22px 14px; }
 .popup-title-row h2 { font: 600 19px/1.4 "Noto Serif SC", "Songti SC", Georgia, serif; }
-.popup-x { width: 32px; height: 32px; color: #777166; font-size: 23px; }
+.popup-x { display: grid; place-items: center; width: 32px; height: 32px; padding: 0; color: #777166; }
 .popup-search { display: flex; align-items: center; gap: 10px; margin: 0 22px 12px; padding: 0 12px; height: 46px; background: #f3f1eb; color: #8d382c; }
-.popup-search > span { font-size: 22px; }
+.popup-search > .lucide { flex: none; color: var(--muted-ink); }
 .popup-search input { flex: 1; min-width: 0; height: 100%; outline: 0; background: transparent; color: #292722; font-size: 14px; }
 .popup-results { max-height: min(56vh, 500px); overflow: auto; padding: 3px 12px 14px; }
 .popup-hint { padding: 16px 12px; color: #8c877d; font-size: 12px; }
@@ -630,7 +631,7 @@ watch(bookName, () => {
 .favorite-open { display: grid; grid-template-columns: minmax(0, 1fr) 55px minmax(0, 2fr); align-items: baseline; gap: 8px; flex: 1; min-width: 0; padding: 10px; text-align: left; }
 .favorite-book { overflow: hidden; color: #857d6e; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .favorite-title { overflow: hidden; color: #4c473d; font: 12px/1.6 "Noto Serif SC", "Songti SC", Georgia, serif; text-overflow: ellipsis; white-space: nowrap; }
-.favorite-remove { flex: 0 0 30px; height: 30px; color: #948b7d; font-size: 19px; }
+.favorite-remove { display: grid; flex: 0 0 30px; place-items: center; width: 30px; height: 30px; padding: 0; color: #948b7d; }
 .favorite-remove:hover { color: #963b2d; }
 .empty-favorites { padding: 24px; }
 .setting-section { padding: 8px 22px 17px; }

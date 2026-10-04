@@ -13,6 +13,7 @@
  * 而不是上虚拟滚动 —— 后者在拖拽场景下与 SortableJS 的手感冲突。
  */
 import { computed, ref, watch } from 'vue';
+import { X } from '@lucide/vue';
 import type { ChainCustomCard, ChainCustomEffect } from '@/tools/chain/types';
 import { searchPool, type ChainPoolItem } from '@/tools/chain/pool';
 import { CARD_COLOR_HEX } from '@/utils/palette';
@@ -221,7 +222,7 @@ function subtitleOf(item: ChainPoolItem): string {
               title="从自定义池删除"
               @click.stop="emit('remove-custom-card', card.id)"
             >
-              ×
+              <X :size="13" aria-hidden="true" />
             </button>
           </div>
 
@@ -242,7 +243,7 @@ function subtitleOf(item: ChainPoolItem): string {
               title="从自定义池删除"
               @click.stop="emit('remove-custom-effect', effect.id)"
             >
-              ×
+              <X :size="13" aria-hidden="true" />
             </button>
           </div>
         </div>
@@ -439,12 +440,13 @@ function subtitleOf(item: ChainPoolItem): string {
 .custom-item { cursor: grab; }
 .effect-item { border-left: 3px solid var(--color-accent); }
 .item-remove {
+  display: grid;
   flex: 0 0 auto;
   width: 18px;
   height: 18px;
+  place-items: center;
+  padding: 0;
   border-radius: 50%;
-  font-size: 12px;
-  line-height: 1;
   color: var(--color-text-subtle);
 }
 .item-remove:hover { background: var(--color-brand-soft); color: var(--color-brand); }

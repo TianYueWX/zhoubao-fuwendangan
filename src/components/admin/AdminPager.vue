@@ -6,6 +6,7 @@
  * 区别是本组件不持有数据 —— 翻页只 emit,由视图去请求下一页。
  */
 import { computed } from 'vue';
+import { ChevronLeft, ChevronRight } from '@lucide/vue';
 
 const props = withDefaults(
   defineProps<{
@@ -51,7 +52,7 @@ function go(p: number): void {
     </span>
     <div class="flex items-center gap-1">
       <button class="page-btn" :disabled="disabled || page <= 1" title="上一页" @click="go(page - 1)">
-        ‹
+        <ChevronLeft :size="16" aria-hidden="true" />
       </button>
       <button
         v-for="p in pagerRange"
@@ -69,7 +70,7 @@ function go(p: number): void {
         title="下一页"
         @click="go(page + 1)"
       >
-        ›
+        <ChevronRight :size="16" aria-hidden="true" />
       </button>
     </div>
   </div>
@@ -77,6 +78,8 @@ function go(p: number): void {
 
 <style scoped>
 .page-btn {
+  display: grid;
+  place-items: center;
   min-width: 1.75rem;
   height: 1.75rem;
   padding: 0 0.4rem;

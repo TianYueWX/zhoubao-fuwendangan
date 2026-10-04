@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from "vue";
+import { ArrowDown, ArrowUp, Minus, Plus, X } from "@lucide/vue";
 import type { CarddexLocale, SortField, SortRule } from "./types";
 const props = defineProps<{
   open: boolean;
@@ -47,7 +48,7 @@ function move(i: number, by: number): void {
             <small>{{ locale === "zh" ? "结果次序" : "Result order" }}</small>
             <h2>{{ locale === "zh" ? "多条件排序" : "Multi-key sort" }}</h2>
           </div>
-          <button @click="emit('close')">✕</button>
+          <button aria-label="关闭" @click="emit('close')"><X :size="18" /></button>
         </header>
         <div class="rules">
           <div v-for="(rule, i) in draft" :key="rule.id" class="rule">
@@ -71,15 +72,15 @@ function move(i: number, by: number): void {
               </option>
             </select>
             <div>
-              <button :disabled="i === 0" @click="move(i, -1)">↑</button
-              ><button :disabled="i === draft.length - 1" @click="move(i, 1)">
-                ↓
+              <button aria-label="上移" :disabled="i === 0" @click="move(i, -1)"><ArrowUp :size="15" /></button
+              ><button aria-label="下移" :disabled="i === draft.length - 1" @click="move(i, 1)">
+                <ArrowDown :size="15" />
               </button>
             </div>
-            <button class="remove" @click="draft.splice(i, 1)">×</button>
+            <button class="remove" aria-label="删除排序条件" @click="draft.splice(i, 1)"><Minus :size="15" /></button>
           </div>
           <button v-if="draft.length < fields.length" class="add" @click="add">
-            ＋ {{ locale === "zh" ? "添加排序条件" : "Add sort key" }}
+            <Plus :size="14" aria-hidden="true" /> {{ locale === "zh" ? "添加排序条件" : "Add sort key" }}
           </button>
         </div>
         <footer>
@@ -119,6 +120,14 @@ header {
   align-items: center;
   padding: 18px 20px;
   border-bottom: 1px solid var(--color-panel-border);
+}
+header > button {
+  display: grid;
+  flex: 0 0 34px;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
 }
 header small {
   color: var(--color-brand);
@@ -164,7 +173,9 @@ h2 {
   opacity: 0.25;
 }
 .remove {
-  font-size: 18px !important;
+  display: grid;
+  place-items: center;
+  padding: 4px;
 }
 .add {
   width: 100%;

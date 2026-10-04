@@ -6,6 +6,7 @@
  * 因此这里不是漂浮 toast,而是内容区顶部的一组细线提示:左侧 2px 竖线定调
  * (成功=黛绿 / 留意=藤黄 / 未成=朱砂),可堆叠、可手动收起、自动消退。
  */
+import { X } from '@lucide/vue';
 import { dismissNotice, notices, type NoticeTone } from '@/tools/admin/notice';
 
 const TONE: Record<NoticeTone, { rule: string; text: string; label: string }> = {
@@ -37,7 +38,7 @@ const TONE: Record<NoticeTone, { rule: string; text: string; label: string }> = 
         title="收起"
         @click="dismissNotice(n.id)"
       >
-        ✕
+        <X :size="14" aria-hidden="true" />
       </button>
     </div>
   </div>

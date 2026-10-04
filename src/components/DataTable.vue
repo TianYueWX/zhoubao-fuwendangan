@@ -7,6 +7,7 @@
  *  - sticky 表头 + 行点击事件
  */
 import { computed, nextTick, ref, watch } from 'vue';
+import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Download } from '@lucide/vue';
 import { useDebouncedRef } from '@/composables/useDebouncedRef';
 import { compareSortValues, sortValue } from '@/composables/useTableSort';
 import { useExportMeta } from '@/composables/useExportMeta';
@@ -170,7 +171,7 @@ async function runExport(): Promise<void> {
         :title="`把「${props.exportTitle}」当前筛选/排序后的全部 ${filteredRows.length} 行存成一张 PNG 长图`"
         @click="runExport"
       >
-        <span aria-hidden="true">⤓</span>
+        <Download :size="14" aria-hidden="true" />
         {{ exporting ? '生成中…' : '下载长图' }}
       </button>
     </div>
@@ -211,7 +212,7 @@ async function runExport(): Promise<void> {
               <span
                 v-if="sortKey === col.key"
                 class="ml-1 text-xs"
-              >{{ sortDir === 'asc' ? '↑' : '↓' }}</span>
+              ><ArrowUp v-if="sortDir === 'asc'" :size="13" aria-hidden="true" /><ArrowDown v-else :size="13" aria-hidden="true" /></span>
             </th>
           </tr>
         </thead>
@@ -258,7 +259,7 @@ async function runExport(): Promise<void> {
     >
       <span>共 {{ filteredRows.length }} 行 · 第 {{ page }}/{{ totalPages }} 页</span>
       <div class="flex items-center gap-1">
-        <button class="page-btn" :disabled="page <= 1" @click="goPage(page - 1)">‹</button>
+          <button class="page-btn" aria-label="上一页" :disabled="page <= 1" @click="goPage(page - 1)"><ChevronLeft :size="16" aria-hidden="true" /></button>
         <button
           v-for="p in pagerRange"
           :key="p"
@@ -268,7 +269,7 @@ async function runExport(): Promise<void> {
         >
           {{ p }}
         </button>
-        <button class="page-btn" :disabled="page >= totalPages" @click="goPage(page + 1)">›</button>
+          <button class="page-btn" aria-label="下一页" :disabled="page >= totalPages" @click="goPage(page + 1)"><ChevronRight :size="16" aria-hidden="true" /></button>
       </div>
     </div>
 

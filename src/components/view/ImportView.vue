@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ArrowRight } from '@lucide/vue';
 /**
  * ImportView.vue · 数据导入页
  *  - 3 个上传槽位:1 必需 CSV(赛事卡组)+ 2 可选增强 JSON(胜场/门店)
@@ -133,7 +134,7 @@ const quality = computed(() => {
               <span class="w-2 h-2 rounded-full shrink-0" :class="s.ok ? 'bg-delta-up' : 'bg-delta-down'"></span>
               <span class="text-ink-muted truncate">{{ s.fileName }}</span>
               <span class="text-ink-faint ml-auto shrink-0">
-                {{ s.ok ? '已载入' : '失败' }} → {{ s.slot }}
+                {{ s.ok ? '已载入' : '失败' }} <ArrowRight :size="13" aria-hidden="true" /> {{ s.slot }}
               </span>
             </div>
           </div>

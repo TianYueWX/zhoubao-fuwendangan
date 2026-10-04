@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ArrowUpDown, Ban, Bookmark, Circle, CircleDot, CircleX, ListFilter, Search, Share2, Trash2, X } from "@lucide/vue";
 import {
   computed,
   nextTick,
@@ -516,11 +517,11 @@ onBeforeUnmount(() => {
       <div class="global-actions">
         <CacheSyncStatus :checking="cacheChecking" :stale="cacheStale" :saved-at="cacheSavedAt" :error="cacheError" :disabled="loading" @refresh="load(true)" />
         <button @click="pinnedOpen = true">
-          ◆ <span>{{ labels.pinned }}</span
+          <Bookmark :size="14" aria-hidden="true" /> <span>{{ labels.pinned }}</span
           ><b>{{ pins.length }}</b>
         </button>
         <button @click="share">
-          ↗
+          <Share2 :size="14" aria-hidden="true" />
           <span>{{
             shareCopied ? (zh ? "已复制" : "Copied") : labels.share
           }}</span>
@@ -529,7 +530,7 @@ onBeforeUnmount(() => {
           {{ ui.locale === "zh" ? "EN" : "中" }}
         </button>
         <button :title="labels.cache" @click="clearImages">
-          ⌫ <span class="cache-text">{{ labels.cache }}</span>
+          <Trash2 :size="14" aria-hidden="true" /> <span class="cache-text">{{ labels.cache }}</span>
         </button>
       </div>
     </Teleport>
@@ -539,8 +540,8 @@ onBeforeUnmount(() => {
         <div class="search-tools">
           <div class="search-row">
             <div class="search-box">
-              <span>⌕</span
-              ><input
+              <Search :size="16" aria-hidden="true" />
+              <input
                 id="carddex-search"
                 v-model="searchInput"
                 :placeholder="labels.placeholder"
@@ -554,7 +555,7 @@ onBeforeUnmount(() => {
                   query.search = '';
                 "
               >
-                ×
+                <X :size="14" aria-hidden="true" />
               </button>
               <div v-if="suggestions.length" class="suggestions">
                 <button
@@ -586,13 +587,13 @@ onBeforeUnmount(() => {
               </button>
             </div>
             <button class="tool-btn" @click="cycleBanned">
-              ⊘ {{ bannedLabel() }}
+              <Ban :size="14" aria-hidden="true" /> {{ bannedLabel() }}
             </button>
             <button class="tool-btn" @click="sortOpen = true">
-              ↕ {{ labels.sort }} <b>{{ query.sort.length }}</b>
+              <ArrowUpDown :size="14" aria-hidden="true" /> {{ labels.sort }} <b>{{ query.sort.length }}</b>
             </button>
             <button class="tool-btn filter-trigger" @click="toggleFilterPanel">
-              ☷ {{ labels.filter }} <b v-if="activeCount">{{ activeCount }}</b>
+              <ListFilter :size="14" aria-hidden="true" /> {{ labels.filter }} <b v-if="activeCount">{{ activeCount }}</b>
             </button>
           </div>
           <div
@@ -615,7 +616,7 @@ onBeforeUnmount(() => {
                   searchInput = '';
                 "
               >
-                “{{ query.search }}” ×
+                “{{ query.search }}” <X :size="12" aria-hidden="true" />
               </button>
               <button
                 v-for="f in query.filters"
@@ -624,10 +625,8 @@ onBeforeUnmount(() => {
                 @click="removeFilter(f)"
                 @contextmenu.prevent="removeFilter(f)"
               >
-                {{
-                  f.mode === "include" ? "○" : f.mode === "require" ? "●" : "×"
-                }}
-                {{ f.value }} ×
+                <Circle v-if="f.mode === 'include'" :size="12" aria-hidden="true" /><CircleDot v-else-if="f.mode === 'require'" :size="12" aria-hidden="true" /><CircleX v-else :size="12" aria-hidden="true" />
+                {{ f.value }} <X :size="12" aria-hidden="true" />
               </button>
               <template
                 v-for="k in ['energy', 'returnEnergy', 'power'] as const"
@@ -643,7 +642,7 @@ onBeforeUnmount(() => {
                   {{ numericName(k) }} {{ query.numeric[k].min }}–{{
                     query.numeric[k].max
                   }}
-                  ×
+                  <X :size="12" aria-hidden="true" />
                 </button></template
               >
             </div>
@@ -840,9 +839,11 @@ onBeforeUnmount(() => {
   background: var(--color-card-bg);
   box-shadow: 0 5px 18px -18px var(--color-shadow);
 }
-.search-box > span {
+.search-box > .lucide {
   color: var(--color-brand);
-  font-size: 18px;
+  width: 16px;
+  height: 16px;
+  flex: none;
 }
 .search-box input {
   width: 100%;

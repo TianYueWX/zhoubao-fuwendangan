@@ -6,6 +6,7 @@
  * 每张卡片与首页往期卡同构:期号 / 刊名 / 发布日期 / 日期区间 / 样本 / 3 条要点。
  */
 import { computed } from 'vue';
+import { ArrowLeft, ArrowRight } from '@lucide/vue';
 import { store } from '@/store/analysis';
 import { navigate } from '@/router/hash';
 import type { IssueBrief } from '@/core/issue';
@@ -39,7 +40,7 @@ function openIssue(id: string): void {
     <header class="max-w-[980px] mx-auto">
       <div class="flex items-center justify-between gap-4 flex-wrap text-[11px] text-ink-faint">
         <button class="hover:text-brand transition-colors" @click="navigate({ view: 'journal' })">
-          ← 返回期刊
+          <ArrowLeft :size="14" aria-hidden="true" /> 返回期刊
         </button>
         <span v-if="total" class="tabular-nums">共 {{ total }} 期</span>
       </div>
@@ -60,7 +61,7 @@ function openIssue(id: string): void {
       </p>
       <button class="btn-brand mt-5 px-5 py-2 text-sm" @click="navigate({ view: 'import' })">
         去数据管理载入数据包
-        <span aria-hidden="true">→</span>
+        <ArrowRight :size="14" aria-hidden="true" />
       </button>
     </div>
 
@@ -111,7 +112,7 @@ function openIssue(id: string): void {
                 <span class="min-w-0">{{ bl.text }}</span>
               </li>
             </ul>
-            <span class="text-[11px] text-brand font-medium mt-3">阅读本期 →</span>
+            <span class="text-[11px] text-brand font-medium mt-3">阅读本期 <ArrowRight :size="12" aria-hidden="true" /></span>
           </article>
         </div>
       </section>

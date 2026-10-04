@@ -7,6 +7,7 @@
  * 也能直接敲新值回车新建,且零依赖、可键盘操作。
  */
 import { computed, ref } from 'vue';
+import { X } from '@lucide/vue';
 
 const props = withDefaults(
   defineProps<{
@@ -74,7 +75,7 @@ function onKeydown(e: KeyboardEvent): void {
         :title="`移除 ${v}`"
         @click="remove(v)"
       >
-        ✕
+        <X :size="12" aria-hidden="true" />
       </button>
     </span>
 

@@ -12,6 +12,7 @@
  * 差别只在于:去掉管理界面、区域不再接受编辑操作。
  */
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
+import { ArrowLeft, ArrowRight } from '@lucide/vue';
 import {
   type CardDisplayMode,
   type ChainAreaKey,
@@ -163,11 +164,11 @@ function noop(): void {
             class="step-button"
             data-action="previous-step"
             :disabled="!canStepBack"
-            title="上一步（←）"
+            title="上一步"
             aria-label="显示上一个快照"
             @click="stepBack"
           >
-            ←
+            <ArrowLeft :size="18" aria-hidden="true" />
           </button>
           <span class="present-step-label" aria-live="polite">{{ stepLabel }}</span>
           <button
@@ -175,11 +176,11 @@ function noop(): void {
             class="step-button"
             data-action="next-step"
             :disabled="!canStepForward"
-            title="下一步（→）"
+            title="下一步"
             aria-label="显示下一个快照"
             @click="stepForward"
           >
-            →
+            <ArrowRight :size="18" aria-hidden="true" />
           </button>
         </div>
         <span class="present-hint"><kbd>Ctrl</kbd>+<kbd>R</kbd> 回到开头 · Esc 退出</span>

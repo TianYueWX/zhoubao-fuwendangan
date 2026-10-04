@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import { ArrowLeft, ArrowUp } from "@lucide/vue";
 import {
   store,
   runStoredAnalysis,
@@ -184,7 +185,7 @@ function onWeekChange(e: Event): void {
           class="text-sm text-ink-muted hover:text-brand transition-colors"
           @click="navigate({ view: homeCode })"
         >
-          <span aria-hidden="true">←</span> 返回首页
+          <ArrowLeft :size="15" aria-hidden="true" /> 返回首页
         </button>
         <div
           id="global-page-actions"
@@ -354,7 +355,7 @@ function onWeekChange(e: Event): void {
       title="回到顶部"
       @click="scrollToTop"
     >
-      ↑
+      <ArrowUp :size="19" aria-hidden="true" />
     </button>
   </div>
 </template>

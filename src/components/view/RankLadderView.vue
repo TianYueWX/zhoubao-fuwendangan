@@ -10,6 +10,7 @@
  * 接口与实测口径见 src/tools/rank/api.ts 与 docs/rank-ladder.md。
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { RefreshCw } from '@lucide/vue';
 import SectionHeading from '@/components/SectionHeading.vue';
 import { PAGE_SIZE_MAX, MAX_PAGES } from '@/tools/rank/api';
 import type { RankRow } from '@/tools/rank/api';
@@ -192,7 +193,7 @@ if (typeof window !== 'undefined') {
           title="清空本地快照,从第 1 页重新抓取"
           @click="runResync"
         >
-          <span aria-hidden="true">↻</span>
+          <RefreshCw :size="14" aria-hidden="true" />
           {{ rankState.loading ? '抓取中…' : '重新抓取' }}
         </button>
       </template>

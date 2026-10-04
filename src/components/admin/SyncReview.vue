@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue';
+import { ArrowRight } from '@lucide/vue';
 import AdminConfirmButton from './AdminConfirmButton.vue';
 import type { SyncDataset } from '@/tools/sync/run';
 import { applyReviewOperation, type ExistingSnapshot } from '@/tools/admin/sync';
@@ -365,7 +366,7 @@ defineExpose({ hasUnsavedReview });
           </p>
           <p v-else-if="candidates.length === 1" class="mt-2 font-mono">{{ candidates[0]?.card_no }} · {{ candidates[0]?.id }}</p>
           <p v-else class="mt-2 text-accent">基础卡尚未创建。</p>
-          <button v-if="active.table === 'card_prints'" class="text-brand mt-2 hover:underline" @click="openParent">查看 / 创建基础卡 →</button>
+          <button v-if="active.table === 'card_prints'" class="text-brand mt-2 hover:underline" @click="openParent">查看 / 创建基础卡 <ArrowRight :size="13" aria-hidden="true" /></button>
           <label v-if="parentRow.variants.length > 1" class="block mt-3">不同版本含不同勘误，请选择文本来源
             <select class="filter-select w-full mt-2" @change="chooseVariant">
               <option value="">请选择勘误来源</option>

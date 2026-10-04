@@ -7,6 +7,7 @@
  * (上游把「存快照/历史/全屏」做成纯图标,不熟的人根本发现不了。)
  */
 import { ref } from 'vue';
+import { Redo2, Undo2 } from '@lucide/vue';
 import { DISPLAY_MODES, DISPLAY_MODE_LABELS, type CardDisplayMode } from '@/tools/chain/types';
 
 defineProps<{
@@ -81,8 +82,8 @@ function onRenameInput(e: Event): void {
 
       <!-- 过程类 -->
       <div class="tb-group">
-        <button type="button" class="tb-btn" :disabled="!canUndo" title="撤销(Ctrl+Z)" @click="emit('undo')">↶</button>
-        <button type="button" class="tb-btn" :disabled="!canRedo" title="重做(Ctrl+Y)" @click="emit('redo')">↷</button>
+        <button type="button" class="tb-btn" :disabled="!canUndo" title="撤销(Ctrl+Z)" @click="emit('undo')"><Undo2 :size="16" aria-hidden="true" /></button>
+        <button type="button" class="tb-btn" :disabled="!canRedo" title="重做(Ctrl+Y)" @click="emit('redo')"><Redo2 :size="16" aria-hidden="true" /></button>
         <button type="button" class="tb-btn" title="存一个历史快照(Ctrl+S)" @click="emit('snapshot')">保存快照</button>
         <button type="button" class="tb-btn" :aria-expanded="historyOpen" @click="emit('toggle-history')">快照历史</button>
       </div>

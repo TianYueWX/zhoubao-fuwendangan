@@ -7,6 +7,7 @@
  *  - variant='text' 供期号正文等印刷版式使用(文字链,不打断版面)
  */
 import { ref } from 'vue';
+import { Download } from '@lucide/vue';
 import { downloadTableImage } from '@/utils/tableImage';
 import { useExportMeta } from '@/composables/useExportMeta';
 
@@ -56,7 +57,7 @@ async function run(): Promise<void> {
     :title="`把「${title}」存成一张 PNG 长图(含报头/期号/口径说明,卡图为色块占位)`"
     @click="run"
   >
-    <span aria-hidden="true">⤓</span>
+    <Download :size="14" aria-hidden="true" />
     {{ busy ? '生成中…' : '下载长图' }}
   </button>
   <button
@@ -66,6 +67,6 @@ async function run(): Promise<void> {
     :title="`把本表存成 PNG 长图`"
     @click="run"
   >
-    {{ busy ? '生成中…' : '⤓ 下载本表长图' }}
+    {{ busy ? '生成中…' : '下载本表长图' }}
   </button>
 </template>

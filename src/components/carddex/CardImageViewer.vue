@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
+import { Minus, Plus, RotateCw, X } from "@lucide/vue";
 import CarddexImage from "./CarddexImage.vue";
 import type { CarddexLocale, DisplayCard } from "./types";
 const props = defineProps<{ item: DisplayCard; locale: CarddexLocale }>();
@@ -49,13 +50,13 @@ async function download(): Promise<void> {
         >
       </div>
       <nav>
-        <button @click="zoom(-0.2)">−</button
-        ><button @click="zoom(0.2)">＋</button
-        ><button @click="rotation = (rotation + 90) % 360">↻</button
+        <button aria-label="缩小" @click="zoom(-0.2)"><Minus :size="16" /></button
+        ><button aria-label="放大" @click="zoom(0.2)"><Plus :size="16" /></button
+        ><button aria-label="旋转" @click="rotation = (rotation + 90) % 360"><RotateCw :size="16" /></button
         ><button @click="fit">{{ locale === "zh" ? "适应窗口" : "Fit" }}</button
         ><button @click="download">
           {{ locale === "zh" ? "下载原图" : "Download" }}</button
-        ><button @click="closeWindow">✕</button>
+        ><button aria-label="关闭图片" @click="closeWindow"><X :size="16" /></button>
       </nav>
     </header>
     <main :class="{ fitted }">
@@ -117,6 +118,11 @@ async function download(): Promise<void> {
   gap: 6px;
 }
 .viewer nav button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 34px;
   min-width: 34px;
   padding: 6px 9px;
   border: 1px solid rgba(255, 255, 255, 0.2);

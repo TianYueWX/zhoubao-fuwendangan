@@ -10,6 +10,7 @@
  *   保存 = 把当前棋盘写进盘位,落 localStorage
  */
 import { onMounted, onUnmounted, ref } from 'vue';
+import { Redo2, Undo2, X } from '@lucide/vue';
 import type { ChainSnapshot } from '@/tools/chain/types';
 
 defineProps<{
@@ -109,12 +110,12 @@ function timeLabel(ts: number): string {
     <header class="hp-head" @pointerdown="startDrag" @pointermove="moveDrag" @pointerup="endDrag" @pointercancel="endDrag" @lostpointercapture="drag = null">
       <h3>快照历史</h3>
       <span class="hp-count tabular-nums">{{ history.length }} 条</span>
-      <button type="button" class="hp-close" aria-label="关闭快照历史" @click="emit('close')">×</button>
+      <button type="button" class="hp-close" aria-label="关闭快照历史" @click="emit('close')"><X :size="16" aria-hidden="true" /></button>
     </header>
 
     <div class="hp-actions">
-      <button type="button" title="撤销(Ctrl+Z)" @click="emit('undo')">↶ 撤销</button>
-      <button type="button" title="重做(Ctrl+Y)" @click="emit('redo')">↷ 重做</button>
+      <button type="button" title="撤销(Ctrl+Z)" @click="emit('undo')"><Undo2 :size="14" aria-hidden="true" /> 撤销</button>
+      <button type="button" title="重做(Ctrl+Y)" @click="emit('redo')"><Redo2 :size="14" aria-hidden="true" /> 重做</button>
       <button type="button" title="存一个快照(Ctrl+S)" @click="emit('snapshot')">保存快照</button>
       <button type="button" :disabled="history.length === 0" title="清空过程记录" @click="emit('clear')">
         清空
@@ -174,7 +175,7 @@ function timeLabel(ts: number): string {
   gap: 8px;
 }
 .hp-head h3 { font-size: 12.5px; font-weight: 700; color: var(--color-text-primary); }
-.hp-close { cursor: pointer; padding: 0 5px; font-size: 20px; color: var(--color-text-muted); }
+.hp-close { display: grid; flex: 0 0 28px; place-items: center; width: 28px; height: 28px; cursor: pointer; padding: 0; color: var(--color-text-muted); }
 .hp-count { margin-left: auto; font-size: 10px; color: var(--color-text-subtle); }
 
 .hp-actions { display: flex; gap: 4px; flex-wrap: wrap; }

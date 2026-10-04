@@ -36,6 +36,7 @@
     "verify:sync-review-perf": "node scripts/verify-sync-review-ui.mjs --perf --assert-fast"
   },
   "dependencies": {
+    "@lucide/vue": "^1.51.0",
     "echarts": "^5.5.1",
     "oboe": "^2.1.7",
     "papaparse": "^5.4.1",

@@ -13,6 +13,7 @@
  * 写入是**逐行只提交 keyword 一个字段**,不整行覆盖;并且只加不删。
  */
 import { computed, ref, watch } from 'vue';
+import { TriangleAlert } from '@lucide/vue';
 import Drawer from '../Drawer.vue';
 import {
   diffKeywords,
@@ -351,7 +352,7 @@ async function commit(): Promise<void> {
                     @click.prevent="toggleWord(it.row.id, h.keyword)"
                   >
                     {{ h.keyword }}
-                    <span v-if="h.suspect" class="ml-1">⚠</span>
+                    <TriangleAlert v-if="h.suspect" class="ml-1" :size="13" aria-hidden="true" />
                   </button>
                 </div>
 
@@ -361,7 +362,7 @@ async function commit(): Promise<void> {
                   :key="`ctx-${h.keyword}`"
                   class="text-[11px] text-ink-faint leading-relaxed mt-1.5 break-words"
                 >
-                  ⚠ <b class="font-normal text-ink-muted">{{ h.keyword }}</b>
+                  <TriangleAlert :size="13" aria-hidden="true" /> <b class="font-normal text-ink-muted">{{ h.keyword }}</b>
                   疑似描述他人:{{ h.before }}<b class="font-normal text-ink-muted">{{ h.hit }}</b>{{ h.after }}
                 </div>
 

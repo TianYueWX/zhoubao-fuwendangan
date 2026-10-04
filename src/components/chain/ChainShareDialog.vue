@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
+import { X } from '@lucide/vue';
 import QRCode from 'qrcode';
 const props = defineProps<{ url: string; error: string; historyCount: number }>();
 const emit = defineEmits<{ (e: 'close'): void; (e: 'export-json'): void }>();
@@ -22,7 +23,7 @@ async function copy(): Promise<void> {
 <template>
   <div class="share-mask" @click.self="emit('close')">
     <section class="share-dialog" role="dialog" aria-modal="true" aria-labelledby="chain-share-title">
-      <header><h3 id="chain-share-title">分享当前棋盘</h3><button ref="closeButton" aria-label="关闭分享" @click="emit('close')">×</button></header>
+      <header><h3 id="chain-share-title">分享当前棋盘</h3><button ref="closeButton" aria-label="关闭分享" @click="emit('close')"><X :size="16" aria-hidden="true" /></button></header>
       <p>分享当前棋盘与 {{ historyCount }} 个历史快照。</p>
       <template v-if="url">
         <label for="chain-share-link">分享链接</label>
@@ -41,7 +42,7 @@ async function copy(): Promise<void> {
 .share-mask { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 16px; background: #0006; }
 .share-dialog { width: min(440px, 100%); max-height: calc(100vh - 32px); overflow: auto; padding: 20px; border: 1px solid var(--color-panel-border); border-radius: 12px; background: var(--color-panel-bg); color: var(--color-text-primary); display: flex; flex-direction: column; gap: 12px; }
 header { display: flex; align-items: center; justify-content: space-between; font-weight: 700; }
-header button { font-size: 20px; }
+header button { display: grid; flex: 0 0 32px; place-items: center; width: 32px; height: 32px; padding: 0; }
 p, label { font-size: 12px; color: var(--color-text-muted); }
 textarea { width: 100%; resize: vertical; padding: 8px; border: 1px solid var(--color-panel-border); border-radius: 6px; background: var(--color-card-bg); font-size: 11px; }
 button { padding: 6px 10px; border: 1px solid var(--color-panel-border); border-radius: 6px; }

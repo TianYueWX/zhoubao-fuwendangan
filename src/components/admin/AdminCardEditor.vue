@@ -16,6 +16,7 @@
  *   - 效果文本 {{标记}} 实时预览(经白名单过滤,不裸 v-html)
  */
 import { computed, onMounted, reactive, ref, watch } from 'vue';
+import { X } from '@lucide/vue';
 import EditorialShell from './EditorialShell.vue';
 import AdminPager from './AdminPager.vue';
 import AdminTagInput from './AdminTagInput.vue';
@@ -1212,7 +1213,7 @@ onMounted(async () => {
               class="w-8 h-8 rounded-lg hover:bg-ink/5 text-ink-faint hover:text-brand transition-colors"
               @click="transferOpen = false"
             >
-              ✕
+              <X :size="14" aria-hidden="true" />
             </button>
           </div>
 

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Bookmark } from "@lucide/vue";
 import { computed } from "vue";
 import CarddexImage from "./CarddexImage.vue";
 import type { CarddexLocale, DisplayCard } from "./types";
@@ -38,7 +39,7 @@ const name = computed(() =>
       :aria-pressed="pinned"
       @click.stop="emit('pin')"
     >
-      <span aria-hidden="true">◆</span>
+      <Bookmark :size="13" aria-hidden="true" />
     </button>
     <button class="tile-caption" type="button" @click="emit('open')">
       <strong :title="name">{{ name }}</strong>

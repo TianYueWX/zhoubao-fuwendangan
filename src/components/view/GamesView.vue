@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
+import { ArrowLeft, ArrowRight, ArrowUpRight, Check, Plus, RotateCw, Sparkles } from "@lucide/vue";
 import { restSelectAll } from "@/tools/sources/rest";
 import { useVersionedResource } from "@/tools/sources/versionedCache";
 import CacheSyncStatus from "@/components/CacheSyncStatus.vue";
@@ -431,7 +432,7 @@ const nextLabel = computed(() => {
     <div class="games-page__frame" aria-hidden="true"></div>
     <header class="games-heading">
       <CacheSyncStatus :checking="cacheChecking" :stale="cacheStale" :saved-at="cacheSavedAt" :error="cacheError" :disabled="cardDataLoading" @refresh="loadCards(true)" />
-      <button v-if="page !== 'menu'" class="games-back" type="button" @click="leaveToMenu">← 小游戏菜单</button>
+      <button v-if="page !== 'menu'" class="games-back" type="button" @click="leaveToMenu"><ArrowLeft :size="14" aria-hidden="true" /> 小游戏菜单</button>
       <p class="games-eyebrow">符文档案 · CARD PLAY</p>
       <h1 class="games-title">小游戏</h1>
       <p class="games-intro">读一段卡牌故事，或一点点揭开卡面。</p>
@@ -450,7 +451,7 @@ const nextLabel = computed(() => {
           <p>读一段卡牌上的趣味文本，揭晓角色名称和副标题。</p>
           <div class="mode-card__actions">
             <button class="games-button games-button--primary" type="button" @click="openMode('text')">
-              {{ canResumeText ? '新开一轮' : '开始玩' }} <span>→</span>
+              {{ canResumeText ? '新开一轮' : '开始玩' }} <ArrowRight :size="14" aria-hidden="true" />
             </button>
             <button v-if="canResumeText" class="games-button games-button--quiet" type="button" @click="openMode('text', true)">继续上次</button>
           </div>
@@ -468,7 +469,7 @@ const nextLabel = computed(() => {
           <p>自己选择格子慢慢点开，也可以随时看提示或揭晓答案。</p>
           <div class="mode-card__actions">
             <button class="games-button games-button--primary" type="button" @click="openMode('image')">
-              {{ canResumeImage ? '新开一轮' : '开始玩' }} <span>→</span>
+              {{ canResumeImage ? '新开一轮' : '开始玩' }} <ArrowRight :size="14" aria-hidden="true" />
             </button>
             <button v-if="canResumeImage" class="games-button games-button--quiet" type="button" @click="openMode('image', true)">继续上次</button>
           </div>
@@ -524,14 +525,14 @@ const nextLabel = computed(() => {
       <p v-if="notice" class="games-notice" role="status">{{ notice }}</p>
       <footer class="setup-footer">
         <span>趣味文本每次揭晓后继续一张；猜卡图每轮先发 10 张，可随时追加。</span>
-        <button class="games-button games-button--primary" type="button" :disabled="!selectedItems.length" @click="startGame">开始游戏 <span>→</span></button>
+        <button class="games-button games-button--primary" type="button" :disabled="!selectedItems.length" @click="startGame">开始游戏 <ArrowRight :size="14" aria-hidden="true" /></button>
       </footer>
     </section>
 
     <section v-else-if="page === 'play'" class="games-play">
       <template v-if="session && currentItem && !session.ended">
         <div class="play-topline">
-          <div><button class="games-back" type="button" @click="leaveToMenu">← 菜单</button><span class="play-mode">{{ modeText }}</span></div>
+          <div><button class="games-back" type="button" @click="leaveToMenu"><ArrowLeft :size="14" aria-hidden="true" /> 菜单</button><span class="play-mode">{{ modeText }}</span></div>
           <span class="play-series">{{ session.series.join(" · ") }}</span>
         </div>
         <div class="play-progress">
@@ -562,7 +563,7 @@ const nextLabel = computed(() => {
                 :class="{ 'is-open': session.openTiles.includes(tile) || session.answerRevealed }"
                 :style="tileStyle(tile)" :aria-label="session.openTiles.includes(tile) || session.answerRevealed ? `第 ${tile + 1} 格已揭开` : `揭开第 ${tile + 1} 格`"
                 :disabled="imageStatus !== 'loaded' || session.openTiles.includes(tile) || session.answerRevealed" @click="openTile(tile)">
-                <span v-if="!session.openTiles.includes(tile) && !session.answerRevealed">＋</span>
+                <Plus v-if="!session.openTiles.includes(tile) && !session.answerRevealed" :size="18" aria-hidden="true" />
               </button>
               <div v-if="imageStatus !== 'loaded'" class="image-loading" role="status" aria-live="polite">
                 <span v-if="imageStatus === 'error'">卡图载入失败，请检查网络后重试。</span>
@@ -577,7 +578,7 @@ const nextLabel = computed(() => {
               <p v-if="shownClues.length" v-for="clue in shownClues" :key="clue" class="clue-line">{{ clue }}</p>
               <p v-else class="clue-placeholder">遇到困难时，点一下看看线索。</p>
               <button class="games-button games-button--quiet clue-action" type="button" :disabled="session.clueCount >= clueOptions.length" @click="revealClue">
-                {{ session.clueCount >= clueOptions.length ? '线索已全部打开' : '打开一条线索' }} <span>＋</span>
+                {{ session.clueCount >= clueOptions.length ? '线索已全部打开' : '打开一条线索' }} <Plus :size="14" aria-hidden="true" />
               </button>
             </section>
 
@@ -596,12 +597,12 @@ const nextLabel = computed(() => {
               </template>
               <template v-else>
                 <p class="answer-hidden">先猜一猜，再自己揭晓。</p>
-                <button class="games-button games-button--primary answer-reveal" type="button" @click="revealAnswer">揭晓答案 <span>↗</span></button>
+            <button class="games-button games-button--primary answer-reveal" type="button" @click="revealAnswer">揭晓答案 <ArrowUpRight :size="14" aria-hidden="true" /></button>
               </template>
             </section>
 
             <button v-if="session.answerRevealed" class="games-button games-button--primary next-question" type="button" @click="advance">
-              {{ nextLabel }} <span>{{ nextLabel === '完成本轮' ? '✓' : '→' }}</span>
+              {{ nextLabel }} <Check v-if="nextLabel === '完成本轮'" :size="14" aria-hidden="true" /><ArrowRight v-else :size="14" aria-hidden="true" />
             </button>
             <p v-else class="answer-hint">想好了就揭晓；不需要输入答案。</p>
           </aside>
@@ -609,12 +610,12 @@ const nextLabel = computed(() => {
       </template>
 
       <div v-else-if="session?.ended" class="session-finished">
-        <span class="finish-stamp" aria-hidden="true">✓</span>
+        <span class="finish-stamp"><Check :size="24" aria-hidden="true" /></span>
         <p class="games-eyebrow">本轮结束</p>
         <h2>卡牌都看过啦</h2>
         <p>这次没有重复题目。换一轮可以重新打乱卡牌。</p>
         <div class="finish-actions">
-          <button class="games-button games-button--primary" type="button" @click="restartGame">重新开始 <span>↻</span></button>
+          <button class="games-button games-button--primary" type="button" @click="restartGame">重新开始 <RotateCw :size="14" aria-hidden="true" /></button>
           <button class="games-button games-button--quiet" type="button" @click="leaveToMenu">回到小游戏菜单</button>
         </div>
       </div>
@@ -629,7 +630,7 @@ const nextLabel = computed(() => {
     <Transition name="rules-fade">
       <div v-if="rulesOpen" class="rules-backdrop" role="presentation">
         <section class="rules-dialog" role="dialog" aria-modal="true" :aria-labelledby="`rules-title-${mode}`">
-          <span class="rules-spark" aria-hidden="true">✳</span>
+          <Sparkles class="rules-spark" aria-hidden="true" />
           <p class="games-eyebrow">第一次进入 · {{ modeText }}</p>
           <h2 :id="`rules-title-${mode}`">怎么玩</h2>
           <template v-if="mode === 'text'">
@@ -640,7 +641,7 @@ const nextLabel = computed(() => {
             <p>卡图会被分成多个格子。自己挑选格子逐步揭开，也可以点开线索，或随时揭晓答案。</p>
             <p>每轮先玩 10 张。答完一批后，你可以选择再加 10 张；难度调整会从下一张卡开始生效。</p>
           </template>
-          <button class="games-button games-button--primary rules-confirm" type="button" @click="confirmRules">明白，开始设置 <span>→</span></button>
+          <button class="games-button games-button--primary rules-confirm" type="button" @click="confirmRules">明白，开始设置 <ArrowRight :size="14" aria-hidden="true" /></button>
           <small>这份规则只会在本机首次显示。</small>
         </section>
       </div>
@@ -691,7 +692,7 @@ const nextLabel = computed(() => {
 .mode-card__body > p:not(.games-eyebrow) { max-width: 300px; min-height: 48px; margin: 0; color: var(--game-muted); font-size: 13px; line-height: 1.75; }
 .mode-card__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: auto; padding-top: 16px; }
 .games-button { display: inline-flex; min-height: 40px; align-items: center; justify-content: center; gap: 16px; border: 1px solid transparent; padding: 8px 15px; font-size: 13px; font-weight: 700; cursor: pointer; transition: background-color 160ms, border-color 160ms, color 160ms, transform 160ms; }
-.games-button > span { font-size: 17px; line-height: 1; }
+.games-button > .lucide { width: 14px; height: 14px; }
 .games-button--primary { background: var(--game-cinnabar); color: #fff8f0; }
 .games-button--primary:hover:not(:disabled) { background: #982f20; transform: translateY(-1px); }
 .games-button--primary:disabled { cursor: not-allowed; opacity: .45; }

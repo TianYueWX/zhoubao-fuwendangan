@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
+import { ArrowLeft, ArrowRight, ArrowUpRight, ChevronDown, ChevronRight, Diamond, Sparkles, X } from "@lucide/vue";
 import { useVersionedResource } from "@/tools/sources/versionedCache";
 import CacheSyncStatus from "@/components/CacheSyncStatus.vue";
 import CarddexImage from "@/components/carddex/CarddexImage.vue";
@@ -338,7 +339,7 @@ function cardFinishLabel(card: OpenedPack["cards"][number]): string {
             </div>
             <div v-if="inProgressBox" class="resume-callout">
               <span><b>{{ inProgressBox.series }}</b> 有一盒未开完 · {{ progressText(inProgressBox) }}</span>
-              <button type="button" class="text-action" @click="openRecoveredBox">继续开盒 →</button>
+              <button type="button" class="text-action" @click="openRecoveredBox">继续开盒 <ArrowRight :size="14" aria-hidden="true" /></button>
             </div>
             <div class="probability-note">
               <span class="note-seal">估</span>
@@ -346,9 +347,9 @@ function cardFinishLabel(card: OpenedPack["cards"][number]): string {
             </div>
             <p v-if="notice" class="booster-notice" role="alert">{{ notice }}</p>
             <button class="open-sealed-button" type="button" :disabled="!setReady || (openKind === 'box' && !!inProgressBox)" @click="startOpening">
-              <span class="open-sealed-button__icon" aria-hidden="true">✦</span>
+              <Sparkles class="open-sealed-button__icon" aria-hidden="true" />
               {{ openKind === 'box' ? '开始开一盒' : '开始开一包' }}
-              <span aria-hidden="true">↗</span>
+              <ArrowUpRight :size="16" aria-hidden="true" />
             </button>
           </div>
           <aside class="sealed-art" aria-label="补充包封面">
@@ -360,7 +361,7 @@ function cardFinishLabel(card: OpenedPack["cards"][number]): string {
 
         <section v-else class="opening-stage">
           <div class="opening-toolbar">
-            <button class="text-action" type="button" @click="activeRecordId = ''">← 选择系列</button>
+            <button class="text-action" type="button" @click="activeRecordId = ''"><ArrowLeft :size="14" aria-hidden="true" /> 选择系列</button>
             <div class="opening-identity"><b>{{ activeRecord.series }}</b><span>{{ setName(activeRecord.series) }}</span><i>{{ activeRecord.kind === 'box' ? '整盒' : '单包' }}</i></div>
             <time>{{ formatTime(activeRecord.createdAt) }}</time>
           </div>
@@ -391,9 +392,9 @@ function cardFinishLabel(card: OpenedPack["cards"][number]): string {
               <span>{{ currentPack.cards.filter((card) => card.revealed).length }} / {{ currentPack.cards.length }} 张已翻开</span>
               <button class="subtle-action" type="button" :disabled="currentPackRevealed" @click="flipAll(currentPack)">一次全部翻开</button>
               <button v-if="activeRecord.kind === 'box' && activeRecord.status === 'inProgress'" class="next-pack-button" type="button" :disabled="!currentPackRevealed" @click="nextPack">
-                {{ activeRecord.packs.length >= BOX_SIZE ? '本盒已开完' : `开下一包 · ${String(activeRecord.packs.length + 1).padStart(2, '0')}` }} <span>→</span>
+                {{ activeRecord.packs.length >= BOX_SIZE ? '本盒已开完' : `开下一包 · ${String(activeRecord.packs.length + 1).padStart(2, '0')}` }} <ArrowRight :size="14" aria-hidden="true" />
               </button>
-              <button v-else-if="activeRecord.kind === 'pack'" class="next-pack-button" type="button" @click="activeRecordId = ''; startOpening()">再开一包 <span>→</span></button>
+              <button v-else-if="activeRecord.kind === 'pack'" class="next-pack-button" type="button" @click="activeRecordId = ''; startOpening()">再开一包 <ArrowRight :size="14" aria-hidden="true" /></button>
               <span v-else class="complete-label">本盒已开完</span>
             </div>
             <p v-if="notice" class="booster-notice" role="alert">{{ notice }}</p>
@@ -419,17 +420,17 @@ function cardFinishLabel(card: OpenedPack["cards"][number]): string {
         <button v-if="records.length" type="button" class="delete-all-button" @click="clearPrompt = !clearPrompt">清空记录</button>
       </div>
       <div v-if="clearPrompt" class="clear-confirm" role="alert"><span>确定删除全部 {{ records.length }} 条本地记录？</span><button type="button" @click="clearHistory">确认清空</button><button type="button" @click="clearPrompt = false">取消</button></div>
-      <div v-if="!records.length" class="history-empty"><span>◇</span><h3>还没有开包记录</h3><p>开出第一包后，系列、时间和逐张卡牌都会保存在这里。</p><button class="text-action" type="button" @click="activePage = 'open'">去开一包 →</button></div>
+      <div v-if="!records.length" class="history-empty"><Diamond class="history-empty-icon" :size="30" aria-hidden="true" /><h3>还没有开包记录</h3><p>开出第一包后，系列、时间和逐张卡牌都会保存在这里。</p><button class="text-action" type="button" @click="activePage = 'open'">去开一包 <ArrowRight :size="14" aria-hidden="true" /></button></div>
       <div v-else class="history-list">
         <article v-for="record in records" :key="record.id" class="history-record">
           <header class="history-record__head">
             <button type="button" class="history-expand" :aria-expanded="expandedRecords.includes(record.id)" @click="toggleHistory(record.id)">
-              <span class="history-chevron">{{ expandedRecords.includes(record.id) ? '⌄' : '›' }}</span>
+              <ChevronDown v-if="expandedRecords.includes(record.id)" class="history-chevron" :size="16" aria-hidden="true" /><ChevronRight v-else class="history-chevron" :size="16" aria-hidden="true" />
               <span class="history-set">{{ record.series }}</span><span>{{ setName(record.series) }} · {{ record.kind === 'box' ? '整盒' : '单包' }}</span>
               <span class="history-summary">{{ recordSummary(record) }}</span><time>{{ formatTime(record.createdAt) }}</time>
               <i class="record-status" :class="{ pending: record.status === 'inProgress' }">{{ statusName(record) }}</i>
             </button>
-            <button class="delete-record" type="button" :aria-label="`删除 ${record.series} 开包记录`" @click="deleteRecord(record.id)">×</button>
+            <button class="delete-record" type="button" :aria-label="`删除 ${record.series} 开包记录`" @click="deleteRecord(record.id)"><X :size="15" aria-hidden="true" /></button>
           </header>
           <div v-if="expandedRecords.includes(record.id)" class="history-detail">
             <div v-if="record.kind === 'box'" class="history-box-summary">
@@ -448,7 +449,7 @@ function cardFinishLabel(card: OpenedPack["cards"][number]): string {
                 </div>
               </div>
             </section>
-            <button v-if="record.status === 'inProgress'" class="resume-record" type="button" @click="openRecoveredBox">继续这盒 →</button>
+            <button v-if="record.status === 'inProgress'" class="resume-record" type="button" @click="openRecoveredBox">继续这盒 <ArrowRight :size="14" aria-hidden="true" /></button>
           </div>
         </article>
       </div>
@@ -494,7 +495,7 @@ function cardFinishLabel(card: OpenedPack["cards"][number]): string {
 .pack-actions { display: flex; align-items: center; gap: 12px; margin-top: 17px; }.pack-actions > span:first-child { margin-right: auto; color: var(--pack-muted); font-size: 10px; }.subtle-action { border: 1px solid var(--pack-line); padding: 8px 11px; background: transparent; color: var(--pack-ink); font-size: 10px; cursor: pointer; }.subtle-action:disabled { opacity: .4; cursor: default; }.next-pack-button { border: 0; padding: 10px 14px; background: var(--pack-green); color: white; font-size: 11px; font-weight: 700; cursor: pointer; }.next-pack-button:disabled { opacity: .4; cursor: not-allowed; }.next-pack-button span { margin-left: 14px; }.complete-label { color: var(--pack-green); font-size: 11px; font-weight: 800; }
 .box-summary { margin-top: 22px; border-top: 2px solid var(--pack-ink); border-bottom: 1px solid var(--pack-line); padding: 21px 0; }.summary-heading { display: flex; align-items: flex-end; justify-content: space-between; }.summary-heading > span { color: var(--pack-muted); font: 11px ui-monospace, monospace; }.summary-metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; margin: 18px 0 14px; background: var(--pack-line); border: 1px solid var(--pack-line); }.summary-metrics div { display: flex; flex-direction: column; gap: 3px; padding: 12px; background: var(--color-page-bg); }.summary-metrics b { color: var(--pack-ink); font: 800 24px ui-monospace, monospace; }.summary-metrics span, .summary-rarities { color: var(--pack-muted); font-size: 10px; }.summary-rarities { display: flex; flex-wrap: wrap; gap: 7px 18px; }.summary-rarities b { margin-left: 4px; color: var(--pack-ink); font-family: ui-monospace, monospace; }
 .history-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; border-bottom: 2px solid var(--pack-ink); padding-bottom: 16px; }.history-heading h2 { font-size: 27px; }.history-heading p:not(.booster-kicker) { margin: 7px 0 0; color: var(--pack-muted); font-size: 11px; }.delete-all-button, .delete-record { border: 1px solid var(--pack-line); padding: 7px 10px; background: transparent; color: var(--pack-muted); font-size: 10px; cursor: pointer; }.delete-all-button:hover, .delete-record:hover { border-color: #a34838; color: #a34838; }.clear-confirm { display: flex; align-items: center; gap: 12px; margin: 14px 0; border: 1px solid #d8b9a8; padding: 12px; background: #fbf0e9; color: #773b30; font-size: 11px; }.clear-confirm span { margin-right: auto; }.clear-confirm button { border: 1px solid #d8b9a8; padding: 6px 9px; background: transparent; color: inherit; font-size: 10px; cursor: pointer; }
-.history-empty { display: flex; min-height: 290px; flex-direction: column; align-items: center; justify-content: center; text-align: center; }.history-empty > span { color: var(--pack-gold); font: 40px Georgia, serif; }.history-empty h3 { margin: 8px 0; color: var(--pack-ink); font: 700 18px "Noto Serif SC", "Songti SC", serif; }.history-empty p { color: var(--pack-muted); font-size: 11px; }.history-list { display: grid; gap: 9px; margin-top: 15px; }.history-record { border: 1px solid var(--pack-line); background: var(--pack-paper); }.history-record__head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; }.history-expand { display: flex; min-width: 0; flex: 1; align-items: center; gap: 9px; border: 0; padding: 3px; background: transparent; color: var(--pack-muted); text-align: left; cursor: pointer; }.history-chevron { width: 14px; color: var(--pack-green); font: 20px/1 ui-monospace, monospace; }.history-set { color: var(--pack-ink); font: 800 12px ui-monospace, monospace; }.history-summary { margin-left: auto; color: var(--pack-ink); font-size: 10px; }.history-expand time { color: var(--pack-muted); font-size: 9px; white-space: nowrap; }.record-status { border: 1px solid #8eaa98; padding: 3px 6px; color: var(--pack-green); font-size: 8px; font-style: normal; white-space: nowrap; }.record-status.pending { border-color: var(--pack-gold); color: #8d7040; }.delete-record { border: 0; font-size: 17px; line-height: 1; }.history-detail { border-top: 1px solid var(--pack-line); padding: 16px; }.history-box-summary { display: flex; flex-wrap: wrap; gap: 8px 17px; border-bottom: 1px solid var(--pack-line); padding-bottom: 12px; color: var(--pack-muted); font-size: 9px; }.history-box-summary b { color: var(--pack-ink); font: 700 11px ui-monospace, monospace; }.history-pack + .history-pack { margin-top: 20px; border-top: 1px solid var(--pack-line); padding-top: 14px; }.history-pack > header { display: flex; justify-content: space-between; margin-bottom: 9px; color: var(--pack-ink); font-size: 10px; }.history-pack > header time { color: var(--pack-muted); font-weight: 400; }.history-cards { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; }.history-card { min-width: 0; }.history-card :deep(.carddex-image) { border: 1px solid var(--pack-line); }.history-card > b, .history-card > small { display: block; overflow: hidden; margin-top: 4px; color: var(--pack-ink); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }.history-card > small { color: var(--pack-muted); font-size: 8px; }.resume-record { margin-top: 15px; border: 0; padding: 8px 11px; background: var(--pack-green); color: white; font-size: 10px; cursor: pointer; }.storage-warning { margin: 12px auto 0; color: #9b4938; font-size: 11px; text-align: center; }
+.history-empty { display: flex; min-height: 290px; flex-direction: column; align-items: center; justify-content: center; text-align: center; }.history-empty-icon { margin-bottom: 4px; color: var(--pack-gold); }.history-empty h3 { margin: 8px 0; color: var(--pack-ink); font: 700 18px "Noto Serif SC", "Songti SC", serif; }.history-empty p { color: var(--pack-muted); font-size: 11px; }.history-list { display: grid; gap: 9px; margin-top: 15px; }.history-record { border: 1px solid var(--pack-line); background: var(--pack-paper); }.history-record__head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; }.history-expand { display: flex; min-width: 0; flex: 1; align-items: center; gap: 9px; border: 0; padding: 3px; background: transparent; color: var(--pack-muted); text-align: left; cursor: pointer; }.history-chevron { width: 14px; height: 14px; flex: none; color: var(--pack-green); }.history-set { color: var(--pack-ink); font: 800 12px ui-monospace, monospace; }.history-summary { margin-left: auto; color: var(--pack-ink); font-size: 10px; }.history-expand time { color: var(--pack-muted); font-size: 9px; white-space: nowrap; }.record-status { border: 1px solid #8eaa98; padding: 3px 6px; color: var(--pack-green); font-size: 8px; font-style: normal; white-space: nowrap; }.record-status.pending { border-color: var(--pack-gold); color: #8d7040; }.delete-record { display: grid; width: 30px; height: 30px; flex: none; place-items: center; border: 0; padding: 0; }.history-detail { border-top: 1px solid var(--pack-line); padding: 16px; }.history-box-summary { display: flex; flex-wrap: wrap; gap: 8px 17px; border-bottom: 1px solid var(--pack-line); padding-bottom: 12px; color: var(--pack-muted); font-size: 9px; }.history-box-summary b { color: var(--pack-ink); font: 700 11px ui-monospace, monospace; }.history-pack + .history-pack { margin-top: 20px; border-top: 1px solid var(--pack-line); padding-top: 14px; }.history-pack > header { display: flex; justify-content: space-between; margin-bottom: 9px; color: var(--pack-ink); font-size: 10px; }.history-pack > header time { color: var(--pack-muted); font-weight: 400; }.history-cards { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; }.history-card { min-width: 0; }.history-card :deep(.carddex-image) { border: 1px solid var(--pack-line); }.history-card > b, .history-card > small { display: block; overflow: hidden; margin-top: 4px; color: var(--pack-ink); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }.history-card > small { color: var(--pack-muted); font-size: 8px; }.resume-record { margin-top: 15px; border: 0; padding: 8px 11px; background: var(--pack-green); color: white; font-size: 10px; cursor: pointer; }.storage-warning { margin: 12px auto 0; color: #9b4938; font-size: 11px; text-align: center; }
 .booster-footer { display: flex; justify-content: space-between; gap: 12px; max-width: 1120px; margin: 35px auto 0; border-top: 1px solid var(--pack-line); padding-top: 11px; color: var(--pack-muted); font: 8px ui-monospace, monospace; letter-spacing: .07em; }.booster-footer span:first-child { font-family: inherit; letter-spacing: 0; }
 @media (max-width: 800px) { .sealed-panel { grid-template-columns: minmax(0, 1fr) 210px; }.cards-grid, .history-cards { grid-template-columns: repeat(5, minmax(0, 1fr)); }.history-summary { display: none; } }
 @media (max-width: 620px) { .booster-page { padding: 17px 13px 28px; }.booster-stamp { width: 55px; height: 55px; }.booster-stamp b { font-size: 19px; }.sealed-panel { grid-template-columns: 1fr; }.sealed-art { min-height: 205px; }.wrapper-seal { width: 105px; height: 155px; }.wrapper-seal b { margin-top: 12px; font-size: 29px; }.wrapper-seal span { font-size: 6px; }.wrapper-seal small { font-size: 6px; }.cards-grid, .history-cards { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; }.pack-actions { flex-wrap: wrap; }.pack-actions > span:first-child { width: 100%; }.next-pack-button { margin-left: auto; }.history-expand { flex-wrap: wrap; gap: 5px 8px; }.history-expand time { order: 3; }.record-status { margin-left: auto; }.summary-metrics { grid-template-columns: repeat(2, 1fr); }.opening-toolbar { flex-wrap: wrap; gap: 7px 13px; }.opening-toolbar time { width: 100%; margin-left: 0; }.progress-pips { gap: 2px; }.booster-footer { flex-direction: column; } }

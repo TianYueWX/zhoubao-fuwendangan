@@ -3,6 +3,7 @@
  * Drawer.vue · 右侧滑出抽屉
  */
 import { watch } from 'vue';
+import { X } from '@lucide/vue';
 
 const props = defineProps<{ open: boolean; title?: string; wide?: boolean }>();
 const emit = defineEmits<{
@@ -46,8 +47,8 @@ function onKeydown(e: KeyboardEvent): void {
             {{ title }}
           </h3>
           <button @click="close()"
-            class="w-8 h-8 rounded-lg hover:bg-ink/5 text-ink-faint hover:text-brand transition-colors shrink-0">
-            ✕
+          class="inline-grid place-items-center w-8 h-8 rounded-lg hover:bg-ink/5 text-ink-faint hover:text-brand transition-colors shrink-0">
+            <X :size="18" aria-hidden="true" />
           </button>
         </div>
         <div class="p-5">

@@ -2,6 +2,14 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Lucide SVGs sit on the same text baseline as their labels and never shrink
+   when their parent is a flex row. */
+svg.lucide {
+  display: inline-block;
+  flex: 0 0 auto;
+  vertical-align: middle;
+}
+
 /* ══════════════════════════════════════════════════════════════
  * 符文档案 · 周报 — 设计系统(报刊头版式 · 宣纸卷宗单主题)
  *

@@ -7,6 +7,7 @@
  * 数字全部来自现有统计引擎。
  */
 import { computed, ref } from 'vue';
+import { ArrowLeft, ArrowRight } from '@lucide/vue';
 import { store } from '@/store/analysis';
 import { navigate } from '@/router/hash';
 import { buildIssueArticle } from '@/core/issue';
@@ -82,7 +83,7 @@ function openIssue(id: string): void {
       <header class="max-w-[980px] mx-auto">
         <div class="flex items-center justify-between gap-4 flex-wrap text-[11px] text-ink-faint">
           <button class="hover:text-brand transition-colors" @click="navigate({ view: 'journal' })">
-            ← 返回期刊
+            <ArrowLeft :size="14" aria-hidden="true" /> 返回期刊
           </button>
           <span class="font-latin tracking-[0.22em] uppercase">{{ article.roman }}</span>
         </div>
@@ -213,7 +214,7 @@ function openIssue(id: string): void {
           </p>
           <button class="btn-brand mt-4 px-5 py-2 text-sm" @click="openTool">
             打开数据工具
-            <span aria-hidden="true">→</span>
+            <ArrowRight :size="14" aria-hidden="true" />
           </button>
         </section>
 
@@ -224,7 +225,7 @@ function openIssue(id: string): void {
             class="flex-1 card card-hover p-4 text-left"
             @click="openIssue(prevIssue.id)"
           >
-            <span class="text-[10px] text-ink-faint">← 上一期</span>
+            <span class="text-[10px] text-ink-faint"><ArrowLeft :size="12" aria-hidden="true" /> 上一期</span>
             <span class="block font-display font-bold text-ink text-sm mt-1 truncate">
               {{ prevIssue.label }}
             </span>
@@ -235,7 +236,7 @@ function openIssue(id: string): void {
             class="flex-1 card card-hover p-4 text-right"
             @click="openIssue(nextIssue.id)"
           >
-            <span class="text-[10px] text-ink-faint">下一期 →</span>
+            <span class="text-[10px] text-ink-faint">下一期 <ArrowRight :size="12" aria-hidden="true" /></span>
             <span class="block font-display font-bold text-ink text-sm mt-1 truncate">
               {{ nextIssue.label }}
             </span>

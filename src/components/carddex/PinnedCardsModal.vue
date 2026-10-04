@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
+import { Diamond, X } from "@lucide/vue";
 import CarddexTile from "./CarddexTile.vue";
 import CarddexSortDialog from "./CarddexSortDialog.vue";
 import { sortDisplayCards } from "./query";
@@ -71,7 +72,7 @@ function clearAll(): void {
               <b>{{ items.length }}</b>
             </h2>
           </div>
-          <button @click="emit('close')">✕</button>
+          <button aria-label="关闭收藏卡牌" @click="emit('close')"><X :size="18" /></button>
         </header>
         <nav>
           <div class="segments">
@@ -109,7 +110,7 @@ function clearAll(): void {
           </div>
         </div>
         <div v-else class="empty">
-          <b>◇</b>
+          <b><Diamond :size="24" aria-hidden="true" /></b>
           <p>
             {{ locale === "zh" ? "还没有标记卡牌" : "No pinned cards yet" }}
           </p>
@@ -158,6 +159,15 @@ header {
   padding: 17px 21px;
   background: var(--color-card-bg);
   border-bottom: 1px solid var(--color-panel-border);
+}
+header > button {
+  display: grid;
+  flex: 0 0 34px;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  color: var(--color-text-muted);
 }
 header small {
   color: var(--color-brand);
