@@ -14,11 +14,28 @@ const allRules = ref<Rule[]>([]);
 const loading = ref(true);
 const error = ref("");
 const query = ref("");
+const searchOpen = ref(false);
+const searchDialog = ref<HTMLDialogElement | null>(null);
+const searchInput = ref<HTMLInputElement | null>(null);
 const language = ref<LanguageMode>("zh");
 const selected = ref<Set<string>>(new Set());
 const notice = ref("");
 const bookName = computed(() => store.currentRuleBook);
 const bookRules = computed(() => allRules.value.filter((rule) => (rule.rules_book || "（未分类）") === bookName.value));
+const ruleIndexes = computed(() => {
+  const byBookAndNumber = new Map<string, Rule>();
+  const byNumber = new Map<string, Rule[]>();
+  const bookNames = new Set<string>();
+  for (const rule of allRules.value) {
+    const book = rule.rules_book || "（未分类）";
+    byBookAndNumber.set(`${book}\u0000${rule.rule_number}`, rule);
+    bookNames.add(book);
+    const sameNumber = byNumber.get(rule.rule_number) ?? [];
+    sameNumber.push(rule);
+    byNumber.set(rule.rule_number, sameNumber);
+  }
+  return { byBookAndNumber, byNumber, bookNames: [...bookNames].sort((a, b) => b.length - a.length) };
+});
 
 function flattenTree(rules: Rule[]): FlatRule[] {
   const output: FlatRule[] = [];
@@ -35,6 +52,11 @@ function flattenTree(rules: Rule[]): FlatRule[] {
 const flatRules = computed(() => flattenTree(bookRules.value));
 const hits = computed(() => query.value.trim() ? matchRules(bookRules.value, query.value) : []);
 const selectedRules = computed(() => flatRules.value.map(({ item }) => item).filter((item) => selected.value.has(item.rule_number)));
+const renderedRules = computed(() => flatRules.value.map(({ item, depth }) => ({
+  item,
+  depth,
+  lines: displayLines(item).map(textParts),
+})));
 
 function displayLines(rule: Rule): string[] {
   if (language.value === "zh") return [rule.text_zh || rule.text_en || "暂无正文"];
@@ -48,12 +70,6 @@ function toggleSelected(number: string): void {
   selected.value = next;
 }
 
-function toggleAll(): void {
-  selected.value = selected.value.size === flatRules.value.length
-    ? new Set()
-    : new Set(flatRules.value.map(({ item }) => item.rule_number));
-}
-
 function scrollToRule(number: string): void {
   document.getElementById(ruleId(number))?.scrollIntoView({ behavior: "smooth", block: "center" });
 }
@@ -61,31 +77,68 @@ function scrollToRule(number: string): void {
 function ruleId(number: string): string { return `rule-${encodeURIComponent(number)}`; }
 
 function textParts(text: string): TextPart[] {
-  const candidates: Array<{ token: string; book: string; number: string }> = [];
-  for (const rule of allRules.value) {
-    const book = rule.rules_book || "（未分类）";
-    const token = `${book}/${rule.rule_number}`;
-    if (text.includes(token)) candidates.push({ token, book, number: rule.rule_number });
+  const spans: Array<{ start: number; end: number; part: TextPart }> = [];
+  const { byBookAndNumber, byNumber, bookNames } = ruleIndexes.value;
+  const referencePattern = /(?<![\w.])(?:(?:rules?|规则)\s*(?:第\s*)?)?(\d+(?:\.\w+)*)(?![\w]|\.\d)/gi;
+  for (const match of text.matchAll(referencePattern)) {
+    const number = match[1] ?? "";
+    if (match.index === undefined) continue;
+    const beforeNumber = text.slice(0, match.index);
+    const linkedBook = bookNames.find((book) => beforeNumber.endsWith(`${book}/`));
+    const start = linkedBook ? match.index - linkedBook.length - 1 : match.index;
+    const target = linkedBook
+      ? byBookAndNumber.get(`${linkedBook}\u0000${number}`)
+      : byBookAndNumber.get(`${bookName.value}\u0000${number}`) ?? byNumber.get(number)?.[0];
+    if (target) {
+      let end = match.index + match[0].length;
+      if (target.is_heading) {
+        const tail = text.slice(end);
+        const separator = tail.match(/^[.．、,，:：]?\s*/)?.[0] ?? "";
+        const afterSeparator = tail.slice(separator.length);
+        const heading = [target.text_zh, target.text_en]
+          .map((value) => value?.trim() ?? "")
+          .filter(Boolean)
+          .sort((a, b) => b.length - a.length)
+          .find((value) => afterSeparator.slice(0, value.length).toLocaleLowerCase() === value.toLocaleLowerCase());
+        if (heading) end += separator.length + heading.length;
+      }
+      spans.push({
+        start,
+        end,
+        part: { text: text.slice(start, end), book: target.rules_book || "（未分类）", number },
+      });
+    }
   }
-  candidates.sort((a, b) => b.token.length - a.token.length);
-  if (!candidates.length) return [{ text }];
+  spans.sort((a, b) => a.start - b.start || b.end - a.end);
   const parts: TextPart[] = [];
   let cursor = 0;
-  while (cursor < text.length) {
-    const found = candidates.find((candidate) => text.startsWith(candidate.token, cursor));
-    if (!found) {
-      const next = candidates.reduce((min, candidate) => {
-        const at = text.indexOf(candidate.token, cursor);
-        return at >= 0 && at < min ? at : min;
-      }, text.length);
-      parts.push({ text: text.slice(cursor, next) });
-      cursor = next;
-      continue;
-    }
-    parts.push({ text: found.token, book: found.book, number: found.number });
-    cursor += found.token.length;
+  for (const span of spans) {
+    if (span.start < cursor) continue;
+    if (span.start > cursor) parts.push({ text: text.slice(cursor, span.start) });
+    parts.push(span.part);
+    cursor = span.end;
   }
+  if (cursor < text.length) parts.push({ text: text.slice(cursor) });
   return parts;
+}
+
+function openSearch(): void {
+  query.value = "";
+  searchOpen.value = true;
+  nextTick(() => {
+    searchDialog.value?.showModal();
+    searchInput.value?.focus();
+  });
+}
+
+function closeSearch(): void {
+  searchOpen.value = false;
+  if (searchDialog.value?.open) searchDialog.value.close();
+}
+
+function chooseSearchHit(number: string): void {
+  closeSearch();
+  nextTick(() => scrollToRule(number));
 }
 
 function openReference(part: TextPart): void {
@@ -195,8 +248,9 @@ watch(bookName, () => {
     <header class="rulebook-head">
       <div>
         <button class="back-link" type="button" @click="navigate({ view: 'rules' })">← 返回规则目录</button>
-        <p class="rulebook-kicker">RULE BOOK / {{ flatRules.length.toLocaleString() }} ENTRIES</p>
+        <p class="rulebook-kicker">RIFTBOUND · OFFICIAL RULES</p>
         <h1>{{ bookName }}</h1>
+        <p class="book-description">按原有章节与规则编号编排 · 共 {{ flatRules.length.toLocaleString() }} 条</p>
       </div>
       <div class="language-switch" aria-label="语言模式">
         <button v-for="option in [{ id: 'zh', label: '中文' }, { id: 'en', label: 'English' }, { id: 'both', label: '中英对照' }]" :key="option.id" :class="{ active: language === option.id }" @click="language = option.id as LanguageMode">{{ option.label }}</button>
@@ -206,88 +260,108 @@ watch(bookName, () => {
     <div v-if="loading" class="state-card">正在加载规则书…</div>
     <div v-else-if="error" class="state-card error">{{ error }}</div>
     <template v-else>
-      <section class="reader-tools">
-        <label class="search-box"><span aria-hidden="true">⌕</span><input v-model="query" type="search" placeholder="检索规则编号或正文内容" /><button v-if="query" @click="query = ''">清除</button></label>
-        <span class="match-count">{{ query.trim() ? `匹配 ${hits.length} 条` : `${flatRules.length} 条规则` }}</span>
-        <button class="tool-action" :disabled="!selected.size" @click="copySelected">复制成段落 <b v-if="selected.size">{{ selected.size }}</b></button>
-        <button class="tool-action" :disabled="!selected.size" @click="exportSelectedImage">导出为图</button>
+      <section class="reader-tools" aria-label="规则书工具">
+        <button class="search-launch" @click="openSearch"><span aria-hidden="true">⌕</span> 搜索规则</button>
+        <span class="match-count">{{ flatRules.length.toLocaleString() }} 条</span>
+        <span class="tool-spacer"></span>
+        <button class="tool-action" :disabled="!selected.size" @click="copySelected">复制选中条目 <b v-if="selected.size">{{ selected.size }}</b></button>
+        <button class="tool-action" :disabled="!selected.size" @click="exportSelectedImage">导出图片</button>
       </section>
       <p v-if="notice" class="notice" role="status">{{ notice }}</p>
-      <div class="reader-layout">
-        <aside class="reader-sidebar">
-          <div class="sidebar-heading"><span>本规则书</span><button @click="toggleAll">{{ selected.size === flatRules.length ? "取消全选" : "全选" }}</button></div>
-          <p class="reader-hint">勾选条目后可复制或导出；点击检索结果定位到正文。</p>
-          <div v-if="query.trim()" class="hit-list">
-            <button v-for="hit in hits" :key="hit.id" class="hit-row" @click="scrollToRule(hit.rule_number)">
-              <span class="hit-number">{{ hit.rule_number }}</span><span>{{ hit.text_zh || hit.text_en || "暂无正文" }}</span>
-            </button>
-            <p v-if="!hits.length" class="no-hits">没有匹配条目</p>
+      <main class="book-stage">
+        <div class="book-page">
+          <div class="running-head"><span>{{ bookName }}</span><span>规则书 · {{ language === 'zh' ? '中文版' : language === 'en' ? 'ENGLISH EDITION' : '中英对照' }}</span></div>
+          <div class="book-rule-list">
+            <article v-for="{ item, depth, lines } in renderedRules" :id="ruleId(item.rule_number)" :key="item.id" class="rule-entry" :class="{ selected: selected.has(item.rule_number), chapter: item.is_heading }" :style="{ '--depth': depth }">
+              <label class="select-entry" :aria-label="`选择规则 ${item.rule_number}`"><input type="checkbox" :checked="selected.has(item.rule_number)" @change="toggleSelected(item.rule_number)" /></label>
+              <div class="entry-copy">
+                <h2 :class="{ heading: item.is_heading }"><span class="entry-number">{{ item.rule_number }}</span></h2>
+                <p v-for="(parts, lineIndex) in lines" :key="lineIndex" class="entry-text">
+                  <template v-for="(part, partIndex) in parts" :key="partIndex"><button v-if="part.book" class="rule-reference" @click="openReference(part)">{{ part.text }}</button><span v-else>{{ part.text }}</span></template>
+                </p>
+              </div>
+            </article>
           </div>
-          <div v-else class="outline-list">
-            <button v-for="{ item } in flatRules" :key="item.id" class="outline-row" @click="scrollToRule(item.rule_number)">{{ item.rule_number }} <span>{{ item.text_zh || item.text_en || "" }}</span></button>
-          </div>
-        </aside>
+          <footer class="book-folio"><span>符文战场 · 规则档案</span><span>{{ flatRules.length }} 条</span></footer>
+        </div>
+      </main>
 
-        <main class="rule-content">
-          <article v-for="{ item, depth } in flatRules" :id="ruleId(item.rule_number)" :key="item.id" class="rule-entry" :class="{ selected: selected.has(item.rule_number) }" :style="{ '--depth': depth }">
-            <label class="select-entry" :aria-label="`选择规则 ${item.rule_number}`"><input type="checkbox" :checked="selected.has(item.rule_number)" @change="toggleSelected(item.rule_number)" /></label>
-            <div class="entry-copy">
-              <h2 :class="{ heading: item.is_heading }"><span class="entry-number">{{ item.rule_number }}</span></h2>
-              <p v-for="(line, lineIndex) in displayLines(item)" :key="lineIndex" class="entry-text">
-                <template v-for="(part, partIndex) in textParts(line)" :key="partIndex"><button v-if="part.book" class="rule-reference" @click="openReference(part)">{{ part.text }}</button><span v-else>{{ part.text }}</span></template>
-              </p>
-            </div>
-          </article>
-        </main>
-      </div>
+      <dialog ref="searchDialog" class="search-dialog" @close="searchOpen = false">
+        <div class="search-modal-head"><div><span class="modal-kicker">本书检索</span><h2>查找规则</h2></div><button class="modal-close" aria-label="关闭搜索" @click="closeSearch">×</button></div>
+        <label class="modal-search-field"><span aria-hidden="true">⌕</span><input ref="searchInput" v-model="query" type="search" placeholder="输入规则编号或正文内容" @keydown.esc="closeSearch" /><kbd>ESC</kbd></label>
+        <div class="search-results" aria-live="polite">
+          <p v-if="!query.trim()" class="search-prompt">搜索范围：{{ bookName }}</p>
+          <p v-else-if="!hits.length" class="search-prompt">没有找到匹配的规则</p>
+          <button v-for="hit in hits.slice(0, 80)" :key="hit.id" class="search-result" @click="chooseSearchHit(hit.rule_number)">
+            <span class="result-number">{{ hit.rule_number }}</span><span class="result-copy"><strong>{{ hit.is_heading ? '章节' : '规则' }}</strong>{{ hit.text_zh || hit.text_en || '暂无正文' }}</span><span class="result-arrow">↗</span>
+          </button>
+          <p v-if="hits.length > 80" class="search-limit">显示前 80 条，请输入更具体的编号或内容。</p>
+        </div>
+      </dialog>
     </template>
   </div>
 </template>
 
 <style scoped>
-.rulebook-page { width: min(100%, 1440px); margin: 0 auto; padding-bottom: 60px; color: var(--color-text-primary); }
-.rulebook-head { display: flex; justify-content: space-between; align-items: end; gap: 24px; padding: 26px 0 24px; border-bottom: 1px solid var(--color-panel-border); }
+.rulebook-page { width: min(100%, 1340px); margin: 0 auto; padding: 0 20px 70px; color: var(--color-text-primary); }
+.rulebook-head { display: flex; justify-content: space-between; align-items: end; gap: 24px; padding: 22px 0 20px; }
 .back-link { color: var(--color-text-muted); font-size: 12px; }
 .back-link:hover { color: var(--color-brand); }
-.rulebook-kicker { margin-top: 25px; color: var(--color-text-subtle); font: 10px ui-monospace, monospace; letter-spacing: .17em; }
-h1 { margin-top: 7px; font: 800 clamp(27px, 4vw, 42px)/1.2 Georgia, "Noto Serif SC", serif; }
-.language-switch { display: flex; gap: 3px; padding: 4px; border: 1px solid var(--color-card-border); border-radius: 8px; background: var(--color-card-bg); }
-.language-switch button { padding: 8px 12px; border-radius: 5px; color: var(--color-text-muted); font-size: 12px; white-space: nowrap; }
-.language-switch button.active { color: var(--color-brand-ink); background: var(--color-brand); }
-.state-card { margin-top: 24px; padding: 32px; border: 1px solid var(--color-card-border); border-radius: 10px; background: var(--color-card-bg); color: var(--color-text-muted); }
+.rulebook-kicker { margin-top: 19px; color: var(--color-brand); font: 10px ui-monospace, monospace; letter-spacing: .18em; }
+h1 { margin-top: 6px; font: 700 clamp(28px, 4vw, 42px)/1.2 "Noto Serif SC", "Songti SC", Georgia, serif; letter-spacing: .035em; }
+.book-description { margin-top: 7px; color: var(--color-text-subtle); font: 11px/1.5 ui-monospace, monospace; }
+.language-switch { display: flex; gap: 2px; padding: 3px; border: 1px solid var(--color-card-border); background: #ede8db; }
+.language-switch button { padding: 8px 12px; color: var(--color-text-muted); font-size: 12px; white-space: nowrap; }
+.language-switch button.active { color: #fff8f0; background: var(--color-brand); }
+.state-card { width: min(100%, 900px); margin: 28px auto; padding: 32px; border: 1px solid var(--color-card-border); background: var(--color-card-bg); color: var(--color-text-muted); }
 .state-card.error { color: #9e493b; }
-.reader-tools { display: flex; align-items: center; gap: 10px; padding: 18px 0; border-bottom: 1px solid var(--color-panel-border); }
-.search-box { display: flex; align-items: center; gap: 9px; flex: 1; min-width: 200px; height: 42px; padding: 0 12px; border: 1px solid var(--color-card-border); border-radius: 7px; background: var(--color-card-bg); color: var(--color-brand); }
-.search-box input { flex: 1; min-width: 0; outline: none; background: transparent; color: var(--color-text-primary); font-size: 13px; }
-.search-box button, .match-count { color: var(--color-text-subtle); font-size: 11px; white-space: nowrap; }
-.tool-action { padding: 10px 12px; border: 1px solid var(--color-card-border); border-radius: 6px; color: var(--color-text-muted); font-size: 12px; white-space: nowrap; }
+.reader-tools { display: flex; align-items: center; gap: 10px; min-height: 54px; border-top: 1px solid var(--color-panel-border); border-bottom: 1px solid var(--color-panel-border); }
+.search-launch { display: inline-flex; align-items: center; gap: 9px; padding: 8px 12px; border: 1px solid var(--color-card-border); background: var(--color-card-bg); color: var(--color-text-muted); font-size: 12px; }
+.search-launch > span { color: var(--color-brand); font-size: 20px; line-height: .8; }
+kbd { padding: 2px 5px; border: 1px solid var(--color-card-border); color: var(--color-text-subtle); font: 10px ui-monospace, monospace; }
+.match-count { color: var(--color-text-subtle); font: 11px ui-monospace, monospace; white-space: nowrap; }
+.tool-spacer { flex: 1; }
+.tool-action { padding: 8px 11px; border: 1px solid var(--color-card-border); color: var(--color-text-muted); font-size: 11px; white-space: nowrap; }
 .tool-action:not(:disabled):hover { border-color: var(--color-brand-faint); color: var(--color-brand); }
-.tool-action:disabled { opacity: .45; cursor: not-allowed; }
-.tool-action b { margin-left: 5px; color: var(--color-brand); }
-.notice { position: fixed; z-index: 80; right: 24px; bottom: 24px; padding: 12px 16px; border-radius: 8px; color: white; background: #343b34; box-shadow: 0 8px 30px #0002; font-size: 13px; }
-.reader-layout { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 34px; align-items: start; padding-top: 22px; }
-.reader-sidebar { position: sticky; top: 126px; max-height: calc(100vh - 150px); overflow: auto; padding-right: 10px; }
-.sidebar-heading { display: flex; justify-content: space-between; align-items: center; padding-bottom: 10px; border-bottom: 1px solid var(--color-panel-border); font-size: 13px; font-weight: 700; }
-.sidebar-heading button { color: var(--color-brand); font-size: 11px; }
-.reader-hint { padding: 10px 0; color: var(--color-text-subtle); font-size: 11px; line-height: 1.6; }
-.outline-list, .hit-list { display: grid; }
-.outline-row, .hit-row { display: flex; gap: 8px; width: 100%; padding: 8px 4px; border-bottom: 1px solid var(--color-split-line); text-align: left; color: var(--color-text-muted); font-size: 11px; line-height: 1.5; }
-.outline-row:hover, .hit-row:hover { color: var(--color-brand); background: var(--color-brand-soft); }
-.outline-row { color: var(--color-brand); font-family: ui-monospace, monospace; }
-.outline-row span, .hit-row span:last-child { display: -webkit-box; flex: 1; overflow: hidden; -webkit-line-clamp: 2; -webkit-box-orient: vertical; color: var(--color-text-subtle); font-family: inherit; }
-.hit-number { flex: 0 0 auto; color: var(--color-brand); font-family: ui-monospace, monospace; }
-.no-hits { padding: 18px 4px; color: var(--color-text-subtle); font-size: 12px; }
-.rule-content { min-width: 0; }
-.rule-entry { display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 12px; padding: 18px 18px 18px calc(18px + min(var(--depth), 5) * 18px); border-bottom: 1px solid var(--color-split-line); scroll-margin-top: 150px; }
-.rule-entry.selected { background: var(--color-brand-soft); }
-.select-entry { padding-top: 3px; }
-.select-entry input { accent-color: var(--color-brand); width: 15px; height: 15px; cursor: pointer; }
-.entry-copy h2 { display: flex; align-items: baseline; gap: 10px; font-size: 14px; font-weight: 700; line-height: 1.55; }
-.entry-copy h2.heading { font-size: 18px; }
-.entry-number { color: var(--color-brand); font: 700 12px ui-monospace, monospace; white-space: nowrap; }
-.entry-text { margin-top: 5px; color: var(--color-text-muted); font-size: 13px; line-height: 1.9; white-space: pre-wrap; overflow-wrap: anywhere; }
-.rule-reference { color: var(--color-brand); text-decoration: underline; text-decoration-style: dotted; text-underline-offset: 3px; }
-.rule-reference:hover { text-decoration-style: solid; }
-@media (max-width: 900px) { .reader-layout { grid-template-columns: 1fr; gap: 12px; } .reader-sidebar { position: static; max-height: 260px; border-bottom: 1px solid var(--color-panel-border); } }
-@media (max-width: 650px) { .rulebook-head { align-items: flex-start; flex-direction: column; } .language-switch { align-self: stretch; } .language-switch button { flex: 1; } .reader-tools { flex-wrap: wrap; } .search-box { flex-basis: 100%; } .match-count { flex: 1; } .rule-entry { padding-left: 12px; padding-right: 8px; } }
+.tool-action:disabled { opacity: .4; cursor: not-allowed; }
+.tool-action b { margin-left: 4px; color: var(--color-brand); }
+.notice { position: fixed; z-index: 80; right: 24px; bottom: 24px; padding: 12px 16px; color: white; background: #343b34; box-shadow: 0 8px 30px #0002; font-size: 13px; }
+.book-stage { width: min(100%, 1040px); margin: 24px auto 0; padding-left: 9px; background: linear-gradient(90deg, #9c8765 0 5px, #d8c8a9 5px 9px, transparent 9px); filter: drop-shadow(0 12px 22px rgba(49, 39, 22, .13)); }
+.book-page { position: relative; min-height: 75vh; padding: 40px clamp(24px, 7vw, 86px) 28px; background: #fffdf6; border: 1px solid #e7dfce; border-left: 0; }
+.book-page::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 22px; background: linear-gradient(90deg, rgba(67, 49, 27, .08), transparent); pointer-events: none; }
+.running-head { display: flex; justify-content: space-between; gap: 12px; padding-bottom: 13px; border-bottom: 1px solid #d9cfbc; color: #857a68; font: 10px/1.4 ui-monospace, monospace; letter-spacing: .08em; }
+.book-rule-list { width: min(100%, 72ch); margin: 22px auto 50px; }
+.rule-entry { position: relative; display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 10px; padding: 8px 8px 8px calc(8px + min(var(--depth), 5) * 15px); scroll-margin-top: 100px; content-visibility: auto; contain-intrinsic-size: auto 112px; }
+.rule-entry.selected { background: rgba(178, 58, 39, .07); }
+.rule-entry.chapter { margin-top: 24px; padding-top: 18px; border-top: 1px solid #c7b89e; }
+.select-entry { padding-top: 3px; opacity: .24; transition: opacity .15s; }
+.rule-entry:hover .select-entry, .rule-entry.selected .select-entry, .select-entry:focus-within { opacity: 1; }
+.select-entry input { accent-color: var(--color-brand); width: 14px; height: 14px; cursor: pointer; }
+.entry-copy h2 { min-height: 18px; line-height: 1.6; }
+.entry-number { color: #927a55; font: 600 11px ui-monospace, monospace; }
+.entry-copy h2.heading .entry-number { color: var(--color-brand); font-weight: 800; font-size: 14px; }
+.entry-text { margin-top: 3px; color: #37332b; font: 15px/2 "Noto Serif SC", "Songti SC", "Noto Serif", Georgia, serif; white-space: pre-wrap; overflow-wrap: anywhere; }
+.entry-copy h2.heading + .entry-text { margin-top: 7px; font-size: 17px; font-weight: 700; line-height: 1.8; }
+.rule-reference { color: #9f3021; font: inherit; text-decoration: underline; text-decoration-color: rgba(159, 48, 33, .45); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+.rule-reference:hover { color: #6f2118; text-decoration-color: currentColor; }
+.book-folio { display: flex; justify-content: space-between; width: min(100%, 72ch); margin: 0 auto; padding-top: 12px; border-top: 1px solid #d9cfbc; color: #8d826f; font: 10px ui-monospace, monospace; }
+.search-dialog { width: min(650px, calc(100vw - 30px)); max-height: min(76vh, 760px); padding: 0; border: 1px solid #c9bca5; background: #fbf8ef; color: var(--color-text-primary); box-shadow: 0 28px 90px rgba(25, 20, 12, .32); }
+.search-dialog::backdrop { background: rgba(35, 31, 25, .54); backdrop-filter: blur(3px); }
+.search-modal-head { display: flex; align-items: center; justify-content: space-between; padding: 22px 24px 15px; }
+.modal-kicker { color: var(--color-brand); font: 10px ui-monospace, monospace; letter-spacing: .15em; }
+.search-modal-head h2 { margin-top: 4px; font: 700 24px/1.25 "Noto Serif SC", Georgia, serif; }
+.modal-close { width: 34px; height: 34px; color: #756c5c; font-size: 25px; line-height: 1; }
+.modal-search-field { display: flex; align-items: center; gap: 10px; height: 50px; margin: 0 24px; padding: 0 12px; border: 1px solid #c9bca5; background: #fffdf7; color: var(--color-brand); }
+.modal-search-field:focus-within { outline: 2px solid rgba(178, 58, 39, .18); border-color: var(--color-brand); }
+.modal-search-field > span { font-size: 25px; }
+.modal-search-field input { flex: 1; min-width: 0; outline: none; background: transparent; color: var(--color-text-primary); font-size: 14px; }
+.search-results { max-height: calc(min(76vh, 760px) - 140px); overflow-y: auto; margin-top: 12px; border-top: 1px solid #ded5c5; }
+.search-prompt, .search-limit { padding: 18px 24px; color: #827969; font-size: 12px; }
+.search-result { display: flex; align-items: flex-start; gap: 14px; width: 100%; padding: 13px 24px; border-bottom: 1px solid #e8e0d2; text-align: left; }
+.search-result:hover { background: #f0eadc; }
+.result-number { flex: 0 0 68px; color: var(--color-brand); font: 700 12px ui-monospace, monospace; }
+.result-copy { display: grid; gap: 3px; color: #4c463c; font: 13px/1.6 "Noto Serif SC", Georgia, serif; }
+.result-copy strong { color: #978a74; font: 10px ui-monospace, monospace; }
+.result-arrow { margin-left: auto; color: #a39884; }
+@media (max-width: 650px) { .rulebook-page { padding-inline: 12px; } .rulebook-head { align-items: flex-start; flex-direction: column; } .language-switch { align-self: stretch; } .language-switch button { flex: 1; } .reader-tools { flex-wrap: wrap; padding: 9px 0; } .tool-spacer { display: none; } .search-launch { flex: 1; } .book-stage { margin-top: 14px; } .book-page { padding: 24px 14px 22px 20px; } .running-head { font-size: 8px; } .rule-entry { padding-left: 5px; padding-right: 4px; } .entry-text { font-size: 14px; } .result-number { flex-basis: 48px; } .search-result { gap: 8px; padding-inline: 15px; } .search-modal-head { padding-inline: 16px; } .modal-search-field { margin-inline: 16px; } }
 </style>
