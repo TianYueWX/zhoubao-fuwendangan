@@ -23,6 +23,7 @@ import DecksView from "./DecksView.vue";
 import ChainBoardView from "./ChainBoardView.vue";
 import RankLadderView from "./RankLadderView.vue";
 import GamesView from "./GamesView.vue";
+import BoosterOpeningView from "./BoosterOpeningView.vue";
 import RulesQaView from "./RulesQaView.vue";
 import ToolPlaceholder from "./ToolPlaceholder.vue";
 import EditorialHub from "../admin/EditorialHub.vue";
@@ -71,6 +72,9 @@ export const ViewComponents: Record<string, unknown> = {
   /* 小工具:小游戏(使用站点内置的 SC 印版卡表) */
   games: GamesView,
 
+  /* 小工具:补充包模拟器(直接读公开卡表,开包记录落在本机) */
+  booster: BoosterOpeningView,
+
   /* 编辑部(隐藏栏目:连点报头刊名解锁 + 管理员门禁) */
   editorial: EditorialHub,
   "editorial-cards": AdminCardEditor,
@@ -96,6 +100,7 @@ export {
   ChainBoardView,
   RankLadderView,
   GamesView,
+  BoosterOpeningView,
   RulesQaView,
   ToolPlaceholder,
   EditorialHub,

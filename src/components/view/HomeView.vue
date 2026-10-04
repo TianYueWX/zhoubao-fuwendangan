@@ -203,6 +203,19 @@ onUnmounted(() => {
           </svg>
           小游戏
         </button>
+        <button
+          type="button"
+          class="shortcut-btn"
+          title="开卡包模拟 · 选择补充包系列并查看本地开包记录"
+          @click="navigate({ view: 'booster' })"
+        >
+          <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+            <path d="M3.5 5.5 10 2.5l6.5 3v9L10 17.5l-6.5-3v-9Z" stroke-width="1.35" stroke-linejoin="round" />
+            <path d="m3.8 5.7 6.2 3 6.2-3M10 8.8v8.2M6.2 3.9l6.5 3.2" stroke-width="1.2" stroke-linejoin="round" />
+            <path d="m14.4 2.6.4-1.1m2.2 3 .9-.6" stroke-width="1.2" stroke-linecap="round" />
+          </svg>
+          开卡包
+        </button>
       </div>
     </div>
   </section>

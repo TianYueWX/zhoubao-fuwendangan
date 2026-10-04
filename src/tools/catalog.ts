@@ -262,6 +262,17 @@ export const TOOLS: readonly ToolDef[] = Object.freeze([
     badge: "小工具",
     needsData: false,
   },
+  {
+    code: "booster",
+    short: "开卡包",
+    label: "开卡包模拟",
+    desc: "按系列模拟补充包与整盒开包，保存本机开包记录",
+    group: "reference",
+    source: "supabase",
+    badge: "小工具",
+    needsData: false,
+    unavailableHint: "需要配置公开只读的 Supabase 卡牌数据源",
+  },
 
   /* ── 编辑部(隐藏栏目:连点报头刊名解锁,且必须管理员登录) ──
    * editorial 是栏目首页(hub),其余 5 个工具各自独立成页。
