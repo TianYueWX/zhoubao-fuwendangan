@@ -119,6 +119,7 @@ const needsCodeProp = computed(() =>
 const homeCode = HOME_CODE;
 const isHome = computed(() => store.currentView === homeCode);
 const isCarddex = computed(() => store.currentView === "carddex");
+const isBuilder = computed(() => store.currentView === "builder");
 
 /**
  * 当前所在的**一级栏目**。
@@ -177,7 +178,7 @@ function onWeekChange(e: Event): void {
   -->
   <div class="flex flex-col min-h-screen">
     <header
-      v-if="!isHome && store.currentView !== 'chain' && store.currentView !== 'rulebook'"
+      v-if="!isHome && !isBuilder && store.currentView !== 'chain' && store.currentView !== 'rulebook'"
       class="masthead-solid sticky top-0 z-50 shrink-0"
     >
       <div class="px-4 lg:px-8 h-14 flex items-center justify-between gap-3">
@@ -322,6 +323,8 @@ function onWeekChange(e: Event): void {
       :class="
         isHome
           ? 'w-full'
+          : isBuilder
+            ? 'flex-1 w-full min-w-0'
           : isCarddex
             ? 'flex-1 w-full max-w-[1720px] mx-auto px-4 lg:px-8 py-4'
             : 'flex-1 w-full max-w-[1720px] mx-auto px-4 lg:px-8 py-8'
@@ -335,7 +338,7 @@ function onWeekChange(e: Event): void {
 
     <!-- ══════════ 页脚 ══════════ -->
     <footer
-      v-if="!isHome && !isCarddex"
+      v-if="!isHome && !isCarddex && !isBuilder"
       class="px-4 lg:px-8 pb-8 max-w-[1720px] mx-auto w-full"
     >
       <div class="rune-rule mb-5"></div>
@@ -349,7 +352,7 @@ function onWeekChange(e: Event): void {
 
     <!-- 回到顶部 FAB(carddex 也走这条，页面内不再自建局部回顶) -->
     <button
-      v-if="!isHome && showTop"
+      v-if="!isHome && !isBuilder && showTop"
       class="fixed bottom-6 right-6 z-50 w-11 h-11 rounded-full bg-brand text-brand-ink shadow-lg flex items-center justify-center text-lg leading-none transition-transform hover:scale-110 fade-in"
       aria-label="回到顶部"
       title="回到顶部"

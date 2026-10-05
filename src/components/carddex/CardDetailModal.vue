@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { ArrowLeft, ArrowRight, Bookmark, BookmarkCheck, MessageCircle, X } from "@lucide/vue";
 import CarddexImage from "./CarddexImage.vue";
 import { printKey } from "./data";
-import { richEffectText } from "./richText";
+import CardEffectText from "./CardEffectText.vue";
 import { segmentQaText } from "@/tools/sync/qa";
 import type {
   CardIcon,
@@ -338,37 +338,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey));
               </div>
             </dl>
           </div>
-          <section
-            v-if="
-              item.base.effectCn ||
-              item.base.effectEn ||
-              item.base.effectKr ||
-              item.base.effectTw
-            "
-            class="copy-block"
-          >
-            <h4>{{ locale === "zh" ? "卡牌效果" : "Card text" }}</h4>
-            <div
-              v-if="item.base.effectCn"
-              class="effect"
-              v-html="richEffectText(item.base.effectCn, icons)"
-            ></div>
-            <div
-              v-if="item.base.effectEn"
-              class="effect secondary"
-              v-html="richEffectText(item.base.effectEn, icons)"
-            ></div>
-            <div
-              v-if="item.base.effectKr"
-              class="effect secondary"
-              v-html="richEffectText(item.base.effectKr, icons)"
-            ></div>
-            <div
-              v-if="item.base.effectTw"
-              class="effect secondary"
-              v-html="richEffectText(item.base.effectTw, icons)"
-            ></div>
-          </section>
+          <CardEffectText :base="item.base" :icons="icons" :locale="locale" />
           <section
             v-if="
               item.base.tags.length ||
@@ -714,34 +684,6 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey));
   color: var(--color-brand);
   font-size: 10px;
   letter-spacing: 0.16em;
-}
-.effect {
-  color: var(--color-text-primary);
-  font-size: 15px;
-  font-weight: 560;
-  line-height: 1.82;
-  letter-spacing: 0.01em;
-}
-.effect.secondary {
-  margin-top: 10px;
-  color: var(--color-text-muted);
-  font:
-    500 14px/1.75 Georgia,
-    serif;
-}
-.effect :deep(strong) {
-  color: var(--color-brand);
-  font-weight: 800;
-}
-.effect :deep(.effect-icon) {
-  margin-inline: 2px;
-  height: 19px;
-  display: inline-block;
-  vertical-align: -4px;
-  object-fit: contain;
-}
-.effect :deep(.effect-icon.white-source) {
-  filter: invert(1);
 }
 .secondary {
   margin-top: 8px;

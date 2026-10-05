@@ -189,6 +189,17 @@ export async function restSelect<T = Record<string, unknown>>(
   });
 }
 
+/** 私有资料读取必须携带当前用户 JWT，与公开资料的 anon 读取分开。 */
+export async function restSelectPrivate<T = Record<string, unknown>>(
+  table: string,
+  query: RestQuery = {}
+): Promise<{ rows: T[]; total: number | null }> {
+  return call<T>(table, {
+    method: 'GET', token: 'user', search: buildSearch(query),
+    prefer: query.count ? 'count=exact' : undefined
+  });
+}
+
 /**
  * 分页读全表(PostgREST 单次上限默认 1000 行)。
  * 用于同步差异比对这类需要全量快照的场景。

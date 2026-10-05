@@ -10,6 +10,9 @@ codex-session-*.md
 # UI 验证截图(临时)
 shots/
 
+# 一次性界面调试脚本
+scripts/.tmp*
+
 # 预设数据包(由 scripts/prepare-preset.mjs 从根目录数据包生成,不入库)
 public/data/s4-w3/
 public/data/manifest.json

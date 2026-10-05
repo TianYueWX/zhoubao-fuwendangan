@@ -38,6 +38,9 @@ export interface Route {
   ruleBook?: string;
   /** 可选的规则书内定位编号 */
   ruleNumber?: string;
+  builderPage?: 'library' | 'edit' | 'cloud' | 'share';
+  builderId?: string;
+  builderSnapshot?: string;
 }
 
 export function parseHash(hash: string): Route {
@@ -48,6 +51,12 @@ export function parseHash(hash: string): Route {
   const raw = withoutQuery.replace(/\/+$/, '');
   if (!raw) return { view: HOME_CODE };
   const [head = '', tail] = raw.split('/');
+  if (head === 'builder') {
+    const page = tail === 'edit' || tail === 'cloud' || tail === 'share' ? tail : 'library';
+    try {
+      return { view: 'builder', builderPage: page, builderId: decodeURIComponent(raw.split('/')[2] ?? ''), builderSnapshot: new URLSearchParams(hash.split('?')[1] ?? '').get('s') ?? '' };
+    } catch { return { view: 'builder', builderPage: 'library' }; }
+  }
 
   // 内容层特例:期号正文
   if (head === 'issue') {
@@ -82,6 +91,10 @@ export function parseHash(hash: string): Route {
 }
 
 export function routeToHash(route: Route): string {
+  if (route.view === 'builder') {
+    const page = route.builderPage ?? 'library';
+    return `#/builder${page === 'library' ? '' : `/${page}`}${route.builderId ? `/${encodeURIComponent(route.builderId)}` : ''}${page === 'share' && route.builderSnapshot ? `?s=${encodeURIComponent(route.builderSnapshot)}` : ''}`;
+  }
   if (route.view === 'issue') {
     return route.issueId ? `#/issue/${encodeURIComponent(route.issueId)}` : '#/archive';
   }
@@ -104,6 +117,7 @@ export function routeToHash(route: Route): string {
 
 /** 当前 store 状态 → 路由 */
 export function currentRoute(): Route {
+  if (store.currentView === 'builder') return { view: 'builder', builderPage: store.currentBuilderPage, builderId: store.currentBuilderId, builderSnapshot: store.currentBuilderSnapshot };
   if (store.currentView === 'issue') {
     return { view: 'issue', issueId: store.currentIssueId };
   }
@@ -118,6 +132,13 @@ const CONTENT_ROUTES = new Set(['archive', 'issue']);
 
 /** 路由 → store(带可用性校验:既非工具 code 也非内容层路由 → 回工具台) */
 export function applyRoute(route: Route): void {
+  if (route.view === 'builder') {
+    store.currentBuilderPage = route.builderPage ?? 'library';
+    store.currentBuilderId = route.builderId ?? '';
+    store.currentBuilderSnapshot = route.builderSnapshot ?? '';
+    store.currentView = 'builder';
+    return;
+  }
   if (route.view === 'issue') {
     const id = route.issueId ?? '';
     if (id && store.packages.some((p) => p.id === id)) {

@@ -16,6 +16,22 @@ import { quickHeroRows } from '@/core';
 import { zoneAtTokenIndex } from '@/utils/parseTTS';
 import { normalizeEventKey } from '@/utils/dataParser';
 import type { CardCatalog, Deck } from '@/types';
+import { buildCarddexData } from '@/components/carddex/data';
+import { cardIndex } from '@/tools/deckbuilder/model';
+import { fromEventDeck } from '@/tools/deckbuilder/formats';
+import { saveDraft } from '@/tools/deckbuilder/storage';
+import { navigate } from '@/router/hash';
+
+const builderError = ref('');
+function copyToBuilder(): void {
+  if (!selectedDeck.value) return;
+  try {
+    const data = buildCarddexData((store.cardBase ?? []).map(r => ({ ...r })), (store.cardPrints ?? []).map(r => ({ ...r })), [], [], []);
+    const draft = fromEventDeck(selectedDeck.value, cardIndex(data.records));
+    saveDraft(draft);
+    navigate({ view: 'builder', builderPage: 'edit', builderId: draft.id });
+  } catch (error) { builderError.value = error instanceof Error ? error.message : String(error); }
+}
 
 /* ── 过滤 ── */
 const rankLimit = ref<0 | 8 | 16 | 32>(0);
@@ -332,6 +348,7 @@ async function copyTTS(): Promise<void> {
               <span v-if="selectedDeck.city && selectedDeck.city !== '未知'" class="text-ink-faint whitespace-nowrap">· {{ selectedDeck.city }}</span>
               <span v-if="selectedDeck.shopName" class="text-ink-faint whitespace-nowrap">· {{ selectedDeck.shopName }}</span>
             </div>
+            <button class="btn-brand px-3 py-1 text-xs shrink-0" @click="copyToBuilder">复制到构筑</button>
             <button
               v-if="selectedDeck.ttsCode"
               @click="copyTTS"
@@ -342,6 +359,7 @@ async function copyTTS(): Promise<void> {
           </div>
         </div>
 
+        <p v-if="builderError" class="text-brand text-xs mb-3" role="alert">{{ builderError }}</p>
         <!-- 分组卡表(区域:传奇/选定/符文/战场 并排一行,战场横置;主牌堆/备牌 网格) -->
         <div class="space-y-5">
           <!-- 顶部一排:传奇 / 选定 / 符文 / 战场 -->

@@ -11,6 +11,9 @@ importers:
       '@lucide/vue':
         specifier: ^1.51.0
         version: 1.51.0(vue@3.5.41(typescript@5.9.3))
+      '@piltoverarchive/riftbound-deck-codes':
+        specifier: 1.5.0
+        version: 1.5.0
       echarts:
         specifier: ^5.5.1
         version: 5.6.0
@@ -276,6 +279,10 @@ packages:
   '@nodelib/fs.walk@1.2.8':
     resolution: {integrity: sha512-oGB+UxlgWcgQkgwo8GcEGwemoTFt3FIO9ababBmaGwXIoBKZ+GTy0pP185beGg7Llih/NSHSV2XAs1lnznocSg==}
     engines: {node: '>= 8'}
+
+  '@piltoverarchive/riftbound-deck-codes@1.5.0':
+    resolution: {integrity: sha512-vgW7X/ybQSavKKTCATm8lTbD6D3RZV3nzqQDoNW7TRGR27qv+QEqr5pYnoGVcD7DbenSdTHs55KPb8caFDBQcg==}
+    engines: {node: '>=16.0.0'}
 
   '@rollup/rollup-android-arm-eabi@4.62.5':
     resolution: {integrity: sha512-jfkGfTwhQpsiSckPF8r9bU3pn3vyd72NlWaO+TgEO6WPSDnUhXzrNYCHBMOYj0ACaUgjm6eERLF+XV9a6RstoA==}
@@ -1175,6 +1182,8 @@ snapshots:
     dependencies:
       '@nodelib/fs.scandir': 2.1.5
       fastq: 1.20.1
+
+  '@piltoverarchive/riftbound-deck-codes@1.5.0': {}
 
   '@rollup/rollup-android-arm-eabi@4.62.5':
     optional: true

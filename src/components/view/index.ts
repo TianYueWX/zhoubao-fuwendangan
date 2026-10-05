@@ -20,6 +20,7 @@ import CardsView from "./CardsView.vue";
 import CarddexView from "./CarddexView.vue";
 import RegionView from "./RegionView.vue";
 import DecksView from "./DecksView.vue";
+import DeckBuilderView from "./DeckBuilderView.vue";
 import ChainBoardView from "./ChainBoardView.vue";
 import RankLadderView from "./RankLadderView.vue";
 import GamesView from "./GamesView.vue";
@@ -55,6 +56,7 @@ export const ViewComponents: Record<string, unknown> = {
   heroes: HeroLegendView, // 兼容:英雄与传奇同一视图
   region: RegionView,
   decks: DecksView,
+  builder: DeckBuilderView,
 
   /* 云端内容 */
   blog: placeholder,

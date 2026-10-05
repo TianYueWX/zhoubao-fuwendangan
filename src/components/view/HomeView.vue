@@ -123,6 +123,12 @@ onUnmounted(() => {
           <span class="entry-label font-display">卡牌</span>
           <ArrowUpRight class="entry-arrow" aria-hidden="true" />
         </button>
+        <button type="button" class="entry-card" @click="navigate({ view: 'builder' })">
+          <svg class="entry-art" viewBox="0 0 160 104" fill="none" aria-hidden="true">
+            <path class="art-sheet" d="M32 27h47v65H32zM58 19h47v65H58zM84 11h47v65H84z" />
+            <path class="art-accent" d="M99 40h17m-8-8v17M43 74h22M43 81h14" />
+          </svg><span class="entry-label font-display">构筑卡组</span><ArrowUpRight class="entry-arrow" aria-hidden="true" />
+        </button>
         <button
           v-if="editorialUnlocked"
           type="button"
@@ -262,7 +268,7 @@ onUnmounted(() => {
   width: min(100%, 1180px);
 }
 .has-editorial .home-entries {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 .has-editorial .entry-card {
   padding-inline: 18px;
@@ -327,7 +333,7 @@ onUnmounted(() => {
 }
 .home-entries {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 22px;
 }
 .entry-card {

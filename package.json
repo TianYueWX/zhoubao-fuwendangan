@@ -5,6 +5,8 @@
   "type": "module",
   "description": "Riftbound (符文战场) TCG 赛事 Meta 分析系统 —— Vite + Vue 3 + TypeScript 重构版",
   "scripts": {
+    "verify:deck-builder": "node --experimental-strip-types --import ./scripts/register-hooks.mjs scripts/verify-deck-builder.mjs",
+    "verify:deck-builder-ui": "node scripts/verify-deck-builder-ui.mjs",
     "build": "vue-tsc --noEmit -p tsconfig.json && vue-tsc --noEmit -p tsconfig.node.json && vite build",
     "build:fast": "vite build",
     "dev": "vite",
@@ -37,6 +39,7 @@
   },
   "dependencies": {
     "@lucide/vue": "^1.51.0",
+    "@piltoverarchive/riftbound-deck-codes": "1.5.0",
     "echarts": "^5.5.1",
     "oboe": "^2.1.7",
     "papaparse": "^5.4.1",

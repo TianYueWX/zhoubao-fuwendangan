@@ -184,6 +184,9 @@ export const store = reactive({
 
   /** 内容层当前期号(仅 currentView === 'issue' 时有意义) */
   currentIssueId: '',
+  currentBuilderPage: 'library' as 'library' | 'edit' | 'cloud' | 'share',
+  currentBuilderId: '',
+  currentBuilderSnapshot: '',
 
   get isReady(): boolean {
     const deckReady =
