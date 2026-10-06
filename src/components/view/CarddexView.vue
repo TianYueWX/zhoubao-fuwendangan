@@ -62,6 +62,7 @@ const qaByCardNo = ref<Map<string, CardQa[]>>(new Map());
 const query = reactive<CarddexQueryState>(loadQuery(clone(DEFAULT_QUERY)));
 const ui = reactive(loadUi());
 const searchInput = ref(query.search);
+const searchFocused = ref(false);
 const visibleCount = ref(48);
 const sortOpen = ref(false);
 const mobileFilterOpen = ref(false);
@@ -204,6 +205,7 @@ const activeCount = computed(
     }).length,
 );
 const suggestions = computed(() => {
+  if (!searchFocused.value) return [];
   const q = searchInput.value.trim().toLocaleLowerCase();
   if (!q) return [];
   const types: FilterType[] = ["tag", "keyword", "advancedTag", "region"];
@@ -546,6 +548,8 @@ onBeforeUnmount(() => {
                 v-model="searchInput"
                 :placeholder="labels.placeholder"
                 autocomplete="off"
+                @focus="searchFocused = true"
+                @blur="searchFocused = false"
                 @keydown="searchKeydown"
               />
               <button
