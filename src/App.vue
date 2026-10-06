@@ -9,21 +9,11 @@ import {
   weekBuckets,
 } from "@/store/analysis";
 import { navigate, startRouter, syncUrl } from "@/router/hash";
-import {
-  sectionBarTools,
-  groupOf,
-  findTool,
-  isGroupVisible,
-  HOME_CODE,
-  type ToolGroupId,
-} from "@/tools/catalog";
+import { findTool, HOME_CODE } from "@/tools/catalog";
 import { setSourceState, setToolState } from "@/tools/state";
 import { probeSupabase } from "@/tools/sources/supabase";
-import { bootstrapAuth, isEditorialAdmin } from "@/tools/sources/auth";
-import {
-  editorialUnlocked,
-  loadEditorialUnlock,
-} from "@/tools/editorialAccess";
+import { bootstrapAuth } from "@/tools/sources/auth";
+import { loadEditorialUnlock } from "@/tools/editorialAccess";
 import { ViewComponents } from "@/components/view";
 
 let stopRouter: (() => void) | null = null;
@@ -121,43 +111,12 @@ const isHome = computed(() => store.currentView === homeCode);
 const isCarddex = computed(() => store.currentView === "carddex");
 const isBuilder = computed(() => store.currentView === "builder");
 
-/**
- * 当前所在的**一级栏目**。
- * 期刊栏目含:期刊本体、往期、期号正文、数据管理与全部本地分析工具。
- */
-const activeGroup = computed<ToolGroupId | null>(() => {
-  const v = store.currentView;
-  if (v === HOME_CODE) return null; // 工具台不属于任何栏目
-  if (v === "archive" || v === "issue") return "journal";
-  return findTool(v)?.group ?? null;
-});
-
-/**
- * 栏目内二级导航条:
- *   期刊 → 「本期 · 往期」+ 数据管理与 5 个分析工具
- *   云端内容 / 参考资料 → 该栏目下登记的工具
- * 未载入数据时本地工具仍可进入(页面内给引导),只是样式降级。
- */
-const sectionTools = computed(() => {
-  const g = activeGroup.value;
-  if (!g) return [];
-  // 隐藏栏目(编辑部)未解锁时,栏目条一并收起 —— 深链进来的访客只看到门禁页
-  if (!isGroupVisible(g, editorialUnlocked.value)) return [];
-  // 期刊本体与往期已由「本期 / 往期」两个按钮承载,不重复出现在工具位
-  const tools = sectionBarTools(g).filter(
-    (t) => t.code !== "journal" && t.code !== "archive",
-  );
-  // 需登录的栏目:未通过门禁时只留栏目首页(code === 栏目 id),
-  // 否则会列出 5 个点了就撞门禁的死链
-  if (tools.some((t) => t.requiresAuth) && !isEditorialAdmin.value) {
-    return tools.filter((t) => t.code === g);
-  }
-  return tools;
-});
-const showSectionBar = computed(
-  () => activeGroup.value !== null && sectionTools.value.length > 0,
+const isJournalSection = computed(
+  () =>
+    store.currentView === "archive" ||
+    store.currentView === "issue" ||
+    findTool(store.currentView)?.group === "journal",
 );
-const isJournalSection = computed(() => activeGroup.value === "journal");
 
 /* ── 期刊次级条:周次 + 样本数 ── */
 const weeks = computed(() => weekBuckets());
@@ -194,91 +153,12 @@ function onWeekChange(e: Event): void {
         ></div>
       </div>
 
-      <!-- 栏目内二级导航条(栏目驱动) -->
-      <nav
-        v-if="showSectionBar"
-        class="px-4 lg:px-8 h-12 flex items-center gap-3 lg:gap-4 border-t border-panel-border"
-        :aria-label="`${groupOf(activeGroup ?? 'journal').label}导航`"
+      <!-- 期刊数据范围(仅活动包存在时) -->
+      <div
+        v-if="isJournalSection && store.result"
+        class="px-4 lg:px-8 h-12 flex items-center justify-end gap-3 lg:gap-4 border-t border-panel-border"
       >
-        <div
-          class="flex-1 min-w-0 flex items-center gap-4 lg:gap-5 overflow-x-auto"
-        >
-          <!-- 期刊栏目:正文入口(本期 / 往期) -->
-          <template v-if="isJournalSection">
-            <button
-              class="relative shrink-0 h-12 px-0.5 text-[12.5px] tracking-[0.06em] transition-colors"
-              :class="
-                store.currentView === 'journal'
-                  ? 'text-brand font-semibold'
-                  : 'text-ink-muted hover:text-brand'
-              "
-              title="本期周报"
-              @click="navigate({ view: 'journal' })"
-            >
-              本期
-              <span
-                v-if="store.currentView === 'journal'"
-                class="absolute left-0 right-0 bottom-0 h-[2px] bg-brand"
-                aria-hidden="true"
-              ></span>
-            </button>
-            <button
-              class="relative shrink-0 h-12 px-0.5 text-[12.5px] tracking-[0.06em] transition-colors"
-              :class="
-                store.currentView === 'archive'
-                  ? 'text-brand font-semibold'
-                  : 'text-ink-muted hover:text-brand'
-              "
-              title="往期归档"
-              @click="navigate({ view: 'archive' })"
-            >
-              往期
-              <span
-                v-if="store.currentView === 'archive'"
-                class="absolute left-0 right-0 bottom-0 h-[2px] bg-brand"
-                aria-hidden="true"
-              ></span>
-            </button>
-            <span
-              class="w-px h-4 bg-panel-border shrink-0"
-              aria-hidden="true"
-            ></span>
-          </template>
-
-          <!-- 栏目内工具(期刊栏目下即数据管理与 5 个分析工具) -->
-          <button
-            v-for="t in sectionTools"
-            :key="t.code"
-            class="relative shrink-0 h-12 px-0.5 transition-colors text-[12.5px] tracking-[0.06em]"
-            :class="[
-              store.currentView === t.code
-                ? 'text-brand font-semibold'
-                : t.needsData && !store.hasPackages && t.source === 'local'
-                  ? 'text-ink-faint/60 hover:text-brand'
-                  : 'text-ink-muted hover:text-brand',
-            ]"
-            :data-code="t.code"
-            :title="
-              t.needsData && !store.hasPackages
-                ? `${t.label} · 需先载入数据包`
-                : t.label
-            "
-            @click="navigate({ view: t.code })"
-          >
-            {{ t.short ?? t.label }}
-            <span
-              v-if="store.currentView === t.code"
-              class="absolute left-0 right-0 bottom-0 h-[2px] bg-brand"
-              aria-hidden="true"
-            ></span>
-          </button>
-        </div>
-
-        <!-- 范围(仅活动包存在时;期刊栏目专用) -->
-        <div
-          v-if="isJournalSection && store.result"
-          class="flex items-center gap-2.5 shrink-0"
-        >
+        <div class="flex items-center gap-2.5 shrink-0">
           <label
             class="flex items-center gap-1.5"
             :title="weeks.length <= 1 ? '当前数据包仅含单周' : ''"
@@ -313,7 +193,7 @@ function onWeekChange(e: Event): void {
             {{ store.isAnalyzing ? "分析中…" : "分析新数据包" }}
           </button>
         </div>
-      </nav>
+      </div>
 
       <div class="hairline"></div>
     </header>
