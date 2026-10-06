@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
-import { ArrowLeft, ArrowRight, ChevronDown, ChevronRight, Minus, Plus, Search } from "@lucide/vue";
+import { ArrowRight, ChevronDown, ChevronRight, Minus, Plus, Search } from "@lucide/vue";
 import { navigate } from "@/router/hash";
 import { listAllRules } from "@/tools/admin/rules";
 import { bookCounts, matchRules } from "@/tools/admin/rulesTree";
@@ -47,6 +47,7 @@ interface QaDisplay extends QaEntry {
 const rules = ref<Rule[]>([]);
 const qa = ref<QaDisplay[]>([]);
 const loading = ref(true);
+const teleportReady = ref(false);
 const error = ref("");
 const query = ref("");
 const scope = ref<Scope>("all");
@@ -236,35 +237,17 @@ watch([qaResource.data, cardNamesResource.data], ([bundle, cards]) => {
   loading.value = false;
 }, { immediate: true });
 
-onMounted(() => void loadReferenceData());
+onMounted(() => {
+  teleportReady.value = true;
+  void loadReferenceData();
+});
 </script>
 
 <template>
   <div class="reference-page fade-in">
-    <header class="reference-hero">
-      <div class="reference-hero-copy">
-        <div class="flex items-center gap-3 text-[11px] text-ink-faint">
-          <button class="hover:text-brand transition-colors" @click="navigate({ view: 'home' })">
-            <ArrowLeft :size="14" aria-hidden="true" /> 返回首页
-          </button>
-        </div>
-        <p class="eyebrow mt-8">规则书 · 赛事判例 · 卡牌 QA</p>
-        <h1 class="headline-xl reference-title">规则与 QA 查询</h1>
-        <p class="standfirst reference-lede">
-          把规则编号、正文、卡牌问答和关联卡牌放进同一张检索桌。输入一个词，直接找到可执行的裁定依据。
-        </p>
-      </div>
-
-      <div class="reference-seal" aria-hidden="true">
-        <span class="reference-seal-ring"></span>
-        <span class="reference-seal-mark">问</span>
-        <span class="reference-seal-caption">RULES / QA</span>
-      </div>
-    </header>
-
-    <div class="flex justify-end mt-3">
-      <CacheSyncStatus :checking="cacheChecking" :stale="cacheStale" :saved-at="cacheSavedAt" :error="cacheError" :disabled="loading" @refresh="refreshReferenceData" />
-    </div>
+    <Teleport v-if="teleportReady" to="#global-page-actions">
+      <CacheSyncStatus compact :checking="cacheChecking" :stale="cacheStale" :saved-at="cacheSavedAt" :error="cacheError" :disabled="loading" @refresh="refreshReferenceData" />
+    </Teleport>
 
     <section class="reference-search card" aria-label="检索规则与 QA">
       <div class="reference-search-label">
@@ -333,10 +316,6 @@ onMounted(() => void loadReferenceData());
         <div class="reference-stat">
           <span class="reference-stat-number">{{ qa.length.toLocaleString() }}</span>
           <span class="reference-stat-label">QA 条目</span>
-        </div>
-        <div class="reference-stat reference-stat-note">
-          <span class="reference-stat-dot"></span>
-          <span>公开资料库已接通</span>
         </div>
       </div>
 
@@ -472,35 +451,7 @@ onMounted(() => void loadReferenceData());
   margin: 0 auto;
 }
 
-.reference-hero {
-  display: flex;
-  justify-content: space-between;
-  gap: 48px;
-  align-items: flex-end;
-  padding: 26px 0 34px;
-  border-bottom: 1px solid var(--color-panel-border);
-}
-
-.reference-hero-copy { max-width: 760px; }
-.reference-title { font-size: clamp(36px, 5vw, 62px); margin-top: 14px; }
-.reference-lede { max-width: 650px; margin-top: 17px; font-size: 15px; }
-
-.reference-seal {
-  width: 142px;
-  height: 142px;
-  flex: 0 0 auto;
-  border: 1px solid var(--color-brand-faint);
-  position: relative;
-  display: grid;
-  place-items: center;
-  color: var(--color-brand);
-  transform: rotate(7deg);
-}
-.reference-seal-ring { position: absolute; inset: 13px; border: 1px solid var(--color-brand-faint); border-radius: 50%; }
-.reference-seal-mark { font-family: "Noto Serif SC", serif; font-weight: 900; font-size: 54px; line-height: 1; }
-.reference-seal-caption { position: absolute; bottom: 20px; font: 9px/1 ui-monospace, monospace; letter-spacing: .12em; }
-
-.reference-search { margin-top: 28px; padding: 20px 22px 16px; border-radius: 12px; }
+.reference-search { padding: 20px 22px 16px; border-radius: 12px; }
 .reference-search-label { display: flex; align-items: center; gap: 9px; font-size: 12px; color: var(--color-text-muted); }
 .reference-search-label .sec-kicker { width: 20px; height: 2px; }
 .reference-search-row { display: flex; gap: 14px; align-items: center; margin-top: 13px; }
@@ -526,8 +477,7 @@ onMounted(() => void loadReferenceData());
 .reference-stat { min-width: 150px; padding: 15px 22px; border-right: 1px solid var(--color-panel-border); display: flex; flex-direction: column; gap: 1px; }
 .reference-stat-number { font: 800 24px/1.2 ui-monospace, monospace; color: var(--color-text-primary); }
 .reference-stat-label { font-size: 11px; color: var(--color-text-subtle); }
-.reference-stat-note { flex: 1; flex-direction: row; align-items: center; gap: 8px; border-right: 0; color: var(--color-text-subtle); font-size: 11px; }
-.reference-stat-dot { width: 7px; height: 7px; border-radius: 50%; background: #3d8f66; box-shadow: 0 0 0 4px rgba(61,143,102,.12); }
+.reference-stat:last-child { border-right: 0; }
 
 .reference-results-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; margin-top: 36px; }
 .reference-result-layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 28px; margin-top: 22px; }
@@ -573,15 +523,10 @@ onMounted(() => void loadReferenceData());
 .reference-qa-row-arrow { flex: 0 0 auto; color: var(--color-brand); font-size: 18px; line-height: 1.2; }
 
 @media (max-width: 800px) {
-  .reference-hero { align-items: flex-start; padding-top: 8px; }
-  .reference-seal { width: 92px; height: 92px; }
-  .reference-seal-ring { inset: 8px; }
-  .reference-seal-mark { font-size: 36px; }
-  .reference-seal-caption { bottom: 12px; font-size: 7px; }
   .reference-search-row, .reference-stats { align-items: stretch; flex-direction: column; }
   .reference-scope { align-self: flex-start; }
   .reference-stat { min-width: 0; border-right: 0; border-bottom: 1px solid var(--color-panel-border); flex-direction: row; align-items: baseline; gap: 10px; }
-  .reference-stat-note { border-bottom: 0; }
+  .reference-stat:last-child { border-bottom: 0; }
   .reference-result-layout, .reference-discovery { grid-template-columns: 1fr; gap: 28px; }
   .reference-sidebar { position: static; }
   .reference-sidebar-heading { display: none; }
@@ -590,9 +535,6 @@ onMounted(() => void loadReferenceData());
 }
 
 @media (max-width: 540px) {
-  .reference-hero { gap: 14px; }
-  .reference-seal { display: none; }
-  .reference-title { font-size: 36px; }
   .reference-search { padding-inline: 15px; }
   .reference-search-foot { flex-direction: column; gap: 3px; }
   .reference-book-grid { grid-template-columns: 1fr; }

@@ -1,22 +1,28 @@
 <script setup lang="ts">
+import { computed } from 'vue';
 import { RefreshCw } from '@lucide/vue';
-defineProps<{
+const props = defineProps<{
   checking: boolean;
   stale: boolean;
   savedAt: string;
   error: string;
   disabled?: boolean;
+  compact?: boolean;
 }>();
 defineEmits<{ refresh: [] }>();
+const statusLabel = computed(() => {
+  if (props.checking) return '正在检查资料版本…';
+  if (props.stale) return '网络不可用，正在使用本地资料';
+  if (props.savedAt) return '资料已同步';
+  if (props.error) return '资料暂不可用';
+  return '';
+});
 </script>
 
 <template>
   <div class="cache-sync-status" role="status">
-    <span v-if="checking">正在检查资料版本…</span>
-    <span v-else-if="stale">网络不可用，正在使用本地资料</span>
-    <span v-else-if="savedAt">资料已同步</span>
-    <span v-else-if="error">资料暂不可用</span>
-    <button type="button" :disabled="disabled || checking" title="重新检查并更新资料" aria-label="重新检查并更新资料" @click="$emit('refresh')"><RefreshCw :size="15" aria-hidden="true" /></button>
+    <span v-if="statusLabel" :class="{ 'sr-only': compact }">{{ statusLabel }}</span>
+    <button type="button" :disabled="disabled || checking" :title="compact && statusLabel ? `${statusLabel} · 重新检查并更新资料` : '重新检查并更新资料'" aria-label="重新检查并更新资料" @click="$emit('refresh')"><RefreshCw :size="15" :class="{ 'animate-spin': compact && checking }" aria-hidden="true" /></button>
   </div>
 </template>
 
