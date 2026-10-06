@@ -247,8 +247,6 @@ onMounted(() => void loadReferenceData());
           <button class="hover:text-brand transition-colors" @click="navigate({ view: 'home' })">
             <ArrowLeft :size="14" aria-hidden="true" /> 返回首页
           </button>
-          <span aria-hidden="true">/</span>
-          <span class="font-latin tracking-[0.22em] uppercase">REFERENCE DESK</span>
         </div>
         <p class="eyebrow mt-8">规则书 · 赛事判例 · 卡牌 QA</p>
         <h1 class="headline-xl reference-title">规则与 QA 查询</h1>
