@@ -62,14 +62,14 @@ const clampStyle = computed((): Record<string, string> => {
 
 <style scoped>
 .chain-card-text {
-  font-size: 11.5px;
+  font-size: 0.875rem;
   line-height: 1.65;
   color: var(--color-text-muted);
   overflow-wrap: anywhere;
   white-space: pre-wrap;
 }
 .chain-card-text.is-compact {
-  font-size: 10.5px;
+  font-size: 0.875rem;
   line-height: 1.5;
 }
 /* 能力关键字:藤黄底柔光小片,与站点的徽章语言一致 */

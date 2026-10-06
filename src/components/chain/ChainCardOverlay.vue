@@ -7,7 +7,7 @@
  *   单击钉住 —— 移开鼠标不关,需点空白处或按 Esc
  * 两种行为的差别就在 pin 上。
  */
-import { computed } from 'vue';
+import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from 'vue';
 import { CARD_COLOR_HEX } from '@/utils/palette';
 import type { ChainCard } from '@/tools/chain/types';
 import ChainCardText from './ChainCardText.vue';
@@ -23,6 +23,17 @@ const emit = defineEmits<{
   (e: 'close'): void;
   (e: 'toggle-pin'): void;
 }>();
+const root = ref<HTMLElement>();
+let previous: HTMLElement | null = null;
+async function openDialog(): Promise<void> {
+  await nextTick();
+  if (root.value instanceof HTMLDialogElement && !root.value.open) {
+    previous = document.activeElement as HTMLElement; root.value.showModal();
+  }
+}
+watch(() => props.pinned, openDialog);
+onMounted(openDialog);
+onBeforeUnmount(() => { if (root.value instanceof HTMLDialogElement) root.value.close(); if (props.pinned) previous?.focus(); });
 
 const title = computed(() =>
   props.card.subtitle ? `${props.card.name} · ${props.card.subtitle}` : props.card.name
@@ -41,11 +52,14 @@ const hasImage = computed(() => !!props.image);
 </script>
 
 <template>
-  <div
+  <component
+    :is="pinned ? 'dialog' : 'div'"
+    ref="root"
     class="card-overlay"
     :class="{ pinned }"
     role="dialog"
     :aria-label="`卡牌详情:${title}`"
+    @cancel.prevent="emit('close')"
     @click.self="emit('close')"
     @mouseleave="pinned ? undefined : emit('close')"
   >
@@ -88,14 +102,14 @@ const hasImage = computed(() => !!props.image);
         </footer>
       </div>
     </div>
-  </div>
+  </component>
 </template>
 
 <style scoped>
 .card-overlay {
   position: fixed;
   inset: 0;
-  z-index: 80;
+  z-index: 120;
   display: grid;
   place-items: center;
   padding: 24px;
@@ -137,7 +151,7 @@ const hasImage = computed(() => !!props.image);
   text-align: center;
 }
 .overlay-fallback span {
-  font-size: 18px;
+  font-size: 1.125rem;
   font-weight: 700;
   color: #fff;
   text-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
@@ -151,12 +165,12 @@ const hasImage = computed(() => !!props.image);
   flex-wrap: wrap;
 }
 .overlay-head h3 {
-  font-size: 19px;
+  font-size: 1.1875rem;
   font-weight: 800;
   color: var(--color-text-primary);
 }
 .overlay-player {
-  font-size: 10px;
+  font-size: 0.875rem;
   padding: 1px 6px;
   border-radius: 4px;
   border: 1px solid var(--color-brand-faint);
@@ -166,7 +180,7 @@ const hasImage = computed(() => !!props.image);
   border-color: var(--color-panel-border);
   color: var(--color-map-ramp-3);
 }
-.overlay-subtitle { font-size: 12.5px; color: var(--color-text-subtle); }
+.overlay-subtitle { font-size: 0.9375rem; color: var(--color-text-subtle); }
 
 .overlay-stats {
   display: flex;
@@ -177,11 +191,11 @@ const hasImage = computed(() => !!props.image);
   border-bottom: 1px solid var(--color-panel-border);
 }
 .overlay-stats div { display: flex; align-items: baseline; gap: 4px; }
-.overlay-stats dt { font-size: 10px; color: var(--color-text-subtle); }
-.overlay-stats dd { font-size: 12px; font-weight: 600; color: var(--color-text-primary); }
+.overlay-stats dt { font-size: 0.875rem; color: var(--color-text-subtle); }
+.overlay-stats dd { font-size: 0.9375rem; font-weight: 600; color: var(--color-text-primary); }
 
 .overlay-text { max-height: 34vh; overflow-y: auto; }
-.overlay-empty { font-size: 11.5px; color: var(--color-text-subtle); }
+.overlay-empty { font-size: 0.875rem; color: var(--color-text-subtle); }
 
 .overlay-foot {
   margin-top: auto;
@@ -192,10 +206,10 @@ const hasImage = computed(() => !!props.image);
   gap: 10px;
   border-top: 1px solid var(--color-panel-border);
 }
-.pin-hint { font-size: 10px; color: var(--color-text-subtle); }
+.pin-hint { font-size: 0.875rem; color: var(--color-text-subtle); }
 .foot-actions { display: flex; gap: 6px; }
 .foot-actions button {
-  font-size: 11px;
+  font-size: 0.875rem;
   padding: 3px 10px;
   border: 1px solid var(--color-panel-border);
   border-radius: 6px;
@@ -203,4 +217,5 @@ const hasImage = computed(() => !!props.image);
 }
 .foot-actions button:hover { border-color: var(--color-brand); color: var(--color-brand); }
 
+dialog.card-overlay{margin:0;border:0;width:100vw;height:100dvh;max-width:100vw;max-height:100dvh;color:var(--color-text-primary)}dialog.card-overlay::backdrop{background:transparent}@media(max-width:650px){.card-overlay{padding:.5rem}.overlay-panel{grid-template-columns:1fr;gap:1rem;max-height:95dvh}.overlay-art{width:min(60vw,14rem);margin:auto}.overlay-foot{flex-wrap:wrap}}
 </style>

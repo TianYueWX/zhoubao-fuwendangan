@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import QRCode from "qrcode";
-import { Minus, MoreVertical, Plus, Search, Star, X } from "@lucide/vue";
+import { ArrowLeft, Minus, MoreVertical, Plus, Search, Star, X } from "@lucide/vue";
 import { navigate, routeToHash } from "@/router/hash";
 import { store } from "@/store/analysis";
 import { listAllRules } from "@/tools/admin/rules";
@@ -451,11 +451,16 @@ watch(rulesResource.data, (rows) => {
 }, { immediate: true });
 
 async function refreshRules(): Promise<void> {
+  loading.value = true;
+  error.value = '';
   try {
     const rows = await rulesResource.load(true);
     if (rows) allRules.value = rows;
+    await load();
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : "规则书更新失败";
+  } finally {
+    loading.value = false;
   }
 }
 
@@ -476,8 +481,9 @@ watch(bookName, () => {
 
 <template>
   <div class="reader-screen" :class="[`theme-${readerTheme}`, { 'is-pressing': pressing }]" :style="{ '--reader-font-scale': fontScale }">
+    <button class="reader-back" type="button" aria-label="返回规则列表" @click="navigate({ view: 'rules' })"><ArrowLeft :size="18" aria-hidden="true" /> 返回规则</button>
     <div v-if="loading" class="state-card">正在加载规则书…</div>
-    <div v-else-if="error" class="state-card error">{{ error }}</div>
+    <div v-else-if="error" class="state-card error" role="alert"><p>{{ error }}</p><button class="reader-retry" @click="refreshRules">重新加载规则书</button></div>
     <template v-else>
       <div class="reader-controls" aria-label="阅读设置">
         <button class="icon-control" aria-label="搜索规则" title="搜索规则" @click="openSearch"><Search :size="18" aria-hidden="true" /></button>
@@ -669,4 +675,5 @@ watch(bookName, () => {
   .favorite-open { grid-template-columns: minmax(0, 1fr) 45px minmax(0, 1.2fr); gap: 5px; }
   .theme-option { min-width: 0; flex: 1; }
 }
+.reader-back{position:fixed;left:1rem;bottom:1rem;z-index:60;display:flex;align-items:center;gap:.375rem;padding:.5rem .75rem;border:1px solid #bdb4a5;border-radius:2rem;background:var(--reader-paper,#fffdf8);color:var(--reader-ink,#38332d);box-shadow:0 2px 10px #0002;font-size:.875rem}.reader-retry{display:inline-block;margin-top:1rem;padding:.5rem 1rem;border:1px solid currentColor;border-radius:.375rem;font-size:.875rem}
 </style>

@@ -340,6 +340,7 @@ if (typeof window !== 'undefined') {
             <!-- 空态分两种成因,不能混为一谈 -->
             <tr v-if="filteredEmpty">
               <td colspan="5" class="py-10 text-center text-ink-faint">
+                <button v-if="canLoadMore" type="button" class="rank-load-more" :disabled="rankState.loading" @click="loadMore">继续加载，查找这位玩家</button>
                 <p>已抓取的 {{ totalFetched }} 行里没有匹配「{{ rankState.ui.search }}」的玩家。</p>
                 <p class="mt-1 text-xs">
                   这不等于该玩家不存在 —— 本快照只覆盖到第
@@ -375,7 +376,7 @@ if (typeof window !== 'undefined') {
           已达本站抓取上限,不再继续
         </template>
         <template v-else-if="canLoadMore">
-          继续下滑加载更多(下一批 {{ PAGE_SIZE_MAX }} 行)
+          <button type="button" class="rank-load-more" :disabled="rankState.loading" @click="loadMore">加载下一批 {{ PAGE_SIZE_MAX }} 行</button>
         </template>
         <template v-else-if="rankState.batchError">
           本批未成功,已停止加载
@@ -444,4 +445,5 @@ if (typeof window !== 'undefined') {
 .snap-dot-idle {
   background: var(--color-text-subtle);
 }
+.rank-load-more{display:inline-block;margin:.5rem;padding:.5rem 1rem;border:1px solid var(--color-panel-border);border-radius:.5rem;font-size:.875rem;color:var(--color-text-primary);background:var(--color-card-bg)}
 </style>

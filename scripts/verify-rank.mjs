@@ -6,8 +6,8 @@
  * 分两段,各管各的失守方式:
  *   A. 离线:纯函数口径 —— 参数护栏、并集追加语义、段位选项动态生成。
  *      真正的取数正确性靠真机请求,这里只锁死「我们自己写的那部分逻辑」。
- *   B. 联调:CDP 驱动 headless chromium 打开 #/rank,用**真实上游请求**跑通
- *      首屏 → 搜索 → 段位筛选 → 名次顺序(不可排序) → 无限滚动 → 刷新恢复 → 重新抓取。
+ *   B. 联调:Firefox BiDi / Chromium CDP 打开 #/rank,用**真实上游请求**跑通
+ *      首屏 → 搜索 → 段位筛选 → 名次顺序(不可排序) → 无限滚动 → 刷新恢复 → 重新抓取 → 手动加载。
  *
  * 为什么 UI 段不复用 DataTable:积分榜是无限滚动 + 图片列,DataTable 是
  * 客户端分页 + 一次性渲染全部行,1000 行会把 1000 张头像一起塞进 DOM。
@@ -25,8 +25,9 @@
  * ============================================================== */
 
 import { spawn } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { openRankBrowser } from './rank-browser.mjs';
 
 /* ══════════════════════ 断言设施 ══════════════════════ */
 
@@ -236,7 +237,7 @@ check('A7d 空态下不允许继续加载', !storeMod.canLoadMore.value);
 
 /* ══════════════════════ B. 联调(headless) ══════════════════════ */
 
-console.log('\n[B] 联调:CDP 驱动 headless chromium 打真实上游');
+console.log('\n[B] 联调:无头浏览器请求真实上游');
 
 const CHROME =
   process.env.HOME +
@@ -256,7 +257,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let preview = null;
 async function ensurePreview() {
   try {
-    const res = await fetch(APP, { method: 'HEAD' });
+    const res = await fetch(APP, { method: 'HEAD', signal: AbortSignal.timeout(2000) });
     if (res.ok || res.status < 500) {
       console.log(`  (复用已在运行的 ${APP})`);
       return;
@@ -274,7 +275,7 @@ async function ensurePreview() {
   });
   for (let i = 0; i < 60; i++) {
     try {
-      const res = await fetch(APP, { method: 'HEAD' });
+      const res = await fetch(APP, { method: 'HEAD', signal: AbortSignal.timeout(2000) });
       if (res.ok || res.status < 500) {
         console.log('  (已自动启动 vite preview :4173)');
         return;
@@ -289,76 +290,19 @@ async function ensurePreview() {
 
 await ensurePreview();
 
-const chrome = spawn(
-  CHROME,
-  [
-    '--headless',
-    '--disable-gpu',
-    '--no-sandbox',
-    `--remote-debugging-port=${PORT}`,
-    `--user-data-dir=${mkdtempSync('/tmp/rune-rank-verify-')}`,
-    '--hide-scrollbars',
-    '--window-size=1680,1050',
-    'about:blank'
-  ],
-  { stdio: 'ignore' }
-);
-
-async function getJson(url, tries = 40) {
-  for (let i = 0; i < tries; i++) {
-    try {
-      const res = await fetch(url);
-      if (res.ok) return await res.json();
-    } catch {
-      /* 继续等 */
-    }
-    await sleep(500);
-  }
-  throw new Error('CDP 未就绪: ' + url);
-}
-
-let ws;
+let browser;
 let cdp;
 try {
-  const tabs = await getJson(`http://127.0.0.1:${PORT}/json/list`);
-  const tab = tabs.find((t) => t.type === 'page');
-  ws = new WebSocket(tab.webSocketDebuggerUrl);
-  await new Promise((res, rej) => {
-    ws.onopen = res;
-    ws.onerror = rej;
-  });
-
-  let msgId = 0;
-  const pending = new Map();
-  ws.onmessage = (ev) => {
-    const m = JSON.parse(ev.data);
-    if (m.id && pending.has(m.id)) {
-      pending.get(m.id)(m);
-      pending.delete(m.id);
-    }
-  };
-  cdp = (method, params = {}) => {
-    const id = ++msgId;
-    return new Promise((res) => {
-      pending.set(id, res);
-      ws.send(JSON.stringify({ id, method, params }));
-    });
-  };
+  const rankRequests = [];
+  browser = await openRankBrowser({ chromePath: CHROME, port: PORT, onRankRequest: request => rankRequests.push(request) });
+  console.log(`  (${browser.name})`);
+  cdp = browser.command;
 
   await cdp('Page.enable');
   await cdp('Runtime.enable');
   await cdp('Network.enable');
 
-  /* 记录真实发出的 ranking/list 请求。无限滚动的「一次滚动 = 一批」这条口径必须
-   * 从网络层断言:曾出现一次滚到底连抓 6 批(200→1400 行)的级联,只数 DOM 行数
-   * 分不清「按需加载」和「失控刷上游」。 */
-  const rankRequests = [];
-  ws.addEventListener('message', (e) => {
-    const m = JSON.parse(e.data);
-    if (m.method === 'Network.requestWillBeSent' && m.params?.request?.url?.includes('userIntegral/ranking/list')) {
-      rankRequests.push({ at: Date.now(), body: m.params.request.postData ?? '' });
-    }
-  });
+  // 浏览器记录每次真实请求的参数；Firefox 的 fetch 包装仅报告，不替换响应。
 
   async function evaluate(expr) {
     const r = await cdp('Runtime.evaluate', {
@@ -797,7 +741,9 @@ try {
   /* B8 刷新恢复:快照应从 localStorage 直接恢复,不再重抓第 1 页 */
   {
     const navStart = Date.now();
-    await goto(`${APP}#/rank`);
+    const reqBefore = rankRequests.length;
+    await evaluate('window.scrollTo(0, 0); return true;');
+    await cdp('Page.reload');
     const restored = await waitFor(
       '刷新后从本地快照恢复',
       `return document.querySelectorAll('table tbody tr').length >= 400;`,
@@ -810,6 +756,44 @@ try {
       'B8c 刷新后显示快照时间戳',
       (await evaluate(`return document.body.innerText.includes('快照');`)) === true
     );
+    eq('B8d 整页刷新恢复时不请求上游', rankRequests.length - reqBefore, 0);
+  }
+
+  /* B11 新增的显式加载入口也必须一批一批取，不清空搜索或重复请求。 */
+  {
+    const before = await evaluate('return window.__rankStore.state.snapshot.rows.length;');
+    const reqBefore = rankRequests.length;
+    const started = await evaluate(`
+      const button = [...document.querySelectorAll('button.rank-load-more')].find(b => b.innerText.includes('加载下一批'));
+      if (!button) return false;
+      button.click(); button.click();
+      return window.__rankStore.state.loading;
+    `);
+    check('B11 点击下一批时进入加载状态', started);
+    check('B11b 手动加载追加 200 行', await waitFor('手动追加完成', `return !window.__rankStore.state.loading && window.__rankStore.state.snapshot.rows.length === ${before + 200};`, 45000));
+    eq('B11c 连点加载按钮只发一个请求', rankRequests.length - reqBefore, 1);
+
+    await evaluate(`
+      const input = document.querySelector('input[placeholder*="昵称"]');
+      input.value = 'zzz-验收无匹配-zzz'; input.dispatchEvent(new Event('input', { bubbles: true }));
+      return true;
+    `);
+    await waitFor('无匹配时提供继续查找按钮', `return !![...document.querySelectorAll('button')].find(b => b.innerText.includes('继续加载，查找这位玩家'));`, 15000);
+    await sleep(1000);
+    await waitFor('筛选触发的追加完成', 'return !window.__rankStore.state.loading;', 45000);
+    const emptyBefore = await evaluate('return window.__rankStore.state.snapshot.rows.length;');
+    const emptyReqBefore = rankRequests.length;
+    await clickByText('B11d 无结果继续查找入口', 'button', '继续加载，查找这位玩家', true);
+    check('B11e 无结果时也能追加下一批', await waitFor('无匹配手动追加', `return !window.__rankStore.state.loading && window.__rankStore.state.snapshot.rows.length === ${emptyBefore + 200};`, 45000));
+    eq('B11f 无结果手动加载只发一个请求', rankRequests.length - emptyReqBefore, 1);
+    eq('B11g 追加后保留搜索词', await evaluate('return document.querySelector(\'input[placeholder*="昵称"]\').value;'), 'zzz-验收无匹配-zzz');
+    await shot('06-无匹配手动续抓');
+    await evaluate(`
+      const input = document.querySelector('input[placeholder*="昵称"]');
+      input.value = ''; input.dispatchEvent(new Event('input', { bubbles: true }));
+      return true;
+    `);
+    await sleep(300);
   }
 
   /* B9 重新抓取:清空后从第 1 页重建 */
@@ -849,12 +833,7 @@ try {
     JSON.stringify({ passed, failures, at: new Date().toISOString() }, null, 2)
   );
 } finally {
-  try {
-    ws?.close();
-  } catch {
-    /* 忽略 */
-  }
-  chrome.kill();
+  browser?.close();
   // 只关自己起的 preview;复用别人那个就别动
   if (preview) preview.kill();
 }

@@ -450,6 +450,13 @@ export function pushManualSnapshot(label = '手动快照'): void {
   notify(`已存快照(共 ${state.working.history.length} 条)`);
 }
 
+export function updateSnapshot(id: string, action: string, duration: number): void {
+  const snapshot = state.working.history.find((s) => s.id === id);
+  if (!snapshot) return;
+  snapshot.action = action.trim().slice(0, 200) || '手动快照';
+  snapshot.duration = Math.max(0.5, Math.min(30, Number.isFinite(duration) ? duration : 2));
+}
+
 /** 跳到历史中的某一条 */
 export function jumpToSnapshot(index: number): void {
   const snap: ChainSnapshot | undefined = state.working.history[index];

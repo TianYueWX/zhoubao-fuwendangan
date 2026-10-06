@@ -35,12 +35,16 @@
     "verify:carddex-text": "node --experimental-strip-types --import ./scripts/register-hooks.mjs scripts/verify-carddex-text.mjs",
     "verify:carddex-scroll": "node scripts/verify-carddex-scroll.mjs",
     "verify:sync-review-ui": "node scripts/verify-sync-review-ui.mjs",
-    "verify:sync-review-perf": "node scripts/verify-sync-review-ui.mjs --perf --assert-fast"
+    "verify:sync-review-perf": "node scripts/verify-sync-review-ui.mjs --perf --assert-fast",
+    "verify:ux": "node --experimental-strip-types --import ./scripts/register-hooks.mjs scripts/verify-ux-logic.mjs"
   },
   "dependencies": {
     "@lucide/vue": "^1.51.0",
     "@piltoverarchive/riftbound-deck-codes": "1.5.0",
     "echarts": "^5.5.1",
+    "gifenc": "^1.0.3",
+    "h264-mp4-encoder": "^1.0.12",
+    "mediabunny": "^1.61.1",
     "oboe": "^2.1.7",
     "papaparse": "^5.4.1",
     "qrcode": "^1.5.4",

@@ -28,6 +28,7 @@ const props = withDefaults(
 );
 
 const emit = defineEmits<{
+  (e: 'pick'): void;
   (e: 'preview', mode: 'hover' | 'leave' | 'click'): void;
   (e: 'toggle-player'): void;
   (e: 'remove'): void;
@@ -78,7 +79,12 @@ function onRename(): void {
     class="chain-card"
     :class="[`p${card.player}`, `mode-${displayMode}`, { custom: card.custom }]"
     :data-uid="card.uid"
-    :aria-label="`${title} · 按住 Alt 查看详情`"
+    :aria-label="`${title} · 点击或按 Enter 查看详情；连线模式下选择卡牌`"
+    tabindex="0"
+    :role="readOnly ? 'button' : 'group'"
+    @click="emit('pick')"
+    @keydown.enter.self.prevent="emit('pick')"
+    @keydown.space.self.prevent="emit('pick')"
     @mouseenter="onEnter"
     @mouseleave="onLeave"
   >
@@ -150,7 +156,7 @@ function onRename(): void {
   border-radius: 3px;
   background: var(--player-color);
   color: #fff;
-  font-size: 9px;
+  font-size: 0.75rem;
   line-height: 16px;
   font-weight: 700;
 }
@@ -179,7 +185,7 @@ function onRename(): void {
   text-align: center;
 }
 .card-fallback span {
-  font-size: 10px;
+  font-size: 0.875rem;
   font-weight: 600;
   color: #fff;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
@@ -195,7 +201,7 @@ function onRename(): void {
 }
 .card-name {
   font-weight: 600;
-  font-size: 11px;
+  font-size: 0.875rem;
   line-height: 1.5;
   color: var(--color-text-primary);
   overflow-wrap: anywhere;
@@ -212,11 +218,11 @@ function onRename(): void {
   opacity: 0;
   transition: opacity 140ms;
 }
-.chain-card:hover .card-actions { opacity: 1; }
+.chain-card:hover .card-actions, .chain-card:focus-within .card-actions { opacity: 1; }
 .act {
-  font-size: 9.5px;
+  font-size: .75rem;
   line-height: 1.4;
-  padding: 1px 5px;
+  padding: .25rem .375rem;
   border: 1px solid var(--color-panel-border);
   border-radius: 4px;
   background: var(--color-card-bg);

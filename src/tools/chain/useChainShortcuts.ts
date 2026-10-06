@@ -51,6 +51,7 @@ function isTypingTarget(target: EventTarget | null): boolean {
  */
 export function useChainShortcuts(handlers: ChainShortcutHandlers): () => void {
   function onKeydown(e: KeyboardEvent): void {
+    if (document.querySelector('dialog[open], .present-overlay')) return;
     // 输入中不抢键
     if (isTypingTarget(e.target)) return;
 

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AnalysisDetail from '@/components/AnalysisDetail.vue';
 /**
  * HeroBuildsTab.vue · 英雄·传奇融合页「构筑」页签
  *  - 候选卡组表(名次优先排序,勾选/向下取 N)
@@ -440,5 +441,6 @@ function winLine(d: Deck): string {
     <div v-else-if="!legKey" class="py-12 text-center text-sm text-ink-faint">
       暂无该英雄的传奇构筑数据
     </div>
+    <AnalysisDetail kind="builds" :decks="candidates" />
   </div>
 </template>

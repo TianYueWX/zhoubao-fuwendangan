@@ -176,7 +176,7 @@ function onWeekChange(e: Event): void {
     任一祖先出现 overflow:hidden 都会吃掉后代的 position:sticky，
     所以这里的 overflow 一律不加。
   -->
-  <div class="flex flex-col min-h-screen">
+  <div class="flex flex-col min-h-screen" :class="{ 'ux-readable': ['chain', 'overview', 'cards', 'legendary', 'region', 'decks', 'builder', 'games', 'rank'].includes(store.currentView) }">
     <header
       v-if="!isHome && !isBuilder && store.currentView !== 'chain' && store.currentView !== 'rulebook'"
       class="masthead-solid sticky top-0 z-50 shrink-0"

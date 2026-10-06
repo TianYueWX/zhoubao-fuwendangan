@@ -377,3 +377,9 @@ table,
   overflow: hidden;
   box-shadow: 0 12px 28px -14px var(--color-shadow);
 }
+
+/* Readability tokens only apply to the public tools selected for the UX update. */
+.ux-readable { --color-text-subtle: var(--color-text-muted); font-size: 1rem; }
+.ux-readable :is(.text-xs,[class*="text-[9px]"],[class*="text-[10px]"],[class*="text-[11px]"],[class*="text-[12px]"],[class*="text-[12.5px]"]) { font-size: .875rem; }
+.ux-readable :is(.mini-select,.filter-select) { font-size: .875rem; min-height: 2.25rem; }
+.ux-readable :is(button,input,select,textarea):focus-visible { outline: 2px solid var(--color-brand); outline-offset: 2px; }

@@ -64,7 +64,7 @@ const emit = defineEmits<{
   box-shadow: 0 24px 50px -26px rgba(0, 0, 0, 0.45);
 }
 .unsaved-panel h3 {
-  font-size: 16px;
+  font-size: 1rem;
   font-weight: 700;
   color: var(--color-text-primary);
   padding-bottom: 8px;
@@ -72,14 +72,14 @@ const emit = defineEmits<{
   border-bottom: 1px solid var(--color-panel-border);
 }
 .unsaved-body {
-  font-size: 13px;
+  font-size: 1rem;
   line-height: 1.7;
   color: var(--color-text-muted);
 }
 .unsaved-body b { color: var(--color-brand); }
 .unsaved-tip {
   margin-top: 8px;
-  font-size: 11px;
+  font-size: 0.875rem;
   line-height: 1.6;
   color: var(--color-text-subtle);
 }
@@ -91,7 +91,7 @@ const emit = defineEmits<{
   justify-content: flex-end;
 }
 .btn-ghost {
-  font-size: 12px;
+  font-size: 0.9375rem;
   padding: 6px 14px;
   border: 1px solid var(--color-panel-border);
   border-radius: 8px;

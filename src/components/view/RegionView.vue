@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AnalysisDetail from '@/components/AnalysisDetail.vue';
 /**
  * RegionView.vue · 地域差异
  *   1. 城市 × 英雄 出场率分组柱状图(点击城市 → 全局过滤)
@@ -13,8 +14,9 @@ import SectionHeading from '@/components/SectionHeading.vue';
 import SortableTh from '@/components/SortableTh.vue';
 import TableDownloadButton from '@/components/TableDownloadButton.vue';
 import { useTableSort, type SortableColumn } from '@/composables/useTableSort';
-import { store } from '@/store/analysis';
-import { UNKNOWN_CITY } from '@/utils/cityRegex';
+import { store, applyGlobalFilters } from '@/store/analysis';
+import { computeRegionStats } from '@/core/region';
+import { normalizeEventKey } from '@/utils/dataParser';
 import { ensureChinaMap, CITY_COORDS } from '@/utils/chinaMap';
 import { CHART_PALETTE } from '@/utils/palette';
 import { themedAxes, getChartColors, getBrandColor } from '@/utils/theme';
@@ -24,13 +26,21 @@ onMounted(() => {
   ensureChinaMap();
 });
 
+const cityLimit = ref(10), heroLimit = ref(5), minimumSamples = ref(1);
+const scopedDecks = computed(() => applyGlobalFilters(store.result?.allDecks ?? []));
+const regional = computed(() => computeRegionStats(scopedDecks.value));
+const regionalCounts = computed(() => new Map([...regional.value.regionHeat].map(([city, heroes]) => [city, new Map([...heroes].map(([hero, cell]) => [hero, cell.n]))])));
+const shownCities = computed(() => cityLimit.value ? sortedCities.value.slice(0, cityLimit.value) : sortedCities.value);
+const shownHeroes = computed(() => heroLimit.value ? sortedHeroes.value.slice(0, heroLimit.value) : sortedHeroes.value);
+const chartWidth = computed(() => `${Math.max(500, shownCities.value.length * Math.max(70, shownHeroes.value.length * 10))}px`);
+const heatHeight = computed(() => `${Math.max(380, shownHeroes.value.length * 38 + 110)}px`);
+const scopeEvents = computed(() => new Set(scopedDecks.value.map((d) => normalizeEventKey(d.activityName))));
 const heatMode = ref<'top8' | 'top4'>('top8');
 
 const sortedCities = computed(() => {
   if (!store.result) return [] as string[];
-  const rs = store.result.regionStats;
+  const rs = regionalCounts.value;
   return Array.from(rs.entries())
-    .filter(([c]) => c !== UNKNOWN_CITY && c !== '')
     .map(([city, heroes]) => ({
       city,
       total: Array.from(heroes.values()).reduce((a, b) => a + b, 0)
@@ -41,9 +51,9 @@ const sortedCities = computed(() => {
 
 const sortedHeroes = computed(() => {
   if (!store.result) return [] as Array<[string, number]>;
-  return Array.from(store.result.heroes.entries())
-    .sort((a, b) => b[1].total - a[1].total)
-    .map(([name, stat]) => [name, stat.total] as [string, number]);
+  const counts = new Map<string, number>();
+  for (const d of scopedDecks.value) counts.set(d.hero || '未知', (counts.get(d.hero || '未知') ?? 0) + 1);
+  return [...counts].sort((a,b) => b[1]-a[1]);
 });
 
 /** 本页本地选中的城市(表格行点击高亮用,不做全局过滤) */
@@ -55,11 +65,11 @@ function setCity(city: string): void {
 
 const regionBarOption = computed<ChartOptionInput | null>(() => {
   if (!store.result) return null;
-  const cities = sortedCities.value.slice(0, 10);
-  const heroes = sortedHeroes.value.slice(0, 5);
-  const rs = store.result.regionStats;
+  const cities = shownCities.value;
+  const heroes = shownHeroes.value;
+  const rs = regionalCounts.value;
   const series = heroes.map(([name], idx) => ({
-    name: String(name.split(' ')[0]),
+    name: name,
     type: 'bar',
     data: cities.map((c) => {
       const cityHeroes = rs.get(c);
@@ -72,7 +82,7 @@ const regionBarOption = computed<ChartOptionInput | null>(() => {
   }));
   const { axisBase } = themedAxes();
   return {
-    legend: { data: heroes.map(([n]) => String(n.split(' ')[0])), top: 0 },
+    legend: { type: 'scroll', data: heroes.map(([n]) => n), top: 0 },
     grid: { left: 50, right: 30, top: 50, bottom: 40 },
     xAxis: { type: 'category', data: cities, triggerEvent: true, ...axisBase },
     yAxis: { type: 'value', name: '出场率(%)', nameGap: 14, ...axisBase },
@@ -84,7 +94,7 @@ const regionBarOption = computed<ChartOptionInput | null>(() => {
 const cityMapOption = computed<ChartOptionInput | null>(() => {
   if (!store.result) return null;
   if (!ensureChinaMap()) return null;
-  const rs = store.result.regionStats;
+  const rs = regionalCounts.value;
   const pts: Array<{ name: string; value: [number, number, number] }> = [];
   for (const city of sortedCities.value) {
     const coord = CITY_COORDS[city];
@@ -134,7 +144,7 @@ const cityMapOption = computed<ChartOptionInput | null>(() => {
 const provinceMapOption = computed<ChartOptionInput | null>(() => {
   if (!store.result) return null;
   if (!ensureChinaMap()) return null;
-  const prov = store.result.provinceStats;
+  const prov = regional.value.provinceStats;
   const data = Array.from(prov.entries()).map(([name, value]) => ({ name, value }));
   const maxPv = Math.max(1, ...data.map((d) => d.value));
   const cc = getChartColors();
@@ -173,10 +183,10 @@ const provinceMapOption = computed<ChartOptionInput | null>(() => {
 
 const heatOption = computed<ChartOptionInput | null>(() => {
   if (!store.result) return null;
-  const heat = store.result.regionHeat;
-  const cities = sortedCities.value.slice(0, 12);
-  const heroes = sortedHeroes.value.slice(0, 6);
-  const heroNames = heroes.map(([n]) => String(n.split(' ')[0]));
+  const heat = regional.value.regionHeat;
+  const cities = shownCities.value;
+  const heroes = shownHeroes.value;
+  const heroNames = heroes.map(([n]) => n);
   const cells: Array<[number, number, number]> = [];
   let maxVal = 0;
 
@@ -185,7 +195,7 @@ const heatOption = computed<ChartOptionInput | null>(() => {
     for (let x = 0; x < cities.length; x++) {
       const c = cities[x]!;
       const cell = heat.get(c)?.get(heroFull);
-      if (!cell || cell.n < 5) continue;
+      if (!cell || cell.n < minimumSamples.value) continue;
       let v: number;
       if (heatMode.value === 'top4') {
         v = +((cell.top4 / cell.n) * 100).toFixed(1);
@@ -254,7 +264,7 @@ interface EventRow extends Record<string, unknown> {
   rounds: number | null;
 }
 const eventRows = computed<EventRow[]>(() =>
-  (store.result?.events ?? []).map((e) => ({
+  (store.result?.events ?? []).filter((e) => scopeEvents.value.has(normalizeEventKey(e.name))).map((e) => ({
     date: e.date || '—',
     name: e.name.replace(/^【[^】]*】\s*/, ''),
     city: e.city,
@@ -284,14 +294,15 @@ const eventTableEl = ref<HTMLTableElement | null>(null);
 
 <template>
   <div class="fade-in space-y-8" v-if="store.result">
+    <div class="region-controls"><label>城市 <select v-model.number="cityLimit"><option :value="10">前10城</option><option :value="20">前20城</option><option :value="50">前50城</option><option :value="0">全部城市</option></select></label><label>英雄 <select v-model.number="heroLimit"><option :value="5">前5种</option><option :value="10">前10种</option><option :value="20">前20种</option><option :value="0">全部英雄</option></select></label><label>每格最低样本 <select v-model.number="minimumSamples"><option :value="1">1套（全部组合）</option><option :value="5">5套</option><option :value="10">10套</option></select></label><span>{{ store.filterWeek || '全部周次' }} · {{ scopedDecks.length }} 套 · {{ sortedCities.length }} 城</span></div>
     <div class="grid grid-cols-1 xl:grid-cols-2 gap-8 xl:divide-x xl:divide-panel-border">
       <section class="xl:pr-8 min-w-0">
         <SectionHeading
           small
           title="城市×英雄 出场率"
-          note="Top10 城 × Top5 英雄 · 点击城市轴标签可全局过滤该城市"
+          :note="`显示 ${shownCities.length} 城 × ${shownHeroes.length} 英雄；点击城市名称高亮赛事表`"
         />
-        <ChartCard :option="regionBarOption" height="380px" @chart-click="(p) => p.componentType === 'xAxis' && setCity(String(p.value))" />
+        <div class="region-chart-scroll"><div :style="{ minWidth: chartWidth }"><ChartCard :key="`${store.activePackageId}-${store.filterWeek}-${cityLimit}-${heroLimit}`" :option="regionBarOption" height="380px" @chart-click="(p) => p.componentType === 'xAxis' && setCity(String(p.value))" /></div></div>
       </section>
 
       <section class="xl:pl-8 min-w-0">
@@ -312,8 +323,8 @@ const eventTableEl = ref<HTMLTableElement | null>(null);
             </button>
           </div>
         </div>
-        <p class="text-[11px] text-ink-faint mb-1">仅统计 ≥5 套的城市×英雄组合</p>
-        <ChartCard :option="heatOption" height="380px" />
+        <p class="text-[11px] text-ink-faint mb-1">每格至少 {{ minimumSamples }} 套；小样本比例波动大。图表可横向滚动，图例可翻页。</p>
+        <div class="region-chart-scroll"><div :style="{ minWidth: chartWidth }"><ChartCard :key="`${store.activePackageId}-${store.filterWeek}-${cityLimit}-${heroLimit}-${minimumSamples}`" :option="heatOption" :height="heatHeight" /></div></div>
       </section>
     </div>
 
@@ -384,5 +395,8 @@ const eventTableEl = ref<HTMLTableElement | null>(null);
         </table>
       </div>
     </section>
+    <AnalysisDetail kind="region" />
   </div>
 </template>
+
+<style scoped>.region-controls{display:flex;align-items:center;gap:1rem;flex-wrap:wrap;font-size:.875rem}.region-controls label{display:flex;gap:.5rem;align-items:center}.region-controls select{border:1px solid var(--color-panel-border);padding:.375rem;border-radius:.375rem;background:var(--color-card-bg)}.region-chart-scroll{overflow:auto;max-height:44rem}</style>

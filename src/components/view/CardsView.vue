@@ -1,11 +1,12 @@
 <script setup lang="ts">
+import AnalysisDetail from '@/components/AnalysisDetail.vue';
 /**
  * CardsView.vue · 单卡分析(万金油单卡)
  *  - 范围切换 + 类型/颜色/费用/稀有度筛选
  *  - 携带率 Top 表(缩略图、禁卡标记、全局对照列)
  */
 import { computed, ref, watch } from 'vue';
-import { store } from '@/store/analysis';
+import { store, applyGlobalFilters } from '@/store/analysis';
 import CardThumb from '@/components/CardThumb.vue';
 import SectionHeading from '@/components/SectionHeading.vue';
 import SortableTh from '@/components/SortableTh.vue';
@@ -15,19 +16,18 @@ import { countCards } from '@/core';
 import { CARD_COLOR_HEX } from '@/utils/palette';
 import type { CardCategory } from '@/types';
 
-const scope = ref<string>('');
+const scope = ref<string>('__all');
+const rowLimit = ref(60);
+const scopedAll = computed(() => applyGlobalFilters(store.result?.allDecks ?? []).filter((d) => d.cards.size > 0));
 
-/**
- * 单卡页只看单个英雄的 Top 样本,不提供「全部高排名卡组」等全量范围:
- * 全量遍历(数千套卡组)会让携带率统计明显变慢,且对单卡分析意义有限。
- */
+/** 全量与高排名口径都跟随全局周次；缺少牌表的记录不进入携带率分母。 */
 const scopeOptions = computed(() => {
   if (!store.result) return [];
   const heroes = Array.from(store.result.heroes.entries()).sort((a, b) => b[1].total - a[1].total);
-  return heroes.map(([name, stat]) => ({
+  return [{ value: '__all', label: '全部有牌表卡组' }, { value: '__top', label: '全部高排名样本' }, ...heroes.map(([name, stat]) => ({
     value: name,
-    label: `${name} (Top ${stat.topCount})`
-  }));
+    label: `${name} (高排名 ${stat.topCount})`
+  }))];
 });
 
 // 默认选中出场最高的英雄;范围失效时自动回落到第一个
@@ -44,12 +44,14 @@ watch(
 const decks = computed(() => {
   const r = store.result;
   if (!r) return [];
+  if (scope.value === '__all') return scopedAll.value;
+  if (scope.value === '__top') return applyGlobalFilters(r.uniqueSampleDecks).filter((d) => d.cards.size > 0);
   const stat = r.heroes.get(scope.value);
-  return stat ? stat.topDecks : [];
+  return stat ? applyGlobalFilters(stat.topDecks).filter((d) => d.cards.size > 0) : [];
 });
 
 const globalCounts = computed(() =>
-  store.result ? store.result.globalAllCards : new Map<string, number>()
+  store.result ? countCards(scopedAll.value, store.result.catalog) : new Map<string, number>()
 );
 
 /* ── 筛选 ── */
@@ -109,7 +111,7 @@ const rows = computed<StapleRow[]>(() => {
     }
 
     const g = globalCounts.value.get(key) ?? 0;
-    const gRate = r.totalDecks > 0 ? (g / r.totalDecks) * 100 : 0;
+    const gRate = scopedAll.value.length > 0 ? (g / scopedAll.value.length) * 100 : 0;
     const rate = (deckCount / n) * 100;
     const copies = copiesByKey.get(key) ?? 0;
     list.push({
@@ -129,7 +131,7 @@ const rows = computed<StapleRow[]>(() => {
 
   list.sort((a, b) => b.rate - a.rate || a.name.localeCompare(b.name));
   // 位次在截断后固定下来:表头排序只换行序,不重编号(仍代表原始 Top 名次)
-  return list.slice(0, 60).map((c, i) => ({ ...c, rank: i + 1 }));
+  return list.map((c, i) => ({ ...c, rank: i + 1 }));
 });
 
 /* ── 表头点击排序(默认保持携带率降序) ── */
@@ -144,7 +146,7 @@ const STAPLE_COLUMNS: readonly SortableColumn<StapleRow>[] = [
   { key: 'diff', type: 'number' }
 ];
 const stapleSort = useTableSort(rows, STAPLE_COLUMNS);
-const sortedRows = stapleSort.sorted;
+const sortedRows = computed(() => rowLimit.value ? stapleSort.sorted.value.slice(0, rowLimit.value) : stapleSort.sorted.value);
 
 /* ── 长图导出 ── */
 const stapleTableEl = ref<HTMLTableElement | null>(null);
@@ -169,7 +171,7 @@ const STAPLE_NOTE = '携带率 = 使用该卡的卡组占比;"对照"为全环�
             />
           </template>
         </SectionHeading>
-        <select v-model="scope" class="mini-select max-w-[260px] mt-1">
+        <select aria-label="单卡分析范围" v-model="scope" class="mini-select max-w-[260px] mt-1">
           <option v-for="o in scopeOptions" :key="String(o.value)" :value="o.value">
             {{ o.label }}
           </option>
@@ -197,7 +199,7 @@ const STAPLE_NOTE = '携带率 = 使用该卡的卡组占比;"对照"为全环�
             {{ i - 1 === 7 ? '7+费' : `${i - 1} 费` }}
           </option>
         </select>
-        <span class="ml-auto text-xs text-ink-faint">{{ rows.length }} 张卡</span>
+        <label>显示 <select v-model.number="rowLimit" class="mini-select"><option :value="10">前10张</option><option :value="20">前20张</option><option :value="60">前60张</option><option :value="0">全部单卡</option></select></label><span class="ml-auto text-sm text-ink-muted">显示 {{ sortedRows.length }} / {{ rows.length }} 张 · {{ decks.length }} 套样本 · {{ store.filterWeek || '全部周次' }}</span>
       </div>
 
       <div class="overflow-x-auto max-h-[640px] overflow-y-auto">
@@ -295,5 +297,6 @@ const STAPLE_NOTE = '携带率 = 使用该卡的卡组占比;"对照"为全环�
         </table>
       </div>
     </section>
+    <AnalysisDetail kind="cards" />
   </div>
 </template>

@@ -26,6 +26,7 @@ export default defineConfig({
   base: './',
 
   plugins: [vue()],
+  worker: { format: 'es' },
 
   resolve: {
     alias: {

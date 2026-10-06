@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AnalysisDetail from '@/components/AnalysisDetail.vue';
 /**
  * OverviewView.vue · Meta 总览 ——「头版」
  *
@@ -39,7 +40,7 @@ const filteredDecks = computed(() =>
 
 const heroRows = computed(() => {
   if (!store.result) return [];
-  return quickHeroRows(filteredDecks.value, store.result.totalDecks);
+  return quickHeroRows(filteredDecks.value, filteredDecks.value.length);
 });
 
 const tierOrder = { S: 0, A: 1, B: 2, C: 3, null: 4 } as const;
@@ -81,14 +82,16 @@ const metaMinSample = computed(() => {
   const n = filteredDecks.value.length;
   return Math.max(MIN_LEGEND_SAMPLE, Math.floor(n * 0.02));
 });
+const metaLimit = ref(10);
 const metaTop = computed<LegendaryRow[]>(() => {
   const r = store.result;
   if (!r || filteredDecks.value.length === 0) return [];
-  return sortLegendaryRows(
-    legendaryRows(filteredDecks.value, r.catalog, r.totalDecks),
+  const rows = sortLegendaryRows(
+    legendaryRows(filteredDecks.value, r.catalog, filteredDecks.value.length),
     'metaScore',
-    metaMinSample.value
-  ).slice(0, 10);
+    metaLimit.value === 0 ? 1 : metaMinSample.value
+  );
+  return metaLimit.value ? rows.slice(0, metaLimit.value) : rows;
 });
 const avgRankText = (r: LegendaryRow): string => (r.avgRank != null ? r.avgRank.toFixed(1) : '—');
 
@@ -277,7 +280,7 @@ const LEGEND_OTHERS_TAIL = 0.2;
 const legDistOption = computed(() => {
   const r = store.result;
   if (!r || filteredDecks.value.length === 0) return null;
-  const rows = legendaryRows(filteredDecks.value, r.catalog, r.totalDecks);
+  const rows = legendaryRows(filteredDecks.value, r.catalog, filteredDecks.value.length);
   if (rows.length === 0) return null;
   // 尾部长尾截断:从最小传奇向前累计,合计达到总数 20% 的部分归 others(饼图保留头部 80%)
   const tailTarget = filteredDecks.value.length * LEGEND_OTHERS_TAIL;
@@ -342,7 +345,7 @@ function onLegPieClick(p: { name?: string }): void {
   if (!p.name || p.name === 'others') return;
   const r = store.result;
   if (!r) return;
-  const row = legendaryRows(filteredDecks.value, r.catalog, r.totalDecks).find(
+  const row = legendaryRows(filteredDecks.value, r.catalog, filteredDecks.value.length).find(
     (x) => (x.topHero && x.topHero !== '—' ? x.topHero : x.name) === p.name
   );
   if (row) gotoLegendary(row);
@@ -388,8 +391,9 @@ function gotoHero(hero: string): void {
         <!-- 传奇综合表现榜(metaScore = 转化综合分 × log₁₀(数量+10) × 名次权重) -->
         <div class="xl:col-span-2 min-w-0">
           <SectionHeading eyebrow="第二版 · 综合表现" title="传奇综合表现榜"
-            :note="`综合分 = 转化综合分 × log₁₀(数量+10) × 名次权重 —— 又强、又主流、又稳定才是 T0 · 数量≥${metaMinSample}`" />
-          <div v-if="metaTop.length > 0" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-3">
+            :note="`综合分 = 转化综合分 × log₁₀(数量+10) × 名次权重 —— 又强、又主流、又稳定才是 T0 · 数量≥${metaLimit === 0 ? 1 : metaMinSample}`" />
+          <label class="text-sm block mb-3">显示传奇 <select v-model.number="metaLimit" class="mini-select"><option :value="10">前10种</option><option :value="20">前20种</option><option :value="50">前50种</option><option :value="0">全部（含小样本）</option></select></label>
+          <div v-if="metaTop.length > 0" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
             <button v-for="(r, i) in metaTop" :key="r.cardNo"
               class="group rounded-xl border border-panel-border bg-panel-bg p-3 text-left transition-colors hover:border-brand-faint"
               @click="gotoLegendary(r)">
@@ -695,5 +699,6 @@ function gotoHero(hero: string): void {
       </div>
     </template>
 
+    <AnalysisDetail kind="environment" />
   </div>
 </template>

@@ -170,7 +170,7 @@ function timeLabel(ts: number | null): string {
 }
 .play-current:hover { border-color: var(--color-brand-faint); }
 .play-name {
-  font-size: 13px;
+  font-size: 1rem;
   font-weight: 700;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -178,13 +178,13 @@ function timeLabel(ts: number | null): string {
 }
 .dirty-dot {
   flex: 0 0 auto;
-  font-size: 9.5px;
+  font-size: 0.75rem;
   padding: 0 4px;
   border-radius: 3px;
   background: var(--color-brand);
   color: var(--color-brand-ink);
 }
-.play-caret { font-size: 11px; color: var(--color-text-subtle); }
+.play-caret { font-size: 0.875rem; color: var(--color-text-subtle); }
 
 .play-panel {
   position: absolute;
@@ -203,14 +203,14 @@ function timeLabel(ts: number | null): string {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  font-size: 11px;
+  font-size: 0.875rem;
   color: var(--color-text-subtle);
   padding-bottom: 7px;
   border-bottom: 1px solid var(--color-panel-border);
 }
 .panel-actions { display: flex; gap: 5px; }
 .panel-actions button {
-  font-size: 10.5px;
+  font-size: 0.875rem;
   padding: 2px 7px;
   border: 1px solid var(--color-panel-border);
   border-radius: 6px;
@@ -253,7 +253,7 @@ function timeLabel(ts: number | null): string {
   text-align: left;
 }
 .play-open-name {
-  font-size: 12px;
+  font-size: 0.9375rem;
   font-weight: 600;
   color: var(--color-text-primary);
   max-width: 100%;
@@ -262,7 +262,7 @@ function timeLabel(ts: number | null): string {
   white-space: nowrap;
 }
 .play-item.active .play-open-name { color: var(--color-brand); }
-.play-meta { font-size: 9.5px; color: var(--color-text-subtle); }
+.play-meta { font-size: 0.75rem; color: var(--color-text-subtle); }
 .play-row-actions {
   display: flex;
   gap: 3px;
@@ -271,7 +271,7 @@ function timeLabel(ts: number | null): string {
 }
 .play-item:hover .play-row-actions { opacity: 1; }
 .play-row-actions button {
-  font-size: 9.5px;
+  font-size: 0.75rem;
   padding: 1px 5px;
   border: 1px solid var(--color-panel-border);
   border-radius: 5px;
@@ -281,7 +281,7 @@ function timeLabel(ts: number | null): string {
 .play-row-actions button:disabled { opacity: .4; cursor: not-allowed; }
 .rename-input {
   flex: 1 1 auto;
-  font-size: 12px;
+  font-size: 0.9375rem;
   padding: 4px 6px;
   border: 1px solid var(--color-brand);
   border-radius: 6px;
@@ -292,7 +292,7 @@ function timeLabel(ts: number | null): string {
   margin-top: 8px;
   padding-top: 7px;
   border-top: 1px solid var(--color-panel-border);
-  font-size: 9.5px;
+  font-size: 0.75rem;
   line-height: 1.5;
   color: var(--color-text-subtle);
 }

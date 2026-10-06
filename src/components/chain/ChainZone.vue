@@ -32,11 +32,14 @@ const props = withDefaults(
     capacityHint?: number;
     /** 只读模式(演示浮层):隐藏显示模式开关、清空与卡片操作 */
     readOnly?: boolean;
+    changedIds?: string[];
+    selectedUid?: string;
   }>(),
   { disabled: false, capacityHint: 0, readOnly: false }
 );
 
 const emit = defineEmits<{
+  (e: 'pick', uid: string): void;
   (e: 'set-mode', mode: CardDisplayMode): void;
   (e: 'clear'): void;
   (e: 'preview', uid: string, mode: 'hover' | 'leave' | 'click'): void;
@@ -139,19 +142,21 @@ function onRename(uid: string, name: string): void {
       <ChainCardChip
         v-for="card in cards"
         :key="card.uid"
+        :class="{ changed: changedIds?.includes(card.uid), 'connect-selected': selectedUid === card.uid }"
         :card="card"
         :mode="area === 'resolve' ? 'both' : mode"
         :text-if-no-image="area === 'resolve'"
         :image="imageOf(card.cardId)"
         :actor="actor"
         :read-only="readOnly"
+        @pick="emit('pick', card.uid)"
         @preview="(m) => onPreview(card.uid, m)"
         @toggle-player="onTogglePlayer(card.uid)"
         @remove="onRemove(card.uid)"
         @rename="(name) => onRename(card.uid, name)"
       />
       <p v-if="cards.length === 0" class="zone-empty">
-        {{ disabled ? '卡表载入中…' : isFull ? '已满' : '把右侧卡池的卡拖到这里' }}
+        {{ readOnly ? '暂无卡牌' : disabled ? '卡表载入中…' : isFull ? '已满' : '拖入卡牌，或从卡池点击添加' }}
       </p>
     </div>
   </section>
@@ -181,27 +186,27 @@ function onRename(uid: string, name: string): void {
   min-width: 0;
 }
 .zone-title h3 {
-  font-size: 13.5px;
+  font-size: 1rem;
   font-weight: 700;
   color: var(--color-text-primary);
   letter-spacing: 0.02em;
 }
 .zone-latin {
-  font-size: 9.5px;
+  font-size: 0.75rem;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--color-text-subtle);
 }
 .zone-count {
-  font-size: 11px;
+  font-size: 0.875rem;
   color: var(--color-text-subtle);
 }
-.zone-cap { font-size: 10px; color: var(--color-text-subtle); }
+.zone-cap { font-size: 0.875rem; color: var(--color-text-subtle); }
 .zone-players {
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  font-size: 10px;
+  font-size: 0.875rem;
   color: var(--color-text-subtle);
 }
 .dot {
@@ -227,7 +232,7 @@ function onRename(uid: string, name: string): void {
 }
 .mode-btn {
   padding: 2px 6px;
-  font-size: 10px;
+  font-size: 0.875rem;
   color: var(--color-text-subtle);
   background: var(--color-card-bg);
   border-right: 1px solid var(--color-panel-border);
@@ -240,7 +245,7 @@ function onRename(uid: string, name: string): void {
   font-weight: 600;
 }
 .zone-clear {
-  font-size: 10px;
+  font-size: 0.875rem;
   padding: 2px 6px;
   border: 1px solid var(--color-panel-border);
   border-radius: 6px;
@@ -266,7 +271,7 @@ function onRename(uid: string, name: string): void {
 .zone-body.is-full { background: var(--color-brand-soft); }
 .zone-empty {
   margin: auto;
-  font-size: 10.5px;
+  font-size: 0.875rem;
   color: var(--color-text-subtle);
   text-align: center;
   padding: 14px 8px;
@@ -283,7 +288,7 @@ function onRename(uid: string, name: string): void {
 .zone-chain :deep(.chain-card.mode-both) { width: 96px; }
 .zone-resolve .zone-body { min-height: 104px; }
 .zone-resolve :deep(.chain-card) { width: 100%; }
-.zone-resolve :deep(.card-name) { font-size: 12px; }
+.zone-resolve :deep(.card-name) { font-size: 0.9375rem; }
 .zone-resolve .zone-body { padding: 0; }
 .zone-resolve .zone-head { align-items: stretch; flex-direction: column; }
 .zone-resolve .zone-title { gap: 4px; }
@@ -295,4 +300,6 @@ function onRename(uid: string, name: string): void {
   border-color: var(--color-brand);
   background: var(--color-brand-soft);
 }
+.zone-body{flex-wrap:wrap}.zone-title h3{font-size:1rem}.zone-empty,.zone-count,.zone-cap,.zone-clear,.mode-btn{font-size:.875rem}.zone-players{font-size:.75rem}.chain-zone :deep(.chain-card.changed){animation:step-change 1s ease-out;border-color:var(--color-brand);box-shadow:0 0 0 2px var(--color-brand-soft)}@keyframes step-change{0%{background:var(--color-brand-soft);transform:translateY(-4px)}100%{transform:translateY(0)}}@media(prefers-reduced-motion:reduce){.chain-zone :deep(.chain-card.changed){animation:none}}
+.chain-zone :deep(.connect-selected){outline:3px solid var(--color-brand);outline-offset:3px}
 </style>

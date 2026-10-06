@@ -22,6 +22,7 @@ import {
   type ChainAreaKey,
   type ChainAreaState,
   type ChainBoard,
+  type ChainArrow,
   type ChainCard,
   type ChainCustomCard,
   type ChainCustomEffect,
@@ -67,7 +68,7 @@ export function emptyBoard(): ChainBoard {
   for (const key of AREA_ORDER) {
     areas[key] = { cards: [], mode: DEFAULT_AREA_MODES[key] };
   }
-  return { areas, updatedAt: Date.now() };
+  return { areas, arrows: [], updatedAt: Date.now() };
 }
 
 /** 新建一个盘位(尚未保存;savedAt = null) */
@@ -175,6 +176,7 @@ export function removeCard(board: ChainBoard, uid: string): ChainBoard {
     const i = list.findIndex((c) => c.uid === uid);
     if (i >= 0) {
       list.splice(i, 1);
+      next.arrows = (next.arrows ?? []).filter((a) => a.from !== uid && a.to !== uid);
       next.updatedAt = Date.now();
       return next;
     }
@@ -186,6 +188,7 @@ export function removeCard(board: ChainBoard, uid: string): ChainBoard {
 export function clearArea(board: ChainBoard, area: ChainAreaKey): ChainBoard {
   const next = cloneBoard(board);
   next.areas[area].cards = [];
+  pruneArrows(next);
   next.updatedAt = Date.now();
   return next;
 }
@@ -194,6 +197,7 @@ export function clearArea(board: ChainBoard, area: ChainAreaKey): ChainBoard {
 export function clearBoard(board: ChainBoard): ChainBoard {
   const next = cloneBoard(board);
   for (const key of AREA_ORDER) next.areas[key].cards = [];
+  next.arrows = [];
   next.updatedAt = Date.now();
   return next;
 }
@@ -461,7 +465,45 @@ export function validateBoard(raw: unknown): ChainBoard | null {
     }
     areas[key] = { cards, mode: asMode(rawArea.mode, fallbackMode) };
   }
-  return { areas, updatedAt: asNumber(raw.updatedAt, Date.now()) };
+  const board: ChainBoard = { areas, arrows: [], updatedAt: asNumber(raw.updatedAt, Date.now()) };
+  const ids = new Set(AREA_ORDER.flatMap((key) => areas[key].cards.map((c) => c.uid)));
+  const seenArrows = new Set<string>();
+  for (const a of Array.isArray(raw.arrows) ? raw.arrows : []) {
+    if (!isRecord(a) || !ids.has(asString(a.from)) || !ids.has(asString(a.to)) || a.from === a.to) continue;
+    const id = asString(a.id, makeId('arrow'));
+    if (seenArrows.has(id)) continue;
+    seenArrows.add(id);
+    board.arrows!.push({ id, from: asString(a.from), to: asString(a.to), label: asString(a.label).slice(0, 120) });
+  }
+  return board;
+}
+
+function pruneArrows(board: ChainBoard): void {
+  const ids = new Set(AREA_ORDER.flatMap((key) => board.areas[key].cards.map((c) => c.uid)));
+  board.arrows = (board.arrows ?? []).filter((a) => ids.has(a.from) && ids.has(a.to));
+}
+
+export function connectCards(board: ChainBoard, from: string, to: string, label = ''): ChainBoard {
+  const next = cloneBoard(board);
+  if (from === to) return next;
+  const existing = (next.arrows ?? []).find((a) => a.from === from && a.to === to);
+  if (existing) existing.label = label.slice(0, 120);
+  else (next.arrows ??= []).push({ id: makeId('arrow'), from, to, label: label.slice(0, 120) });
+  pruneArrows(next);
+  next.updatedAt = Date.now();
+  return next;
+}
+
+export function editArrow(board: ChainBoard, id: string, patch: Partial<Pick<ChainArrow, 'from' | 'to' | 'label'>> | null): ChainBoard {
+  const next = cloneBoard(board);
+  if (!patch) next.arrows = (next.arrows ?? []).filter((a) => a.id !== id);
+  else {
+    const arrow = next.arrows?.find((a) => a.id === id);
+    if (arrow) Object.assign(arrow, patch, { label: (patch.label ?? arrow.label).slice(0, 120) });
+    pruneArrows(next);
+  }
+  next.updatedAt = Date.now();
+  return next;
 }
 
 function validateCustomCards(raw: unknown): ChainCustomCard[] {
@@ -582,7 +624,8 @@ function validateSnapshots(raw: unknown): ChainSnapshot[] {
     if (!board) return [];
     return [{ id: `import-snapshot-${index}`, actor: value.actor === 2 ? 2 : 1,
       action: asString(value.action, '手动快照'),
-      ts: typeof value.ts === 'number' && Number.isFinite(value.ts) ? value.ts : Date.now(), board }];
+      ts: typeof value.ts === 'number' && Number.isFinite(value.ts) ? value.ts : Date.now(), board,
+      duration: Math.max(0.5, Math.min(30, asNumber(value.duration, 2))) }];
   });
 }
 
@@ -672,7 +715,7 @@ function boardForShare(board: ChainBoard): ChainBoard {
       cards: area.cards.map((card) => (card.custom ? card : { ...card, text: '' }))
     };
   }
-  return { areas, updatedAt: board.updatedAt } as ChainBoard;
+  return { areas, arrows: board.arrows ?? [], updatedAt: board.updatedAt } as ChainBoard;
 }
 
 function buildSharePayload(board: ChainBoard, history: readonly ChainSnapshot[]): string {
@@ -682,6 +725,7 @@ function buildSharePayload(board: ChainBoard, history: readonly ChainSnapshot[])
     history: history.map((snapshot) => ({
       actor: snapshot.actor,
       action: snapshot.action,
+      duration: snapshot.duration ?? 2,
       ts: snapshot.ts,
       board: boardForShare(snapshot.board)
     }))

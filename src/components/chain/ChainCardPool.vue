@@ -34,6 +34,7 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
+  (e: 'add-card', id: string): void;
   (e: 'add-custom-card'): void;
   (e: 'add-custom-effect'): void;
   (e: 'remove-custom-card', id: string): void;
@@ -174,6 +175,7 @@ function subtitleOf(item: ChainPoolItem): string {
                 <i v-if="item.banned" class="pool-chip banned">禁</i>
               </span>
             </div>
+            <button type="button" class="pool-add" :aria-label="`添加${item.name}到选定区域`" @click.stop="emit('add-card', item.id)">添加</button>
           </div>
 
           <button v-if="hasMore" type="button" class="pool-more" @click="loadMore">
@@ -279,11 +281,11 @@ function subtitleOf(item: ChainPoolItem): string {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  font-size: 12.5px;
+  font-size: 0.9375rem;
   font-weight: 700;
   color: var(--color-text-primary);
 }
-.pool-count { font-size: 10.5px; font-weight: 400; color: var(--color-text-subtle); }
+.pool-count { font-size: 0.875rem; font-weight: 400; color: var(--color-text-subtle); }
 
 .thumb-switch {
   display: inline-flex;
@@ -293,7 +295,7 @@ function subtitleOf(item: ChainPoolItem): string {
 }
 .thumb-switch button {
   padding: 1px 7px;
-  font-size: 10px;
+  font-size: 0.875rem;
   color: var(--color-text-subtle);
   background: var(--color-card-bg);
 }
@@ -307,7 +309,7 @@ function subtitleOf(item: ChainPoolItem): string {
   width: 100%;
   margin-top: 8px;
   padding: 5px 8px;
-  font-size: 12px;
+  font-size: 0.9375rem;
   border: 1px solid var(--color-panel-border);
   border-radius: 7px;
   background: var(--color-card-bg);
@@ -317,7 +319,7 @@ function subtitleOf(item: ChainPoolItem): string {
 
 .pool-state {
   margin-top: 10px;
-  font-size: 11px;
+  font-size: 0.875rem;
   line-height: 1.6;
   color: var(--color-text-subtle);
   text-align: center;
@@ -369,7 +371,7 @@ function subtitleOf(item: ChainPoolItem): string {
   height: 100%;
   display: grid;
   place-items: center;
-  font-size: 7px;
+  font-size: 0.75rem;
   color: #fff;
   text-align: center;
   line-height: 1.1;
@@ -385,16 +387,16 @@ function subtitleOf(item: ChainPoolItem): string {
   gap: 1px;
 }
 .pool-name {
-  font-size: 11.5px;
+  font-size: 0.875rem;
   font-weight: 600;
   color: var(--color-text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.pool-sub { font-style: normal; font-weight: 400; color: var(--color-text-subtle); font-size: 10px; }
+.pool-sub { font-style: normal; font-weight: 400; color: var(--color-text-subtle); font-size: 0.875rem; }
 .pool-sub-line {
-  font-size: 9.5px;
+  font-size: 0.75rem;
   color: var(--color-text-subtle);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -404,7 +406,7 @@ function subtitleOf(item: ChainPoolItem): string {
   display: flex;
   align-items: center;
   gap: 4px;
-  font-size: 9px;
+  font-size: 0.75rem;
   color: var(--color-text-subtle);
   flex-wrap: wrap;
 }
@@ -420,7 +422,7 @@ function subtitleOf(item: ChainPoolItem): string {
 .pool-more {
   margin-top: 5px;
   padding: 5px;
-  font-size: 11px;
+  font-size: 0.875rem;
   border: 1px dashed var(--color-panel-border);
   border-radius: 7px;
   color: var(--color-text-muted);
@@ -429,7 +431,7 @@ function subtitleOf(item: ChainPoolItem): string {
 
 .custom-add { display: flex; gap: 4px; }
 .custom-add button {
-  font-size: 10px;
+  font-size: 0.875rem;
   padding: 1px 6px;
   border: 1px solid var(--color-panel-border);
   border-radius: 6px;
@@ -452,7 +454,7 @@ function subtitleOf(item: ChainPoolItem): string {
 .item-remove:hover { background: var(--color-brand-soft); color: var(--color-brand); }
 
 .pool-foot {
-  font-size: 10px;
+  font-size: 0.875rem;
   line-height: 1.6;
   color: var(--color-text-subtle);
   padding: 0 2px;
@@ -460,4 +462,5 @@ function subtitleOf(item: ChainPoolItem): string {
 
 /* 纯文字模式:把缩略图收掉 */
 .thumb-text .pool-thumb { display: none; }
+.pool-add{flex-shrink:0;align-self:center;border:1px solid var(--color-panel-border);border-radius:.375rem;padding:.25rem .375rem;font-size:.75rem}.pool-add:hover{color:var(--color-brand);border-color:var(--color-brand)}
 </style>

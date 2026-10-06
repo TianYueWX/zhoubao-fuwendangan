@@ -21,6 +21,8 @@ import {
 } from '@/tools/chain/types';
 import { chainStore } from '@/tools/chain/store';
 import ChainZone from './ChainZone.vue';
+import ChainArrowLayer from './ChainArrowLayer.vue';
+import type { ChainBoard } from '@/tools/chain/types';
 
 const props = defineProps<{
   cardsOf: (area: ChainAreaKey) => readonly ChainCard[];
@@ -28,15 +30,44 @@ const props = defineProps<{
   actor: 1 | 2;
   imageOf: (cardId: string) => string;
   history: readonly ChainSnapshot[];
+  board: ChainBoard;
 }>();
 
 const emit = defineEmits<{
   (e: 'close'): void;
+  (e: 'preview-card', card: ChainCard): void;
   (e: 'preview', uid: string, mode: 'hover' | 'leave' | 'click'): void;
   (e: 'toggle-player', uid: string): void;
 }>();
 
 const isFullscreen = ref(false);
+const playing = ref(false), speed = ref(1), fit = ref(true), scale = ref(1);
+const viewport = ref<HTMLElement>(), scene = ref<HTMLElement>(), overlay = ref<HTMLElement>();
+let timer: ReturnType<typeof setTimeout> | undefined, resize: ResizeObserver | undefined;
+let previousFocus: HTMLElement | null = null;
+function pause(): void { playing.value = false; clearTimeout(timer); }
+function schedule(): void {
+  clearTimeout(timer);
+  if (!playing.value) return;
+  timer = setTimeout(() => { if (stepIndex.value + 1 >= props.history.length) pause(); else stepIndex.value++; }, (activeSnapshot.value?.duration ?? 2) * 1000 / speed.value);
+}
+function play(): void {
+  if (playing.value) { pause(); return; }
+  if (!props.history.length) return;
+  if (stepIndex.value >= props.history.length - 1) stepIndex.value = 0;
+  playing.value = true; schedule();
+}
+function resizeBoard(): void {
+  if (!scene.value || !viewport.value || !fit.value) return;
+  scale.value = Math.min(1, (viewport.value.clientWidth - 16) / scene.value.offsetWidth, (viewport.value.clientHeight - 16) / scene.value.offsetHeight);
+}
+function seek(event: Event): void { pause(); stepIndex.value = Number((event.target as HTMLInputElement).value); }
+function previewCard(uid: string): void {
+  const displayed = activeSnapshot.value?.board ?? props.board;
+  const card = Object.values(displayed.areas).flatMap((a) => a.cards).find((c) => c.uid === uid);
+  if (card) emit('preview-card', card);
+}
+
 /** history.length is a sentinel for the live board shown when presentation opens. */
 const stepIndex = ref(props.history.length);
 
@@ -67,6 +98,15 @@ watch(
   }
 );
 
+watch([stepIndex, speed], schedule);
+watch(fit, () => { if (fit.value) resizeBoard(); else scale.value = 1; });
+const displayedBoard = computed(() => activeSnapshot.value?.board ?? props.board);
+const changedIds = computed(() => {
+  const previous = props.history[stepIndex.value - 1]?.board;
+  if (!previous) return [];
+  const before = new Map(Object.entries(previous.areas).flatMap(([a, z]) => z.cards.map((c, i) => [c.uid, JSON.stringify([a, i, c])] as const)));
+  return Object.entries(displayedBoard.value.areas).flatMap(([a, z]) => z.cards.filter((c, i) => before.get(c.uid) !== JSON.stringify([a, i, c])).map((c) => c.uid));
+});
 /** 演示模式下的排版:与主棋盘同序,结算链与结算中并排 */
 const layoutRows: ChainAreaKey[][] = [
   ['chain', 'resolve'],
@@ -75,6 +115,9 @@ const layoutRows: ChainAreaKey[][] = [
 ];
 
 function onKeydown(e: KeyboardEvent): void {
+  if ((e.target as Element)?.closest('dialog[open]')) return;
+  if (e.key === 'Tab') { const elements = [...(overlay.value?.querySelectorAll<HTMLElement>('button:not(:disabled), input, select, [tabindex="0"]') ?? [])]; const first = elements[0], last = elements[elements.length - 1]; if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last?.focus(); } else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first?.focus(); } return; }
+  if ((e.target as Element)?.matches('input, select, textarea')) return;
   if (e.key === 'Escape') {
     e.preventDefault();
     emit('close');
@@ -86,9 +129,13 @@ function onKeydown(e: KeyboardEvent): void {
     resetSteps();
     return;
   }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'p') {
+    e.preventDefault(); emit('close'); return;
+  }
 
   if (!e.ctrlKey && !e.metaKey && !e.altKey) {
-    if (e.key === 'ArrowLeft') {
+    if (e.key === ' ') { e.preventDefault(); play(); }
+    else if (e.key === 'ArrowLeft') {
       e.preventDefault();
       stepBack();
     } else if (e.key === 'ArrowRight') {
@@ -99,14 +146,17 @@ function onKeydown(e: KeyboardEvent): void {
 }
 
 function stepBack(): void {
+  pause();
   if (canStepBack.value) stepIndex.value -= 1;
 }
 
 function stepForward(): void {
+  pause();
   if (canStepForward.value) stepIndex.value += 1;
 }
 
 function resetSteps(): void {
+  pause();
   if (props.history.length > 0) stepIndex.value = 0;
 }
 
@@ -133,10 +183,13 @@ async function toggleFullscreen(): Promise<void> {
 }
 
 onMounted(() => {
+  previousFocus = document.activeElement as HTMLElement; overlay.value?.focus();
+  resize = new ResizeObserver(resizeBoard); if (viewport.value) resize.observe(viewport.value); if (scene.value) resize.observe(scene.value); resizeBoard();
   window.addEventListener('keydown', onKeydown);
   document.addEventListener('fullscreenchange', onFullscreenChange);
 });
 onUnmounted(() => {
+  pause(); resize?.disconnect(); previousFocus?.focus();
   window.removeEventListener('keydown', onKeydown);
   document.removeEventListener('fullscreenchange', onFullscreenChange);
 });
@@ -148,7 +201,7 @@ function noop(): void {
 </script>
 
 <template>
-  <div class="present-overlay" role="dialog" aria-modal="true" aria-label="结算链推演演示模式">
+  <div ref="overlay" tabindex="-1" class="present-overlay" role="dialog" aria-modal="true" aria-label="结算链推演演示模式">
     <header class="present-bar">
       <div class="present-title">
         <h2>结算链推演</h2>
@@ -158,6 +211,9 @@ function noop(): void {
         </span>
       </div>
       <div class="present-tools">
+        <button type="button" :disabled="!history.length" :aria-pressed="playing" @click="play">{{ playing ? '暂停' : '播放快照' }}</button>
+        <label class="speed-label">速度 <select v-model.number="speed"><option :value=".5">0.5×</option><option :value="1">1×</option><option :value="1.5">1.5×</option><option :value="2">2×</option></select></label>
+        <button type="button" :aria-pressed="fit" @click="fit = !fit">{{ fit ? '原始大小' : '适应屏幕' }}</button>
         <div class="present-stepper" role="group" aria-label="快照播放控制">
           <button
             type="button"
@@ -191,7 +247,9 @@ function noop(): void {
       </div>
     </header>
 
-    <div class="present-board">
+    <div v-if="history.length" class="present-progress"><label>步骤 <input type="range" :value="stepIndex" min="0" :max="history.length" @input="seek" /></label><span>{{ activeSnapshot ? `${activeSnapshot.duration ?? 2} 秒 · ${activeSnapshot.action}` : '当前棋盘' }}</span></div>
+    <div ref="viewport" class="present-viewport">
+    <div ref="scene" class="present-board" :style="{ transform: `scale(${scale})` }">
       <div v-for="(row, i) in layoutRows" :key="i" class="present-row" :class="`row-${row.length}`">
         <ChainZone
           v-for="area in row"
@@ -202,7 +260,9 @@ function noop(): void {
           :actor="displayActor"
           :image-of="imageOf"
           :capacity-hint="0"
+          :changed-ids="changedIds"
           read-only
+          @pick="previewCard"
           @set-mode="noop"
           @clear="noop"
           @preview="(uid, m) => emit('preview', uid, m)"
@@ -211,6 +271,8 @@ function noop(): void {
           @rename="noop"
         />
       </div>
+      <ChainArrowLayer :arrows="displayedBoard.arrows ?? []" read-only />
+    </div>
     </div>
   </div>
 </template>
@@ -236,10 +298,10 @@ function noop(): void {
   background: var(--color-card-bg);
 }
 .present-title { display: flex; align-items: baseline; gap: 10px; }
-.present-title h2 { font-size: 18px; font-weight: 800; color: var(--color-text-primary); }
-.present-play { font-size: 12.5px; color: var(--color-text-subtle); }
+.present-title h2 { font-size: 1.125rem; font-weight: 800; color: var(--color-text-primary); }
+.present-play { font-size: 0.9375rem; color: var(--color-text-subtle); }
 .present-actor {
-  font-size: 11px;
+  font-size: 0.875rem;
   padding: 1px 7px;
   border-radius: 4px;
   border: 1px solid var(--color-brand-faint);
@@ -248,7 +310,7 @@ function noop(): void {
 .present-actor.p2 { border-color: var(--color-panel-border); color: var(--color-map-ramp-3); }
 
 .present-tools { display: flex; align-items: center; gap: 9px; }
-.present-hint { font-size: 10.5px; color: var(--color-text-subtle); }
+.present-hint { font-size: 0.875rem; color: var(--color-text-subtle); }
 .present-hint kbd {
   font: inherit;
   color: var(--color-text-muted);
@@ -263,13 +325,13 @@ function noop(): void {
   max-width: 240px;
   overflow: hidden;
   color: var(--color-text-muted);
-  font-size: 11px;
+  font-size: 0.875rem;
   text-align: center;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .present-tools button {
-  font-size: 12px;
+  font-size: 0.9375rem;
   padding: 4px 13px;
   border: 1px solid var(--color-panel-border);
   border-radius: 7px;
@@ -288,7 +350,7 @@ function noop(): void {
 .present-tools button.step-button {
   width: 32px;
   padding-inline: 0;
-  font-size: 16px;
+  font-size: 1rem;
   line-height: 1;
 }
 .present-tools button.primary {
@@ -323,4 +385,5 @@ function noop(): void {
 }
 .present-board :deep(.chain-card .card-body) { overflow: hidden; }
 .present-board :deep(.zone-checkbox) { display: none; }
+.present-viewport{position:relative;flex:1;min-height:0;overflow:auto;padding:.5rem}.present-board{position:absolute;left:.5rem;top:.5rem;width:calc(100% - 1rem);min-width:1000px;overflow:visible;transform-origin:top left}.present-progress{display:flex;gap:1rem;align-items:center;flex-wrap:wrap;padding:.5rem 1rem;font-size:.875rem}.present-progress label{display:flex;align-items:center;gap:.5rem;flex:1}.present-progress input{flex:1;min-width:0}.present-progress>span{overflow-wrap:anywhere;flex:1}.speed-label{font-size:.875rem}.speed-label select{border:1px solid var(--color-panel-border);padding:.375rem}.present-title,.present-tools{flex-wrap:wrap}.present-play,.present-actor,.present-step-label{font-size:.875rem}.present-tools button{min-height:2.5rem;font-size:.875rem}.present-board :deep(.zone-body){flex-wrap:wrap}.present-hint{font-size:.75rem}@media(max-width:650px){.present-bar{gap:.375rem;padding:.5rem}.present-title h2{font-size:1rem}.present-play,.present-hint{display:none}.present-tools{gap:.375rem}.present-step-label{max-width:8rem;min-width:4rem}.present-tools button{padding:.375rem .5rem}.present-progress>span{flex-basis:100%;font-size:.75rem}}
 </style>

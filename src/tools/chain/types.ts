@@ -117,8 +117,17 @@ export interface ChainAreaState {
 }
 
 /** 一盘推演的棋盘 */
+export interface ChainArrow {
+  id: string;
+  from: string;
+  to: string;
+  label: string;
+}
+
 export interface ChainBoard {
   areas: Record<ChainAreaKey, ChainAreaState>;
+  /** 旧盘没有此字段；端点使用卡实例 uid，换区后仍保持连接。 */
+  arrows?: ChainArrow[];
   /** 最后修改时间(ms) */
   updatedAt: number;
 }
@@ -162,6 +171,8 @@ export interface ChainSnapshot {
   ts: number;
   /** 深拷贝的棋盘;历史条目自身即完整状态,不存增量 */
   board: ChainBoard;
+  /** 秒；旧快照默认停留 2 秒。 */
+  duration?: number;
 }
 
 /** 快照历史上限(上游 MAX_HISTORY = 100) */

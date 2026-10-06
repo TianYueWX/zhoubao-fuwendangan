@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from "vue";
+import { nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { ArrowDown, ArrowUp, Minus, Plus, X } from "@lucide/vue";
 import type { CarddexLocale, SortField, SortRule } from "./types";
 const props = defineProps<{
@@ -9,11 +9,15 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{ close: []; apply: [rules: SortRule[]] }>();
 const draft = ref<SortRule[]>([]);
+const dialog = ref<HTMLDialogElement>();
+let previous: HTMLElement | null = null;
+onBeforeUnmount(() => { dialog.value?.close(); previous?.focus(); });
 watch(
   () => props.open,
-  (open) => {
-    if (open) draft.value = props.rules.map((r) => ({ ...r }));
-  },
+  async (open) => {
+    if (open) { draft.value = props.rules.map((r) => ({ ...r })); previous = document.activeElement as HTMLElement; await nextTick(); dialog.value?.showModal(); }
+    else { dialog.value?.close(); previous?.focus(); }
+  }, { immediate: true },
 );
 const fields: Array<[SortField, string, string]> = [
   ["name", "卡名", "Name"],
@@ -38,11 +42,14 @@ function move(i: number, by: number): void {
   if (row) next.splice(j, 0, row);
   draft.value = next;
 }
+function backdrop(event: MouseEvent): void {
+  if (event.target !== dialog.value) return;
+  const rect = dialog.value.getBoundingClientRect();
+  if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) emit('close');
+}
 </script>
 <template>
-  <Teleport to="body"
-    ><div v-if="open" class="backdrop" @mousedown.self="emit('close')">
-      <section class="dialog" role="dialog" aria-modal="true">
+  <Teleport to="body"><dialog v-if="open" ref="dialog" class="dialog" :aria-label="locale === 'zh' ? '多条件排序' : 'Multi-key sort'" @cancel.prevent="emit('close')" @click="backdrop">
         <header>
           <div>
             <small>{{ locale === "zh" ? "结果次序" : "Result order" }}</small>
@@ -53,7 +60,7 @@ function move(i: number, by: number): void {
         <div class="rules">
           <div v-for="(rule, i) in draft" :key="rule.id" class="rule">
             <span>{{ i + 1 }}</span>
-            <select v-model="rule.field">
+            <select v-model="rule.field" :aria-label="`排序条件 ${i + 1} 字段`">
               <option
                 v-for="f in fields"
                 :key="f[0]"
@@ -63,7 +70,7 @@ function move(i: number, by: number): void {
                 {{ f[locale === "zh" ? 1 : 2] }}
               </option>
             </select>
-            <select v-model="rule.asc">
+            <select v-model="rule.asc" :aria-label="`排序条件 ${i + 1} 方向`">
               <option :value="true">
                 {{ locale === "zh" ? "升序" : "Ascending" }}
               </option>
@@ -90,9 +97,7 @@ function move(i: number, by: number): void {
             {{ locale === "zh" ? "应用" : "Apply" }}
           </button>
         </footer>
-      </section>
-    </div></Teleport
-  >
+      </dialog></Teleport>
 </template>
 <style scoped>
 .backdrop {
@@ -108,7 +113,10 @@ function move(i: number, by: number): void {
 .dialog {
   width: min(620px, 96vw);
   max-height: 85vh;
-  overflow: hidden;
+  overflow: auto;
+  margin: auto;
+  padding: 0;
+  color: var(--color-text-primary);
   background: var(--color-card-bg);
   border: 1px solid var(--color-panel-border);
   border-radius: 13px;
@@ -211,4 +219,5 @@ footer button {
     display: none;
   }
 }
+.dialog::backdrop{background:rgba(35,32,28,.5);backdrop-filter:blur(4px)}.rule select,.add,footer button{font-size:.875rem}.rule>span,header small{font-size:.75rem}@media(max-width:560px){.rule{grid-template-columns:20px 1fr 90px 58px 24px}.rule div{display:flex}.rules{padding:1rem .5rem}.dialog{width:calc(100% - 1rem)}}
 </style>

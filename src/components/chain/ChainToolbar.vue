@@ -30,6 +30,7 @@ const emit = defineEmits<{
   (e: 'undo'): void;
   (e: 'redo'): void;
   (e: 'export-json'): void;
+  (e: 'export-animation'): void;
   (e: 'import-json'): void;
   (e: 'share'): void;
   (e: 'toggle-presentation'): void;
@@ -75,7 +76,8 @@ function onRenameInput(e: Event): void {
         <button type="button" class="tb-btn primary" title="保存到本机(Ctrl+S 存的是快照,不是这个)" @click="emit('save')">
           保存
         </button>
-        <button type="button" class="tb-btn" title="导出为 JSON 文件" @click="emit('export-json')">导出</button>
+        <button type="button" class="tb-btn" title="导出为 JSON 文件" @click="emit('export-json')">导出 JSON</button>
+        <button type="button" class="tb-btn" @click="emit('export-animation')">导出动画</button>
         <button type="button" class="tb-btn" title="从 JSON 文件导入为新盘位" @click="emit('import-json')">导入</button>
         <button type="button" class="tb-btn" title="生成可发给他人的链接" @click="emit('share')">分享</button>
       </div>
@@ -159,7 +161,7 @@ function onRenameInput(e: Event): void {
 .rename-field {
   width: 170px;
   padding: 3px 7px;
-  font-size: 12px;
+  font-size: 0.9375rem;
   font-weight: 600;
   color: var(--color-text-primary);
   border: 1px solid transparent;
@@ -173,7 +175,7 @@ function onRenameInput(e: Event): void {
   outline: none;
 }
 
-.tb-stat { display: inline-flex; align-items: center; gap: 8px; font-size: 10.5px; color: var(--color-text-subtle); }
+.tb-stat { display: inline-flex; align-items: center; gap: 8px; font-size: 0.875rem; color: var(--color-text-subtle); }
 .tb-stat .dirty { color: var(--color-brand); }
 .tb-stat .clean { color: var(--color-text-subtle); font-weight: 400; }
 
@@ -187,7 +189,7 @@ function onRenameInput(e: Event): void {
 .tb-group:first-child { padding-left: 0; border-left: none; }
 
 .tb-btn {
-  font-size: 11.5px;
+  font-size: 0.875rem;
   padding: 3px 10px;
   border: 1px solid var(--color-panel-border);
   border-radius: 7px;
@@ -207,7 +209,7 @@ function onRenameInput(e: Event): void {
 
 .tb-mode { display: inline-flex; border: 1px solid var(--color-panel-border); border-radius: 7px; overflow: hidden; }
 .tb-mode button {
-  font-size: 10.5px;
+  font-size: 0.875rem;
   padding: 3px 7px;
   color: var(--color-text-subtle);
   background: var(--color-card-bg);
@@ -224,14 +226,14 @@ function onRenameInput(e: Event): void {
   flex-wrap: wrap;
   padding: 9px 4px 2px;
   border-top: 1px solid var(--color-panel-border);
-  font-size: 11px;
+  font-size: 0.875rem;
   color: var(--color-text-subtle);
 }
 .tb-help > div { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .tb-help b { color: var(--color-text-muted); }
 kbd {
   font-family: inherit;
-  font-size: 10px;
+  font-size: 0.875rem;
   padding: 0 4px;
   border: 1px solid var(--color-panel-border);
   border-bottom-width: 2px;
@@ -241,7 +243,7 @@ kbd {
 }
 .tb-help-close {
   margin-left: auto;
-  font-size: 10.5px;
+  font-size: 0.875rem;
   padding: 2px 8px;
   border: 1px solid var(--color-panel-border);
   border-radius: 6px;

@@ -46,6 +46,10 @@ import {
   insertCard,
   countCards
 } from '@/tools/chain/board';
+import { connectCards, editArrow } from '@/tools/chain/board';
+import ChainArrowLayer from '@/components/chain/ChainArrowLayer.vue';
+import BuilderModal from '@/components/deckbuilder/BuilderModal.vue';
+import ChainExportDialog from '@/components/chain/ChainExportDialog.vue';
 import {
   addCustomCard,
   addCustomEffect,
@@ -202,7 +206,42 @@ function moveBoardCard(uid: string, toArea: ChainAreaKey, toIndex: number | null
   // 先摘出再插入:moveCard 的「同区差一位」问题由调用方给准下标来规避
   // (拖拽层传来的 newIndex 已经是 Sortable 计算过的最终位置)
   const next = insertCard(removeCard(board.value, uid), card, toArea, toIndex);
+  next.arrows = board.value.arrows?.map((arrow) => ({ ...arrow })) ?? [];
   commitBoard(next, `移动「${card.name}」`);
+}
+
+const linking = ref(false);
+const linkFrom = ref('');
+const editingArrow = ref('');
+const arrowLabel = ref('');
+const poolHidden = ref(false);
+const poolWidth = ref(20);
+const exportOpen = ref(false);
+const addArea = ref<ChainAreaKey>('chain');
+function pickCard(uid: string): void {
+  if (!linking.value) { onPreview(uid, 'click'); return; }
+  if (!linkFrom.value) { linkFrom.value = uid; return; }
+  if (linkFrom.value === uid) { linkFrom.value = ''; return; }
+  commitBoard(connectCards(board.value, linkFrom.value, uid), '添加卡牌箭头');
+  linkFrom.value = '';
+}
+function selectArrow(id: string): void {
+  editingArrow.value = id;
+  arrowLabel.value = board.value.arrows?.find((a) => a.id === id)?.label ?? '';
+}
+function changeArrow(action: 'save' | 'reverse' | 'delete'): void {
+  const arrow = board.value.arrows?.find((a) => a.id === editingArrow.value);
+  if (!arrow) return;
+  const patch = action === 'delete' ? null : action === 'reverse'
+    ? { from: arrow.to, to: arrow.from, label: arrowLabel.value }
+    : { label: arrowLabel.value };
+  commitBoard(editArrow(board.value, arrow.id, patch), '修改卡牌箭头');
+  editingArrow.value = '';
+}
+function addPoolCard(id: string): void {
+  const item = pool.value.find((p) => p.id === id);
+  if (!item || !canAccept(addArea.value)) { notify('这个区域已满，请换一个区域', true); return; }
+  commitBoard(cloneCardFromPool(board.value, poolItemToCardSource(item), addArea.value, null, actor.value), `放入「${item.name}」`);
 }
 
 const dnd = useChainDnd({
@@ -299,6 +338,8 @@ function onSwitchActor(player: ChainPlayer): void {
 /* ──────────────────────── 大图浮层 ──────────────────────── */
 
 const overlayUid = ref('');
+const presentationCard = ref<ChainCard | null>(null);
+const previewPinned = ref(false);
 const hoveredUid = ref('');
 const altHeld = ref(false);
 
@@ -306,19 +347,20 @@ const altHeld = ref(false);
 const poolById = computed(() => new Map(pool.value.map((item) => [item.id, item])));
 
 const overlayCard = computed<ChainCard | null>(() => {
-  if (!overlayUid.value) return null;
-  const card = findCard(overlayUid.value);
+  const card = presentationCard.value ?? (overlayUid.value ? findCard(overlayUid.value) : null);
   if (!card || card.text || card.custom) return card;
   const item = poolById.value.get(card.cardId);
   return item ? { ...card, text: item.text } : card;
 });
 
 function syncPreview(): void {
+  if (previewPinned.value) return;
   overlayUid.value = altHeld.value && !dnd.isDragging.value ? hoveredUid.value : '';
 }
 watch(() => dnd.isDragging.value, syncPreview);
 
 function onPreview(uid: string, mode: 'hover' | 'leave' | 'click'): void {
+  if (mode === 'click') { overlayUid.value = uid; previewPinned.value = true; return; }
   if (mode === 'hover') hoveredUid.value = uid;
   else if (mode === 'leave' && hoveredUid.value === uid) hoveredUid.value = '';
   syncPreview();
@@ -332,7 +374,7 @@ function onPreviewPointer(e: PointerEvent): void {
   altHeld.value = e.altKey;
   syncPreview();
 }
-function closeOverlay(): void { overlayUid.value = ''; }
+function closeOverlay(): void { overlayUid.value = ''; presentationCard.value = null; previewPinned.value = false; }
 function resetPreview(): void {
   altHeld.value = false;
   hoveredUid.value = '';
@@ -527,8 +569,9 @@ useChainShortcuts({
 /** Esc:优先关浮层,其次退出演示 */
 function onEscKey(e: KeyboardEvent): void {
   if (e.key !== 'Escape') return;
+  if ((e.target as Element)?.closest('dialog[open]')) return;
   if (shareOpen.value) { shareOpen.value = false; return; }
-  if (overlayUid.value) {
+  if (overlayUid.value || presentationCard.value) {
     closeOverlay();
     return;
   }
@@ -601,8 +644,7 @@ watch(status, () => {
 /* (卡表就绪的补挂已并入上面的 tryMountDnd,这里不再重复注册 watcher) */
 
 /* ──────────────────────── 视图辅助 ──────────────────────── */
-/* 说明:本工具为桌面场景设计(拖拽 + 多区并排),不做窄屏适配。
- * 窄屏下浏览器会正常横向滚动,不额外降级。 */
+/* 桌面保留多区编辑；演示另按屏幕缩放，手机也能同时观看六区。 */
 
 const thumbMode = ref<'image' | 'text'>('image');
 const historyOpen = ref(false);
@@ -655,6 +697,7 @@ function modeOf(area: ChainAreaKey): CardDisplayMode {
       @undo="undo()"
       @redo="redo()"
       @export-json="onExportJson"
+      @export-animation="exportOpen = true"
       @import-json="onPickImportFile"
       @share="onShare"
       @toggle-presentation="togglePresentation"
@@ -682,7 +725,13 @@ function modeOf(area: ChainAreaKey): CardDisplayMode {
       把右侧卡池的卡拖进任一区域;区域之间也可以直接拖
     </p>
 
-    <div class="chain-layout">
+    <div class="layout-tools">
+      <button type="button" :aria-pressed="linking" @click="linking = !linking; linkFrom = ''">{{ linking ? '结束连线' : '添加箭头' }}</button>
+      <span v-if="linking" role="status">{{ linkFrom ? '再点目标卡牌；点原卡取消起点' : '先点起点卡牌，再点目标卡牌' }}</span>
+      <button type="button" :aria-expanded="!poolHidden" @click="poolHidden = !poolHidden">{{ poolHidden ? '展开卡池' : '收起卡池' }}</button>
+      <label v-if="!poolHidden">卡池宽度 <input v-model.number="poolWidth" type="range" min="16" max="28" step="1" aria-label="卡池宽度" /></label>
+    </div>
+    <div class="chain-layout" :class="{ 'pool-hidden': poolHidden }" :style="{ '--pool-width': `${poolWidth}rem` }">
       <!-- ── 主棋盘 ── -->
       <main class="chain-board">
         <!-- 玩家切换 -->
@@ -705,6 +754,7 @@ function modeOf(area: ChainAreaKey): CardDisplayMode {
         </div>
 
         <!-- 六个区域 -->
+        <div class="board-scene" :class="{ linking }">
         <div v-for="(row, i) in layoutRows" :key="i" class="board-row" :class="`row-${row.length}`">
           <ChainZone
             v-for="area in row"
@@ -717,18 +767,23 @@ function modeOf(area: ChainAreaKey): CardDisplayMode {
             :image-of="imageOf"
             :capacity-hint="area === 'resolve' ? RESOLVE_CAPACITY : 0"
             :disabled="status !== 'ready'"
+            :selected-uid="linkFrom"
             @set-mode="(m) => onSetAreaMode(area, m)"
             @clear="onClearArea(area)"
             @preview="onPreview"
             @toggle-player="onTogglePlayer"
             @remove="onRemoveCard"
             @rename="onRenameCard"
+            @pick="pickCard"
           />
+        </div>
+        <ChainArrowLayer :arrows="board.arrows ?? []" @select="selectArrow" />
         </div>
       </main>
 
       <!-- ── 侧栏 ── -->
-      <aside class="chain-side">
+      <aside v-show="!poolHidden" class="chain-side">
+        <label class="add-area">点击添加到 <select v-model="addArea"><option v-for="area in AREA_ORDER" :key="area" :value="area">{{ AREA_META[area].label }}</option></select></label>
         <ChainCardPool
           ref="poolComponent"
           :pool="pool"
@@ -742,6 +797,7 @@ function modeOf(area: ChainAreaKey): CardDisplayMode {
           @add-custom-effect="onAddCustomEffect"
           @remove-custom-card="removeCustomCard"
           @remove-custom-effect="removeCustomEffect"
+          @add-card="addPoolCard"
         />
 
         <p class="side-foot">
@@ -773,13 +829,18 @@ function modeOf(area: ChainAreaKey): CardDisplayMode {
       @close="shareOpen = false"
       @export-json="onExportJson"
     />
+    <BuilderModal v-if="editingArrow" title="编辑箭头" @close="editingArrow = ''">
+      <label>说明（可不填）<input v-model="arrowLabel" maxlength="120" class="arrow-input" placeholder="例如：选择目标 / 触发效果" /></label>
+      <template #footer><button class="b-btn" @click="changeArrow('delete')">删除箭头</button><button class="b-btn" @click="changeArrow('reverse')">反转方向</button><button class="b-btn b-primary" @click="changeArrow('save')">保存说明</button></template>
+    </BuilderModal>
+    <ChainExportDialog v-if="exportOpen" :history="chainStore.working.history" :image-of="imageOf" :name="playName" @close="exportOpen = false" />
 
     <!-- 浮层 -->
     <ChainCardOverlay
       v-if="overlayCard"
       :card="overlayCard"
       :image="imageOf(overlayCard.cardId)"
-      :pinned="false"
+      :pinned="previewPinned"
       @close="closeOverlay"
     />
 
@@ -790,9 +851,11 @@ function modeOf(area: ChainAreaKey): CardDisplayMode {
       :actor="actor"
       :image-of="imageOf"
       :history="chainStore.working.history"
+      :board="board"
       @close="presenting = false"
       @preview="onPreview"
       @toggle-player="onTogglePlayer"
+      @preview-card="(card) => { presentationCard = card; previewPinned = true; }"
     />
 
     <ChainUnsavedDialog
@@ -957,4 +1020,7 @@ function modeOf(area: ChainAreaKey): CardDisplayMode {
 }
 .back-home:hover { border-color: var(--color-brand); color: var(--color-brand); }
 
+.layout-tools{display:flex;flex-wrap:wrap;align-items:center;gap:.75rem;font-size:.875rem}.layout-tools button,.add-area select{border:1px solid var(--color-panel-border);border-radius:.375rem;padding:.375rem .75rem;background:var(--color-card-bg)}.layout-tools button[aria-pressed=true]{background:var(--color-brand);color:var(--color-brand-ink)}.layout-tools label{display:flex;align-items:center;gap:.5rem;margin-left:auto}.chain-layout{grid-template-columns:minmax(0,1fr) var(--pool-width,20rem)}.chain-layout.pool-hidden{grid-template-columns:minmax(0,1fr)}.board-scene{position:relative;display:flex;flex-direction:column;gap:.75rem}.linking :deep(.chain-card){cursor:crosshair}.add-area{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin-bottom:.75rem;font-size:.875rem}.arrow-input{display:block;width:100%;margin-top:.75rem}.row-2{grid-template-columns:minmax(0,1fr) minmax(11.75rem,20%)}
+@media(max-width:1000px){.chain-layout{grid-template-columns:minmax(0,1fr)}.chain-side{max-width:none}.row-3{grid-template-columns:repeat(3,minmax(0,1fr))}.board-scene :deep(.zone-body){flex-wrap:wrap}.board-scene :deep(.chain-card){max-width:100%}}
+@media(max-width:600px){.actor-note{display:none}.row-2{grid-template-columns:minmax(0,1fr) minmax(7rem,30%)}.board-scene :deep(.chain-zone){padding:.5rem}.board-scene :deep(.zone-title){flex-wrap:wrap}.board-scene :deep(.zone-latin){display:none}.board-scene :deep(.zone-tools){flex-wrap:wrap}.board-scene :deep(.chain-card){width:5rem!important}.view-sub{font-size:.875rem}.layout-tools label{margin-left:0}.back-home{position:static;align-self:flex-start}}
 </style>

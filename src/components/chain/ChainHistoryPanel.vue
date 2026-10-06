@@ -9,7 +9,7 @@
  *   快照 = 过程记录,只在本会话内有效,关页即散
  *   保存 = 把当前棋盘写进盘位,落 localStorage
  */
-import { onMounted, onUnmounted, ref } from 'vue';
+import { updateSnapshot } from '@/tools/chain/store';
 import { Redo2, Undo2, X } from '@lucide/vue';
 import type { ChainSnapshot } from '@/tools/chain/types';
 
@@ -29,75 +29,6 @@ const emit = defineEmits<{
   (e: 'import-json'): void;
 }>();
 
-/** 浮窗位置存在本机:关掉再开、刷新页面都回到上次拖到的地方 */
-const PANEL_POS_KEY = 'rune.chain.history-panel';
-
-function defaultPosition(): { x: number; y: number } {
-  return { x: Math.max(8, window.innerWidth - 344), y: 160 };
-}
-
-function loadPosition(): { x: number; y: number } {
-  try {
-    const raw = localStorage.getItem(PANEL_POS_KEY);
-    if (!raw) return defaultPosition();
-    const parsed: unknown = JSON.parse(raw);
-    if (!parsed || typeof parsed !== 'object') return defaultPosition();
-    const { x, y } = parsed as { x?: unknown; y?: unknown };
-    if (typeof x !== 'number' || typeof y !== 'number') return defaultPosition();
-    if (!Number.isFinite(x) || !Number.isFinite(y)) return defaultPosition();
-    return { x, y };
-  } catch {
-    return defaultPosition();
-  }
-}
-
-function savePosition(): void {
-  try {
-    localStorage.setItem(PANEL_POS_KEY, JSON.stringify(position.value));
-  } catch {
-    // 存不下就算了:位置只是便利,不该因此打断使用
-  }
-}
-
-const panel = ref<HTMLElement | null>(null);
-const position = ref(loadPosition());
-let drag: { id: number; x: number; y: number } | null = null;
-
-function clampPosition(x: number, y: number): void {
-  const rect = panel.value?.getBoundingClientRect();
-  position.value = {
-    x: Math.max(8, Math.min(x, window.innerWidth - (rect?.width || 320) - 8)),
-    y: Math.max(8, Math.min(y, window.innerHeight - (rect?.height || 260) - 8))
-  };
-}
-function startDrag(event: PointerEvent): void {
-  if (event.button !== 0 || (event.target as Element).closest('button')) return;
-  drag = { id: event.pointerId, x: event.clientX - position.value.x, y: event.clientY - position.value.y };
-  (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
-  event.preventDefault();
-}
-function moveDrag(event: PointerEvent): void {
-  if (!drag || drag.id !== event.pointerId) return;
-  clampPosition(event.clientX - drag.x, event.clientY - drag.y);
-}
-function endDrag(event: PointerEvent): void {
-  if (drag?.id !== event.pointerId) return;
-  drag = null;
-  const target = event.currentTarget as HTMLElement;
-  if (target.hasPointerCapture(event.pointerId)) target.releasePointerCapture(event.pointerId);
-  savePosition();
-}
-function onResize(): void {
-  clampPosition(position.value.x, position.value.y);
-  savePosition();
-}
-onMounted(() => {
-  // 恢复的位置可能来自更宽的窗口,进 DOM 后按当前视口再夹一次
-  clampPosition(position.value.x, position.value.y);
-  window.addEventListener('resize', onResize);
-});
-onUnmounted(() => window.removeEventListener('resize', onResize));
-
 function timeLabel(ts: number): string {
   const d = new Date(ts);
   const pad = (n: number): string => String(n).padStart(2, '0');
@@ -106,8 +37,8 @@ function timeLabel(ts: number): string {
 </script>
 
 <template>
-  <div ref="panel" class="history-panel" role="dialog" aria-label="快照历史" :style="{ left: `${position.x}px`, top: `${position.y}px` }">
-    <header class="hp-head" @pointerdown="startDrag" @pointermove="moveDrag" @pointerup="endDrag" @pointercancel="endDrag" @lostpointercapture="drag = null">
+  <div class="history-panel" role="region" aria-label="快照历史" >
+    <header class="hp-head">
       <h3>快照历史</h3>
       <span class="hp-count tabular-nums">{{ history.length }} 条</span>
       <button type="button" class="hp-close" aria-label="关闭快照历史" @click="emit('close')"><X :size="16" aria-hidden="true" /></button>
@@ -138,6 +69,7 @@ function timeLabel(ts: number): string {
           <span class="hp-action">{{ snap.action }}</span>
           <span class="hp-time tabular-nums">{{ timeLabel(snap.ts) }}</span>
         </button>
+        <div class="hp-edit"><label>说明<input :value="snap.action" maxlength="200" @change="updateSnapshot(snap.id, ($event.target as HTMLInputElement).value, snap.duration ?? 2)" /></label><label>停留秒数<input type="number" min=".5" max="30" step=".5" :value="snap.duration ?? 2" @change="updateSnapshot(snap.id, snap.action, Number(($event.target as HTMLInputElement).value))" /></label></div>
       </li>
     </ol>
 
@@ -145,15 +77,15 @@ function timeLabel(ts: number): string {
       <button type="button" @click="emit('export-json')">导出 JSON</button>
       <button type="button" @click="emit('import-json')">导入 JSON</button>
     </footer>
-    <p class="hp-note">快照只在本会话内有效,关页即散;要长期保留请「保存到本机」或导出。</p>
+    <p class="hp-note">快照用于演示和动画导出。修改说明后，请点顶部“保存”保留到本机。</p>
   </div>
 </template>
 
 <style scoped>
 .history-panel {
-  position: fixed;
+  position: relative;
   z-index: 60;
-  width: min(320px, calc(100vw - 16px));
+  width: 100%;
   max-height: calc(100vh - 24px);
   overflow-y: auto;
   box-shadow: 0 12px 36px -12px var(--color-shadow);
@@ -166,7 +98,7 @@ function timeLabel(ts: number): string {
   background: var(--color-panel-bg);
 }
 .hp-head {
-  cursor: move;
+  cursor: default;
   touch-action: none;
   user-select: none;
   display: flex;
@@ -174,13 +106,13 @@ function timeLabel(ts: number): string {
   justify-content: space-between;
   gap: 8px;
 }
-.hp-head h3 { font-size: 12.5px; font-weight: 700; color: var(--color-text-primary); }
+.hp-head h3 { font-size: 0.9375rem; font-weight: 700; color: var(--color-text-primary); }
 .hp-close { display: grid; flex: 0 0 28px; place-items: center; width: 28px; height: 28px; cursor: pointer; padding: 0; color: var(--color-text-muted); }
-.hp-count { margin-left: auto; font-size: 10px; color: var(--color-text-subtle); }
+.hp-count { margin-left: auto; font-size: 0.875rem; color: var(--color-text-subtle); }
 
 .hp-actions { display: flex; gap: 4px; flex-wrap: wrap; }
 .hp-actions button {
-  font-size: 10.5px;
+  font-size: 0.875rem;
   padding: 2px 7px;
   border: 1px solid var(--color-panel-border);
   border-radius: 6px;
@@ -190,7 +122,7 @@ function timeLabel(ts: number): string {
 .hp-actions button:hover:not(:disabled) { border-color: var(--color-brand); color: var(--color-brand); }
 .hp-actions button:disabled { opacity: .45; cursor: not-allowed; }
 
-.hp-empty { font-size: 10.5px; line-height: 1.6; color: var(--color-text-subtle); padding: 6px 0; }
+.hp-empty { font-size: 0.875rem; line-height: 1.6; color: var(--color-text-subtle); padding: 6px 0; }
 
 .hp-list {
   list-style: none;
@@ -210,7 +142,7 @@ function timeLabel(ts: number): string {
   padding: 4px 6px;
   border-radius: 6px;
   text-align: left;
-  font-size: 11px;
+  font-size: 0.875rem;
   color: var(--color-text-muted);
 }
 .hp-item button:hover { background: var(--color-dropzone-hover-bg); }
@@ -230,7 +162,7 @@ function timeLabel(ts: number): string {
 }
 .hp-dot.p2 { background: var(--color-map-ramp-3); }
 .hp-action { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.hp-time { flex: 0 0 auto; font-size: 9.5px; color: var(--color-text-subtle); }
+.hp-time { flex: 0 0 auto; font-size: 0.75rem; color: var(--color-text-subtle); }
 
 .hp-foot {
   display: flex;
@@ -240,7 +172,7 @@ function timeLabel(ts: number): string {
 }
 .hp-foot button {
   flex: 1 1 0;
-  font-size: 10.5px;
+  font-size: 0.875rem;
   padding: 3px 6px;
   border: 1px solid var(--color-panel-border);
   border-radius: 6px;
@@ -248,5 +180,6 @@ function timeLabel(ts: number): string {
   background: var(--color-card-bg);
 }
 .hp-foot button:hover { border-color: var(--color-brand); color: var(--color-brand); }
-.hp-note { font-size: 9.5px; line-height: 1.5; color: var(--color-text-subtle); }
+.hp-note { font-size: 0.75rem; line-height: 1.5; color: var(--color-text-subtle); }
+.hp-edit{display:flex;gap:.5rem;padding:.25rem .375rem .75rem}.hp-edit label{font-size:.75rem;flex:1;min-width:0}.hp-edit label:last-child{flex:0 0 6rem}.hp-edit input{display:block;width:100%;padding:.375rem;border:1px solid var(--color-panel-border);border-radius:.375rem;background:var(--color-card-bg);font-size:.875rem}.hp-list{max-height:24rem}
 </style>

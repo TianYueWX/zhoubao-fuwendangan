@@ -43,8 +43,8 @@ async function copy(): Promise<void> {
 .share-dialog { width: min(440px, 100%); max-height: calc(100vh - 32px); overflow: auto; padding: 20px; border: 1px solid var(--color-panel-border); border-radius: 12px; background: var(--color-panel-bg); color: var(--color-text-primary); display: flex; flex-direction: column; gap: 12px; }
 header { display: flex; align-items: center; justify-content: space-between; font-weight: 700; }
 header button { display: grid; flex: 0 0 32px; place-items: center; width: 32px; height: 32px; padding: 0; }
-p, label { font-size: 12px; color: var(--color-text-muted); }
-textarea { width: 100%; resize: vertical; padding: 8px; border: 1px solid var(--color-panel-border); border-radius: 6px; background: var(--color-card-bg); font-size: 11px; }
+p, label { font-size: 0.9375rem; color: var(--color-text-muted); }
+textarea { width: 100%; resize: vertical; padding: 8px; border: 1px solid var(--color-panel-border); border-radius: 6px; background: var(--color-card-bg); font-size: 0.875rem; }
 button { padding: 6px 10px; border: 1px solid var(--color-panel-border); border-radius: 6px; }
 .share-copy { background: var(--color-brand); color: var(--color-brand-ink); }
 .share-qr { width: min(360px, 100%); align-self: center; image-rendering: pixelated; }
