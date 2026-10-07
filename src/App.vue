@@ -203,7 +203,7 @@ function onWeekChange(e: Event): void {
       :class="
         isHome
           ? 'w-full'
-          : isBuilder
+          : isBuilder || store.currentView === 'rulebook'
             ? 'flex-1 w-full min-w-0'
           : isCarddex
             ? 'flex-1 w-full max-w-[1720px] mx-auto px-4 lg:px-8 py-4'
@@ -218,7 +218,7 @@ function onWeekChange(e: Event): void {
 
     <!-- ══════════ 页脚 ══════════ -->
     <footer
-      v-if="!isHome && !isCarddex && !isBuilder"
+      v-if="!isHome && !isCarddex && !isBuilder && store.currentView !== 'rulebook'"
       class="px-4 lg:px-8 pb-8 max-w-[1720px] mx-auto w-full"
     >
       <div class="rune-rule mb-5"></div>
