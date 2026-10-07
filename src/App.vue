@@ -230,9 +230,9 @@ function onWeekChange(e: Event): void {
       </div>
     </footer>
 
-    <!-- 回到顶部 FAB(carddex 也走这条，页面内不再自建局部回顶) -->
+    <!-- 规则书使用书内回顶，其余页面共用全局 FAB。 -->
     <button
-      v-if="!isHome && !isBuilder && showTop"
+      v-if="!isHome && !isBuilder && store.currentView !== 'rulebook' && showTop"
       class="fixed bottom-6 right-6 z-50 w-11 h-11 rounded-full bg-brand text-brand-ink shadow-lg flex items-center justify-center text-lg leading-none transition-transform hover:scale-110 fade-in"
       aria-label="回到顶部"
       title="回到顶部"

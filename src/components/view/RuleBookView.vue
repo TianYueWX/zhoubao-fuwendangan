@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, watch } from "vue";
 import QRCode from "qrcode";
-import { ArrowLeft, BookOpen, Copy, Minus, MoreVertical, Plus, Search, Star, X } from "@lucide/vue";
+import { ArrowLeft, ArrowUp, BookOpen, Copy, Minus, MoreVertical, Plus, Search, Star, X } from "@lucide/vue";
 import { navigate, routeToHash } from "@/router/hash";
 import { store } from "@/store/analysis";
 import { listAllRules } from "@/tools/admin/rules";
@@ -43,6 +43,7 @@ const readerWidth = ref<ReaderWidth>("full");
 const customWidth = ref(75);
 const documentWidth = computed(() => readerWidth.value === "focused" ? "860px" : readerWidth.value === "wide" ? "1200px" : readerWidth.value === "custom" ? `${customWidth.value}%` : "100%");
 const readerDocument = ref<HTMLElement | null>(null);
+const showReaderTop = ref(false);
 const cardPanelOpen = ref(false);
 const cardPanelMounted = ref(false);
 const cardRequest = shallowRef<ReaderCardRequest | null>(null);
@@ -54,6 +55,7 @@ let requestId = 0;
 let selectionTimer: ReturnType<typeof setTimeout> | null = null;
 let selectingText = false;
 let readingPositionVersion = 0;
+let ruleScrollVersion = 0;
 let readingAnchorActive = false;
 let previousOverflowAnchor = '';
 const bookName = computed(() => store.currentRuleBook);
@@ -136,7 +138,7 @@ function preserveReadingPosition(change: () => void): void {
   if (row && offset !== undefined) void nextTick(() => requestAnimationFrame(() => {
     if (version !== readingPositionVersion) return;
     window.scrollBy({ top: row.getBoundingClientRect().top - offset, behavior: 'instant' });
-    // content-visibility can settle rule heights on the following frame.
+    // Keep the anchor stable after the browser applies scroll anchoring.
     requestAnimationFrame(() => {
       if (version !== readingPositionVersion) return;
       window.scrollBy({ top: row.getBoundingClientRect().top - offset, behavior: 'instant' });
@@ -190,6 +192,15 @@ function scheduleSelection(): void {
   selectionTimer = setTimeout(refreshTextSelection, 140);
 }
 
+function onReaderScroll(): void {
+  showReaderTop.value = window.scrollY > 400;
+  scheduleSelection();
+}
+
+function scrollToBookTop(): void {
+  window.scrollTo({ top: 0, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
+}
+
 function onSelectionPointerDown(event: PointerEvent): void {
   if (!(event.target instanceof Element)) return;
   if (event.target.closest('.text-selection-menu')) return;
@@ -232,7 +243,7 @@ async function copySelectedText(): Promise<void> {
 function returnToSource(book: string, number: string): void {
   if (window.innerWidth <= 900) closeCardPanel();
   if (book !== bookName.value) navigate({ view: 'rulebook', ruleBook: book, ruleNumber: number });
-  else void nextTick(() => scrollToRule(number));
+  else void scrollToRule(number);
 }
 
 function onReaderKey(event: KeyboardEvent): void {
@@ -256,8 +267,22 @@ function completeSelection(): void {
   selected.value = new Set();
 }
 
-function scrollToRule(number: string): void {
-  document.getElementById(ruleId(number))?.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: "center" });
+async function scrollToRule(number: string): Promise<void> {
+  const version = ++ruleScrollVersion;
+  const book = bookName.value;
+  // An explicit jump takes priority over restoring the previous reading position.
+  readingPositionVersion++;
+  if (readingAnchorActive) {
+    document.documentElement.style.overflowAnchor = previousOverflowAnchor;
+    readingAnchorActive = false;
+  }
+  await nextTick();
+  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+  if (version !== ruleScrollVersion || book !== bookName.value) return;
+  const target = document.getElementById(ruleId(number));
+  if (target && readerDocument.value?.contains(target)) {
+    target.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: "center" });
+  }
 }
 
 function ruleId(number: string): string { return `rule-${encodeURIComponent(number)}`; }
@@ -318,7 +343,7 @@ function closeSearch(): void {
 
 function chooseSearchHit(number: string): void {
   closeSearch();
-  nextTick(() => scrollToRule(number));
+  void scrollToRule(number);
 }
 
 function openPopup(mode: Exclude<PopupMode, "none">): void {
@@ -388,7 +413,7 @@ function openFavorite(favorite: Favorite): void {
     return;
   }
   closePopup();
-  nextTick(() => scrollToRule(favorite.number));
+  void scrollToRule(favorite.number);
 }
 
 function jumpToFavorite(newPage: boolean): void {
@@ -440,7 +465,7 @@ function setTheme(theme: ReaderTheme): void {
 function openReference(part: TextPart): void {
   if (!part.book || !part.number) return;
   navigate({ view: "rulebook", ruleBook: part.book, ruleNumber: part.number });
-  if (part.book === bookName.value) nextTick(() => scrollToRule(part.number!));
+  if (part.book === bookName.value) void scrollToRule(part.number);
 }
 
 function onReferenceClick(event: MouseEvent, part: TextPart): void {
@@ -528,15 +553,13 @@ async function load(): Promise<void> {
     allRules.value = rows ?? [];
     if (!allRules.value.some((rule) => (rule.rules_book || "（未分类）") === bookName.value)) {
       error.value = `找不到规则书“${bookName.value}”`;
-    } else if (store.currentRuleTarget) {
-      await nextTick();
-      scrollToRule(store.currentRuleTarget);
     }
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : "规则书加载失败";
   } finally {
     loading.value = false;
   }
+  if (!error.value && store.currentRuleTarget) await scrollToRule(store.currentRuleTarget);
 }
 
 watch(rulesResource.data, (rows) => {
@@ -567,26 +590,28 @@ onMounted(() => {
   document.addEventListener('pointerdown', onSelectionPointerDown);
   document.addEventListener('pointerup', onSelectionPointerUp);
   document.addEventListener('pointercancel', onSelectionPointerUp);
-  window.addEventListener('scroll', scheduleSelection, { passive: true });
+  onReaderScroll();
+  window.addEventListener('scroll', onReaderScroll, { passive: true });
   window.addEventListener('resize', onReaderResize);
   window.addEventListener('keydown', onReaderKey);
   window.addEventListener('storage', syncPinnedCount);
 });
 onUnmounted(() => {
   readingPositionVersion++;
+  ruleScrollVersion++;
   if (readingAnchorActive) document.documentElement.style.overflowAnchor = previousOverflowAnchor;
   if (selectionTimer) clearTimeout(selectionTimer);
   document.removeEventListener('selectionchange', scheduleSelection);
   document.removeEventListener('pointerdown', onSelectionPointerDown);
   document.removeEventListener('pointerup', onSelectionPointerUp);
   document.removeEventListener('pointercancel', onSelectionPointerUp);
-  window.removeEventListener('scroll', scheduleSelection);
+  window.removeEventListener('scroll', onReaderScroll);
   window.removeEventListener('resize', onReaderResize);
   window.removeEventListener('keydown', onReaderKey);
   window.removeEventListener('storage', syncPinnedCount);
 });
 watch(() => store.currentRuleTarget, (number) => {
-  if (number) nextTick(() => scrollToRule(number));
+  if (number) void scrollToRule(number);
 });
 watch(bookName, () => {
   selected.value = new Set();
@@ -614,6 +639,9 @@ watch(bookName, () => {
       </div>
       <p v-if="notice" class="notice" role="status">{{ notice }}</p>
       <main ref="readerDocument" class="reader-document" :inert="mobileViewport && cardPanelOpen">
+        <div class="reader-top-anchor">
+          <button v-show="showReaderTop && !selectionMode && !textSelection && !(mobileViewport && cardPanelOpen)" class="reader-top-button" type="button" :aria-label="language === 'en' ? 'Back to top' : '回到顶部'" :title="language === 'en' ? 'Back to top' : '回到顶部'" @click="scrollToBookTop"><ArrowUp :size="19" aria-hidden="true" /></button>
+        </div>
         <article
           v-for="{ item, depth, lines } in renderedRules"
           :id="ruleId(item.rule_number)"
@@ -724,7 +752,11 @@ watch(bookName, () => {
 .language-switch button { min-width: 34px; padding: 6px 9px; border-radius: 999px; color: var(--muted-ink); font-size: 11px; }
 .language-switch button.active { color: var(--paper); background: var(--ink); }
 .reader-document { width: min(100%, var(--reader-document-width, 100%)); min-height: calc(100vh - 54px); margin: 16px auto 0; padding: 40px clamp(22px, 3vw, 48px) 100px; background: var(--paper); color: var(--ink); font-size: calc(16px * var(--reader-font-scale)); transition: background-color .2s, color .2s; }
-.rule-row { margin-top: 1.25em; margin-left: calc(min(var(--depth), 5) * 1.25em); padding: .12em .35em; border-radius: 2px; scroll-margin-top: 80px; content-visibility: auto; contain-intrinsic-size: auto 90px; touch-action: pan-y; cursor: text; }
+.reader-top-anchor { position: sticky; top: calc(100dvh - 136px - env(safe-area-inset-bottom, 0px)); z-index: 25; display: flex; justify-content: flex-end; height: 0; pointer-events: none; }
+.reader-top-button { display: grid; place-items: center; flex: none; width: 44px; height: 44px; border: 1px solid var(--reader-border); border-radius: 50%; color: var(--ink); background: var(--paper); box-shadow: 0 3px 14px #0002; pointer-events: auto; }
+.reader-top-button:hover { color: var(--reader-accent); background: var(--reader-soft); }
+.reader-top-button:focus-visible { outline: 2px solid var(--reader-accent); outline-offset: 3px; }
+.rule-row { margin-top: 1.25em; margin-left: calc(min(var(--depth), 5) * 1.25em); padding: .12em .35em; border-radius: 2px; scroll-margin-top: 80px; touch-action: pan-y; cursor: text; }
 .rule-row.chapter { margin-top: 2.4em; }
 .rule-row.selected { background: #f7e7a7; color: #242018; }
 .theme-dark .rule-row.selected { background: #594b26; color: #fff8e7; }

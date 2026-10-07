@@ -1,4 +1,4 @@
-// Browser regression coverage for reader widths, native selection, and shared card pins.
+// Browser regression coverage for reader navigation, widths, selection, and shared card pins.
 // All remote reads use fixtures; requests that could write remotely are rejected.
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
@@ -95,6 +95,23 @@ try {
   const test = async (name, fn) => { await fn(); passed++; console.log('✓ ' + name); };
   const viewport = async (width, height = 1050, mobile = false) => { await cdp('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile }); await sleep(150); };
   const shot = async name => { const result = await cdp('Page.captureScreenshot', { format: 'png' }); writeFileSync(join(shots, name + '.png'), Buffer.from(result.data, 'base64')); };
+  const settleScroll = async () => {
+    let previous = NaN, stable = 0;
+    for (let i = 0; i < 50; i++) {
+      const current = await js('scrollY');
+      stable = Math.abs(current - previous) < 0.5 ? stable + 1 : 0;
+      if (stable >= 4) return;
+      previous = current;
+      await sleep(80);
+    }
+    throw Error('Reader scrolling did not settle');
+  };
+  const assertRuleCentered = async number => {
+    await settleScroll();
+    const position = await js(`(() => { const e=document.querySelector('[data-rule-number="${number}"]'), r=e.getBoundingClientRect();return {top:r.top,bottom:r.bottom,center:r.top+r.height/2,expected:(innerHeight+parseFloat(getComputedStyle(e).scrollMarginTop))/2,controls:document.querySelector('.reader-controls').getBoundingClientRect().bottom,height:innerHeight}; })()`);
+    assert(Math.abs(position.center - position.expected) < 3, `Rule ${number} landed incorrectly: ${JSON.stringify(position)}`);
+    assert(position.top >= position.controls && position.bottom <= position.height, `Rule ${number} is not fully visible`);
+  };
   const selectText = async (number = '101') => {
     await js(`(() => { const row = document.querySelector('[data-rule-number="${number}"]'); row.scrollIntoView({block:'center'}); const text = row.querySelector('.rule-text > span').firstChild; const range = new Range(); range.setStart(text, 0); range.setEnd(text, 2); const selection = getSelection(); selection.removeAllRanges(); selection.addRange(range); })()`);
     await wait("document.querySelector('.text-selection-menu')");
@@ -105,6 +122,64 @@ try {
   await cdp('Page.addScriptToEvaluateOnNewDocument', { source: setup });
   await cdp('Page.navigate', { url: app + '#/rules/' + encodeURIComponent('验收规则书') });
   await wait("document.querySelectorAll('.rule-row').length === 100");
+
+  await test('First search jumps reach distant rules at full, focused, and mobile widths', async () => {
+    for (const [width, height, preset] of [[1680, 1050, 'full'], [1680, 1050, 'focused'], [390, 844, 'full']]) {
+      await viewport(width, height, width < 900);
+      await cdp('Page.reload'); await wait("document.querySelectorAll('.rule-row').length === 100");
+      await input('.width-control select', preset, 'change');
+      await mouseClick('.reader-controls [aria-label="搜索规则"]');
+      await wait("document.querySelector('.reader-popup').open");
+      const emptyHeight = await js("document.querySelector('.reader-popup').getBoundingClientRect().height");
+      await input('.popup-search input', '180');
+      await wait("document.querySelectorAll('.popup-result').length === 1");
+      assert.equal(await js("document.querySelector('.reader-popup').getBoundingClientRect().height"), emptyHeight);
+      await mouseClick('.popup-result');
+      await assertRuleCentered('180');
+      assert.equal(await js("document.querySelector('.reader-popup').open"), false);
+      await mouseClick('.reader-controls [aria-label="搜索规则"]');
+      await wait("document.querySelector('.reader-popup').open");
+      assert.equal(await js("document.querySelector('.popup-search input').value"), '180');
+      await click('.reader-popup .popup-x');
+    }
+    await viewport(1680);
+    await cdp('Page.reload'); await wait("document.querySelectorAll('.rule-row').length === 100");
+  });
+  await test('Book-local back-to-top stays clear of card search and follows the book container', async () => {
+    for (const [width, height, preset] of [[1680, 1050, 'full'], [1680, 1050, 'focused'], [390, 844, 'full']]) {
+      await viewport(width, height, width < 900);
+      await input('.width-control select', preset, 'change');
+      await js("document.querySelector('[data-rule-number=\"160\"]').scrollIntoView({block:'center',behavior:'instant'})");
+      await wait("document.querySelector('.reader-top-button').checkVisibility()");
+      assert.equal(await js("document.querySelectorAll('[aria-label=\"回到顶部\"]').length"), 1);
+      assert(await js("document.querySelector('.reader-document').contains(document.querySelector('.reader-top-button'))"));
+      const layout = await js("(() => {const b=document.querySelector('.reader-top-button').getBoundingClientRect(),d=document.querySelector('.reader-document').getBoundingClientRect(),f=document.querySelector('.card-search-fab').getBoundingClientRect();return {left:b.left,right:b.right,top:b.top,bottom:b.bottom,bookLeft:d.left,bookRight:d.right,fabTop:f.top};})()");
+      assert(layout.left >= layout.bookLeft && layout.right <= layout.bookRight);
+      assert(layout.top >= 0 && layout.bottom < layout.fabTop - 12, JSON.stringify(layout));
+      await shot('back-top-' + width + '-' + preset);
+      await mouseClick('.card-search-fab');
+      await wait("document.querySelector('.reader-card-panel').checkVisibility()");
+      if (width > 900) {
+        assert(await js("document.querySelector('.reader-top-button').getBoundingClientRect().right < document.querySelector('.reader-card-panel').getBoundingClientRect().left"));
+      } else {
+        assert.equal(await js("document.querySelector('.reader-top-button').checkVisibility()"), false);
+      }
+      await click('.panel-actions button:last-child');
+      await mouseClick('.reader-top-button');
+      await settleScroll();
+      assert.equal(await js('scrollY'), 0);
+      assert.equal(await js("document.querySelector('.reader-top-button').checkVisibility()"), false);
+    }
+    await viewport(1680);
+    await cdp('Page.reload'); await wait("document.querySelectorAll('.rule-row').length === 100");
+  });
+  await test('Cold rule deep links land correctly after the book mounts', async () => {
+    await js("location.hash='#/rules/' + encodeURIComponent('验收规则书') + '/180'");
+    await cdp('Page.reload'); await wait("document.querySelectorAll('.rule-row').length === 100");
+    await assertRuleCentered('180');
+    await js("location.hash='#/rules/' + encodeURIComponent('验收规则书')");
+    await cdp('Page.reload'); await wait("document.querySelectorAll('.rule-row').length === 100");
+  });
 
   await test('Full width fills 1680px and 2560px screens without overflow', async () => {
     for (const width of [1680, 2560]) {
