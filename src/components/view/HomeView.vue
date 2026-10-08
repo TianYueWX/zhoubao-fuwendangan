@@ -85,7 +85,7 @@ onUnmounted(() => {
             />
             <path class="art-accent" d="M108 16v29l7-5 7 5V16" />
           </svg>
-          <span class="entry-label font-display">规则与 QA 查询</span>
+          <span class="entry-label font-display">规则与QA</span>
           <ArrowUpRight class="entry-arrow" aria-hidden="true" />
         </button>
         <button
