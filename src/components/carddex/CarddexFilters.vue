@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import { Circle, CircleDashed, CircleDot, CircleX, Minus, Plus, X } from "@lucide/vue";
+import { ChevronDown, Circle, CircleDashed, CircleDot, CircleX, Minus, Plus, X } from "@lucide/vue";
+import NumericRangePicker from "./NumericRangePicker.vue";
 import type {
   ActiveFilter,
   CarddexLocale,
@@ -33,6 +34,7 @@ function clone<T>(value: T): T {
 
 const draftFilters = ref<ActiveFilter[]>([]);
 const draftNumeric = ref<NumericFilters>(clone(props.numeric));
+const rangePicker = ref<{ type: keyof NumericFilters; edge: "min" | "max" } | null>(null);
 watch(
   () => [props.filters, props.numeric],
   () => {
@@ -107,6 +109,10 @@ function scrollRange(event: WheelEvent, type: keyof NumericFilters, edge: "min" 
   normalizeRange(type, edge);
   draftNumeric.value[type][edge] += event.deltaY < 0 ? 1 : -1;
   normalizeRange(type, edge);
+}
+function openRangePicker(type: keyof NumericFilters, edge: "min" | "max"): void {
+  normalizeRange(type, edge);
+  rangePicker.value = { type, edge };
 }
 function numericLabel(type: "energy" | "returnEnergy" | "power"): string {
   if (type === "energy") return localeText("法力", "Energy");
@@ -186,6 +192,7 @@ function applyDraft(): void {
           <div class="range-values">
             <input
               v-model.number="draftNumeric[k].min"
+              class="desktop-range-input"
               type="number"
               inputmode="numeric"
               :aria-label="`${numericLabel(k)} ${localeText('最小值', 'minimum')}`"
@@ -195,9 +202,20 @@ function applyDraft(): void {
               step="1"
               @change="normalizeRange(k, 'min')"
               @wheel="scrollRange($event, k, 'min')"
-            /><span>—</span
+            />
+            <button
+              type="button"
+              class="touch-range-input"
+              :aria-label="`${numericLabel(k)} ${localeText('最小值', 'minimum')} ${draftNumeric[k].min}`"
+              aria-haspopup="dialog"
+              @click="openRangePicker(k, 'min')"
+            >
+              <span>{{ draftNumeric[k].min }}</span><ChevronDown :size="14" aria-hidden="true" />
+            </button>
+            <span aria-hidden="true">—</span
             ><input
               v-model.number="draftNumeric[k].max"
+              class="desktop-range-input"
               type="number"
               inputmode="numeric"
               :aria-label="`${numericLabel(k)} ${localeText('最大值', 'maximum')}`"
@@ -208,6 +226,15 @@ function applyDraft(): void {
               @change="normalizeRange(k, 'max')"
               @wheel="scrollRange($event, k, 'max')"
             />
+            <button
+              type="button"
+              class="touch-range-input"
+              :aria-label="`${numericLabel(k)} ${localeText('最大值', 'maximum')} ${draftNumeric[k].max}`"
+              aria-haspopup="dialog"
+              @click="openRangePicker(k, 'max')"
+            >
+              <span>{{ draftNumeric[k].max }}</span><ChevronDown :size="14" aria-hidden="true" />
+            </button>
           </div>
         </div>
       </section>
@@ -282,6 +309,16 @@ function applyDraft(): void {
       </button>
     </footer>
   </aside>
+  <NumericRangePicker
+    v-if="rangePicker"
+    :label="numericLabel(rangePicker.type)"
+    :locale="locale"
+    :range="draftNumeric[rangePicker.type]"
+    :bounds="bounds[rangePicker.type]"
+    :initial-edge="rangePicker.edge"
+    @confirm="(range) => { if (rangePicker) draftNumeric[rangePicker.type] = range; rangePicker = null; }"
+    @close="rangePicker = null"
+  />
 </template>
 
 <style scoped>
@@ -486,7 +523,7 @@ function applyDraft(): void {
   align-items: center;
   gap: 5px;
 }
-.range-values input {
+.range-values input, .touch-range-input {
   width: 60px;
   height: 34px;
   padding: 5px;
@@ -497,10 +534,25 @@ function applyDraft(): void {
   font-size: 13px;
   font-variant-numeric: tabular-nums;
 }
-.range-values input:focus-visible {
+.range-values input:focus-visible, .touch-range-input:focus-visible {
   border-color: var(--color-brand);
   outline: 2px solid var(--color-brand-soft);
   outline-offset: 1px;
+}
+.touch-range-input { display: none; }
+@media (max-width: 1023px), (pointer: coarse) {
+  .range-values .desktop-range-input { display: none; }
+  .touch-range-input {
+    display: inline-flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 72px;
+    height: 44px;
+    padding: 8px 10px;
+    color: var(--color-text-primary);
+    font-size: 16px;
+  }
+  .range-label { font-size: 14px; }
 }
 .filter-foot {
   display: grid;
