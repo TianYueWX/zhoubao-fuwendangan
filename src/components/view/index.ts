@@ -1,3 +1,4 @@
+import { defineAsyncComponent } from 'vue';
 /* ================================================================
  * src/components/view/index.ts
  *
@@ -78,6 +79,7 @@ export const ViewComponents: Record<string, unknown> = {
 
   /* 小工具:补充包模拟器(直接读公开卡表,开包记录落在本机) */
   booster: BoosterOpeningView,
+  cardmaker: defineAsyncComponent(() => import('./CardmakerView.vue')),
 
   /* 编辑部(隐藏栏目:连点报头刊名解锁 + 管理员门禁) */
   editorial: EditorialHub,

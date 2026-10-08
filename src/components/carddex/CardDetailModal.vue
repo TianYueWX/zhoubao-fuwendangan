@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { ArrowLeft, ArrowRight, Bookmark, BookmarkCheck, MessageCircle, X } from "@lucide/vue";
+import { ArrowLeft, ArrowRight, Bookmark, BookmarkCheck, MessageCircle, Paintbrush, X } from "@lucide/vue";
+import { navigate } from '@/router/hash';
+import { setMakerSource } from '@/tools/cardmaker/entry';
 import CarddexImage from "./CarddexImage.vue";
 import { printKey } from "./data";
 import CardEffectText from "./CardEffectText.vue";
@@ -102,6 +104,13 @@ watch(
   },
   { immediate: true },
 );
+
+function makeCard(): void {
+  if (!props.record) return;
+  setMakerSource(props.record, selected.value);
+  emit('close');
+  navigate({ view: 'cardmaker' });
+}
 
 function togglePanel(): void {
   panel.value = panel.value === "qa" ? "info" : "qa";
@@ -271,6 +280,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey));
             </button>
           </div>
           <template v-if="panel === 'info'">
+          <button v-if="record" type="button" class="detail-maker-button" @click="makeCard"><Paintbrush :size="15" />{{ locale === 'zh' ? '以此卡制作' : 'Create from this card' }}</button>
           <div class="detail-summary">
             <div class="detail-heading">
               <div class="detail-title">
@@ -440,6 +450,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey));
 </template>
 
 <style scoped>
+.detail-maker-button{display:flex;align-items:center;justify-content:center;gap:7px;min-height:44px;border:1px solid var(--color-panel-border);padding:8px 16px;font-size:12px;color:var(--color-brand);margin:12px 0}
 .detail-backdrop {
   position: fixed;
   inset: 0;

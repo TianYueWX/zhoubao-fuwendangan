@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onUnmounted } from "vue";
-import { ArrowUpRight, BarChart3, ClipboardCheck, PackageOpen, Workflow } from "@lucide/vue";
+import { ArrowUpRight, BarChart3, ClipboardCheck, PackageOpen, Paintbrush, Workflow } from "@lucide/vue";
 import { navigate } from "@/router/hash";
 import { editorialUnlocked, knock, resetKnock } from "@/tools/editorialAccess";
 
@@ -42,7 +42,7 @@ onUnmounted(() => {
       <div class="home-entries" aria-label="档案入口">
         <button
           type="button"
-          class="entry-card entry-primary"
+          class="entry-card"
           @click="navigate({ view: 'journal' })"
         >
           <svg
@@ -162,6 +162,7 @@ onUnmounted(() => {
       -->
       <div class="home-shortcuts" aria-label="小工具">
         <span class="shortcuts-label">小工具</span>
+        <button type="button" class="shortcut-btn" title="卡牌工坊 · 自制卡牌与高清导出" @click="navigate({ view: 'cardmaker' })"><Paintbrush :size="18" aria-hidden="true" />卡牌工坊</button>
         <button
           type="button"
           class="shortcut-btn"
@@ -368,9 +369,6 @@ onUnmounted(() => {
   box-shadow: 0 12px 28px -16px var(--color-shadow);
   transform: translateY(-4px);
 }
-.entry-primary {
-  border-top: 3px solid var(--color-brand);
-}
 .entry-art {
   grid-column: 1 / -1;
   width: 150px;
@@ -505,11 +503,6 @@ onUnmounted(() => {
   }
   .entry-card::after {
     display: none;
-  }
-  .entry-primary {
-    border-top-width: 1px;
-    border-left: 3px solid var(--color-brand);
-    padding-left: 14px;
   }
   .entry-label {
     font-size: 18px;

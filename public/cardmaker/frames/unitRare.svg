@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Card" xmlns="http://www.w3.org/2000/svg" version="1.1" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 745 1040">
+  <defs>
+    <style>
+      .frameColorFill {
+        fill: #000;
+      }
+
+      .frameColorStroke {
+        stroke: #000;
+      }
+
+      .rarityColorStroke {
+        stroke: #d89e3c;
+      }
+
+      .rarityColorFill {
+        fill: #d89e3c;
+      }
+
+      .frameLine4 {
+        fill: none;
+        stroke-miterlimit: 10;
+        stroke-width: 4px;
+      }
+
+      .accentLine3 {
+        fill: none;
+        stroke-width: 3px;
+        stroke-miterlimit: 10;
+      }
+
+      .accentLine5 {
+        fill: none;
+        stroke-miterlimit: 10;
+        stroke-width: 5px;
+      }
+
+      .accentLine6 {
+        fill: none;
+        stroke-miterlimit: 10;
+        stroke-width: 6px;
+      }
+
+      .noFill {
+        fill: none;
+      }
+
+      .clip1 {
+        clip-path: url(#clippath-1);
+      }
+
+      .clip2 {
+        clip-path: url(#clippath);
+      }
+    </style>
+    <clipPath id="clippath">
+      <rect class="noFill" width="745" height="1040"/>
+    </clipPath>
+    <clipPath id="clippath-1">
+      <polyline class="noFill" points="0 0 745 0 745 1040 0 1040 0 0"/>
+    </clipPath>
+  </defs>
+  <g class="clip2">
+    <g class="clip1">
+      <path class="frame frameColorFill" d="M-153.431-106.633v1162.956h1015.826V-106.633H-153.431ZM87.826,44.956c25.885,0,46.87,20.984,46.87,46.87s-20.984,46.87-46.87,46.87-44-20.767-44-46.652,18.115-47.087,44-47.087ZM696.629,855.943l-9.128,9.128v71.66s-7.095.864-14.106,7.745c-6.967,6.838-8.315,16.63-8.315,16.63l-9.897.033H81.209s-2.299-8.291-9.245-14.992c-6.301-6.079-13.488-8.266-13.488-8.266v-73.003l-10.361-10.361V293.639l8.624-9.719,1.069-140.989s14.201,9.447,33.962,8.665c19.761-.783,29.349-8.413,29.349-8.413l19.172.196v-19.055s10.679-12.901,10.761-31.451c.083-18.924-10.565-34.135-10.565-34.135h144l10.174-10.836,156.913,1.173,8.609,9,80.413.934,20.543,73.076h8.804v9.729h117.978v143.022l8.706,8.707v562.402Z"/>
+      <rect class="rarityColorFill" x="29.45" y="138.94" width="3" height="84.571"/>
+      <rect class="rarityColorFill" x="31.276" y="221.496" width="3" height="6.41" transform="translate(-149.286 88.988) rotate(-44.999)"/>
+      <rect class="rarityColorFill" x="29.45" y="135.94" width="5.837" height="3"/>
+      <path class="accentLine3 rarityColorStroke" d="M57.807,60.109h-12.228s-9.363,11.372-10.177,24.703c-.86,14.071.869,21.406,3.207,26.656,4.182,9.391,9.62,14.886,14.217,20.495"/>
+      <path class="accentLine3 rarityColorStroke" d="M42.857,138.171c-11.285-11.857-17.52-27.457-17.52-45.299,0-36.361,28.863-65.837,64.467-65.837,13.118,0,30.652,4.565,39.75,15.424"/>
+      <rect class="rarityColorFill" x="134.47" y="30.38" width="86.739" height="3"/>
+      <rect class="rarityColorFill" x="220.9" y="30.501" width="3" height="6.41" transform="translate(41.306 167.134) rotate(-45)"/>
+      <rect class="rarityColorFill" x="131.47" y="30.38" width="3" height="5.837"/>
+      <path class="accentLine3 rarityColorStroke" d="M57.807,58.737v-12.228s11.372-9.363,24.703-10.177c14.071-.86,21.406.869,26.656,3.207,9.391,4.182,14.886,9.62,20.495,14.217"/>
+      <rect class="rarityColorFill" x="39.505" y="41.318" width="9.587" height="9.587"/>
+      <ellipse class="accentLine6 rarityColorStroke" cx="89.474" cy="92.101" rx="44.164" ry="44.679"/>
+      <line class="accentLine3 rarityColorStroke" x1="120.897" y1="135.671" x2="120.897" y2="124.323"/>
+      <polyline class="accentLine3 rarityColorStroke" points="84.614 136.486 84.614 145.821 84.614 147.182"/>
+      <path class="accentLine3 rarityColorStroke" d="M125.627,66.433l11.444-.071s6.734,7.647,6.668,25.973-10.19,30.44-10.19,30.44h-11.348"/>
+      <rect class="rarityColorFill" x="126.342" y="129.019" width="9.647" height="9.245"/>
+      <line class="accentLine5 rarityColorStroke" x1="118.552" y1="42.603" x2="296.06" y2="42.603"/>
+      <polyline class="accentLine5 rarityColorStroke" points="41.69 785.726 41.505 118.967 42.857 119.287"/>
+      <path class="accentLine3 rarityColorStroke" d="M84.299,145.846s14.185.923,24.603-2.935c9.111-3.374,12.245-8.087,12.245-8.087"/>
+      <polyline class="accentLine3 rarityColorStroke" points="128.987 53.198 282.435 52.739 291.826 42.603"/>
+      <polyline class="accentLine5 rarityColorStroke" points="115.775 43.427 115.804 42.603 122.754 42.603"/>
+      <path class="accentLine5 rarityColorStroke" d="M55.905,942.772c5.909,3.066,11.327,7.256,14.332,11.446,7.672,10.7,7.337,22.341,7.337,22.341l273.863.123"/>
+      <path class="accentLine5 rarityColorStroke" d="M41.413,785.726l.095,154.813s2.723.049,5.511.016"/>
+      <polyline class="accentLine3 rarityColorStroke" points="48.255 863.913 52.088 868.217 52.284 966.207 69.893 966.207"/>
+      <path class="accentLine3 rarityColorStroke" d="M82.056,966.141s62.217.228,63.717.326l21.79,20.977,102.717-.554,9.371-9.668"/>
+      <path class="accentLine5 rarityColorStroke" d="M670.071,968.344c-.457,4.565-.641,8.178-.641,8.178l-276.241.16"/>
+      <path class="accentLine5 rarityColorStroke" d="M703.336,906.857l-.043,34.114s-22.605-3.057-32.437,21.888"/>
+      <line class="accentLine5 rarityColorStroke" x1="703.489" y1="786.948" x2="703.351" y2="908.148"/>
+      <polyline class="accentLine3 rarityColorStroke" points="692.674 947.961 692.618 966.207 675.01 966.207"/>
+      <polyline class="accentLine3 rarityColorStroke" points="714.687 846.485 692.823 867.607 692.814 901.837 692.707 936.906"/>
+      <path class="accentLine3 rarityColorStroke" d="M676.155,966.207s-75.526.163-77.026.261c-.523-.021-3.95,3.506-4.655,4.21"/>
+      <polyline class="accentLine3 rarityColorStroke" points="35.016 850.56 33.965 850.56 30.957 847.014 30.957 304.054 40.935 294.076 52.609 281.913 52.405 130.951"/>
+      <rect class="frame frameColorFill" x="24.14" y="519.037" width="52.819" height="73.268" rx="26.409" ry="26.409"/>
+      <polyline class="accentLine5 rarityColorStroke" points="291.743 42.686 553.739 42.476 576.503 125.856 686.329 125.856"/>
+      <polyline class="accentLine5 rarityColorStroke" points="703.489 789.489 703.384 125.856 699.03 125.856"/>
+      <polyline class="accentLine3 rarityColorStroke" points="694.286 136.584 576.035 136.194 575.867 127.584"/>
+      <line class="accentLine3 rarityColorStroke" x1="544.152" y1="48.88" x2="542.443" y2="41.856"/>
+      <polyline class="accentLine3 rarityColorStroke" points="453.696 43.144 462.957 52.438 547.287 52.829"/>
+      <line class="accentLine3 rarityColorStroke" x1="564.666" y1="52.829" x2="686.329" y2="52.829"/>
+      <polyline class="accentLine3 rarityColorStroke" points="573.666 52.079 573.666 43.144 573.647 41.367 692.75 41.025 692.77 43.911 692.997 144.424"/>
+      <polyline class="accentLine3 rarityColorStroke" points="699.03 52.829 704.77 52.829 704.753 105.997 694.286 105.997"/>
+      <polyline class="accentLine3 rarityColorStroke" points="710.085 136.91 714.291 136.91 714.487 222.655 710.965 226.421 710.28 226.421"/>
+      <polyline class="accentLine3 rarityColorStroke" points="692.998 144.003 692.867 282.163 715.078 303.856 714.299 847.548"/>
+      <rect class="rarityColorFill" x="699.128" y="37.128" width="8.87" height="8.87"/>
+      <rect class="frame frameColorFill" x="29.052" y="527.106" width="41.185" height="57.13" rx="20.592" ry="20.592"/>
+      <rect class="accentLine3 rarityColorStroke" x="29.052" y="527.106" width="41.185" height="57.13" rx="20.592" ry="20.592"/>
+      <path class="rarityColorFill" d="M566.231,59.008l16.174,59.739h40.304v-59.739h-56.478ZM592.394,74.574c.48-.511.889-.864,1.225-1.056s.808-.32,1.416-.384l1.439-.192v-1.536c0-1.056-.191-1.824-.575-2.304-.385-.544-.576-.992-.576-1.344,0-.416.191-.864.576-1.344.415-.544,1.135-.816,2.159-.816.992,0,1.696.272,2.112.816.416.512.624.977.624,1.392,0,.353-.144.72-.432,1.104-.257.32-.417,1.104-.48,2.352,0,.864.04,1.376.12,1.536.079.161.312.24.696.24.703,0,1.392.208,2.063.624.672.416,1.216.976,1.632,1.68.512.864.769,1.36.769,1.488,0,.16-.801.24-2.4.24h-2.447l1.728,15.552-.672.816c-.064.096-.232.288-.504.576-.272.288-.545.576-.816.864-.272.288-.504.56-.695.816l-1.297,1.392c-1.504-1.632-2.832-3.12-3.983-4.464l.72-6.624c.128-.96.264-2.08.408-3.36.144-1.279.256-2.287.336-3.024.079-.736.136-1.2.168-1.392l.192-1.152h-2.353c-1.056,0-1.704-.031-1.944-.096-.239-.064-.359-.24-.359-.528,0-.48.384-1.104,1.151-1.872h-.001ZM614.762,87.822c-.064.8-.305,1.792-.72,2.976-2.145,6.112-5.088,10.735-8.832,13.872-.896.768-2.192,1.615-3.888,2.544-1.696.928-2.784,1.392-3.265,1.392-.64,0-1.832-.521-3.575-1.56-1.745-1.04-3.192-2.088-4.345-3.144-3.584-3.328-6.256-7.744-8.016-13.248-.416-1.248-.665-2.288-.744-3.12-.08-.832-.137-2.671-.168-5.52v-1.296c0-3.264.079-5.023.24-5.28.063-.16.111-.271.144-.336l.168-.096c.08,0,.168.032.265.096.096.064.256.192.479.384.128.096.312.24.552.432.24.192.512.408.816.648.304.24.535.424.696.552.831.641,1.863,1.248,3.096,1.824,1.231.576,2.232.929,3,1.056l1.2.192-.145,1.92c-.032.288-.239,2.576-.624,6.864l-.432,4.944,7.392,7.392c2.432-2.496,4.896-4.96,7.393-7.392l-.433-5.28c-.224-2.815-.432-5.104-.624-6.864l-.144-1.584,1.2-.192c1.951-.32,4.271-1.504,6.96-3.552,1.119-.928,1.872-1.392,2.256-1.392h.048c.128.192.192,2.433.192,6.72-.032,3.232-.08,5.249-.145,6.048h.003Z"/>
+      <polyline class="accentLine3 rarityColorStroke" points="465.166 976.682 475.47 986.833 578.253 986.833 582.296 983.181"/>
+      <line class="accentLine3 rarityColorStroke" x1="583.437" y1="981.757" x2="581.881" y2="983.555"/>
+      <rect class="frame frameColorFill" x="666.503" y="961.139" width="9.196" height="3.351"/>
+      <rect class="frame frameColorFill" x="587.378" y="970.017" width="12.375" height="2.886"/>
+      <rect class="frame frameColorFill" x="575.541" y="979.555" width="13.353" height="3.375"/>
+      <rect class="frame frameColorFill" x="54.095" y="938.272" width="3.815" height="14.918"/>
+      <line class="frameLine4 frameColorStroke" x1="143.885" y1="969.563" x2="167.965" y2="992.338"/>
+      <line class="frame frameColorFill" x1="147.512" y1="963.492" x2="169.383" y2="984.218"/>
+      <line class="frameLine4 frameColorStroke" x1="147.512" y1="963.492" x2="169.383" y2="984.218"/>
+      <line class="frameLine4 frameColorStroke" x1="698.891" y1="277.832" x2="698.891" y2="301.873"/>
+      <line class="frameLine4 frameColorStroke" x1="707.924" y1="280.396" x2="707.924" y2="304.437"/>
+      <line class="frame frameColorFill" x1="26.093" y1="304.612" x2="49.636" y2="279.895"/>
+      <line class="frameLine4 frameColorStroke" x1="26.093" y1="304.612" x2="49.636" y2="279.895"/>
+      <line class="frame frameColorFill" x1="34.163" y1="305.916" x2="46.685" y2="293.199"/>
+      <line class="frameLine4 frameColorStroke" x1="34.163" y1="305.916" x2="46.685" y2="293.199"/>
+      <line class="frame frameColorFill" x1="695.745" y1="869.655" x2="719.875" y2="846.275"/>
+      <line class="frameLine4 frameColorStroke" x1="695.745" y1="869.655" x2="719.875" y2="846.275"/>
+      <line class="frame frameColorFill" x1="689.865" y1="865.548" x2="709.342" y2="846.766"/>
+      <line class="frameLine4 frameColorStroke" x1="689.865" y1="865.548" x2="709.342" y2="846.766"/>
+    </g>
+    <rect class="frame frameColorFill" x="665.235" y="967.729" width="23.108" height="3.974"/>
+    <polyline class="accentLine3 rarityColorStroke" points="579.761 126.913 565.87 126.913 546.109 56.674"/>
+    <rect class="frame frameColorFill" x="539.652" y="46.793" width="9.065" height="4.174"/>
+    <rect class="frame frameColorFill" x="542.489" y="54.62" width="9.391" height="2.478"/>
+  </g>
+</svg>

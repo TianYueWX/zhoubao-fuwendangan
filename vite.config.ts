@@ -1,6 +1,18 @@
 import { defineConfig } from 'vite';
 import vue from '@vitejs/plugin-vue';
 import { fileURLToPath, URL } from 'node:url';
+import { handleCardImage } from './functions/api/cardmaker/_image';
+import type { Connect } from 'vite';
+
+// Use the same restricted image relay locally and in Cloudflare Pages.
+const cardImageMiddleware: Connect.NextHandleFunction = (req, res, next) => {
+  const path = req.url ?? '';
+  if (!path.startsWith('/api/cardmaker/image?') || req.method !== 'GET') { next(); return; }
+  void handleCardImage(new Request(`http://localhost${path}`)).then(async response => {
+    res.statusCode = response.status; response.headers.forEach((value, key) => res.setHeader(key, value));
+    res.end(Buffer.from(await response.arrayBuffer()));
+  }).catch(() => { res.statusCode = 502; res.end('Card image unavailable'); });
+};
 
 const riftboundProxy = {
   target: 'https://lol-api.playloltcg.com',
@@ -25,7 +37,7 @@ export default defineConfig({
   // 关键:相对路径 base 同时兼容 file:// 与子路径部署(Cloudflare Pages)
   base: './',
 
-  plugins: [vue()],
+  plugins: [vue(), { name: 'cardmaker-image', configureServer(server) { server.middlewares.use(cardImageMiddleware); }, configurePreviewServer(server) { server.middlewares.use(cardImageMiddleware); } }],
   worker: { format: 'es' },
 
   resolve: {

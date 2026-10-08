@@ -137,7 +137,7 @@ function onWeekChange(e: Event): void {
   -->
   <div class="flex flex-col min-h-screen" :class="{ 'ux-readable': ['chain', 'overview', 'cards', 'legendary', 'region', 'decks', 'builder', 'games', 'rank'].includes(store.currentView) }">
     <header
-      v-if="!isHome && !isBuilder && store.currentView !== 'chain' && store.currentView !== 'rulebook'"
+      v-if="!isHome && !isBuilder && store.currentView !== 'cardmaker' && store.currentView !== 'chain' && store.currentView !== 'rulebook'"
       class="masthead-solid sticky top-0 z-50 shrink-0"
     >
       <div class="px-4 lg:px-8 h-14 flex items-center justify-between gap-3">
@@ -203,7 +203,7 @@ function onWeekChange(e: Event): void {
       :class="
         isHome
           ? 'w-full'
-          : isBuilder || store.currentView === 'rulebook'
+          : isBuilder || store.currentView === 'cardmaker' || store.currentView === 'rulebook'
             ? 'flex-1 w-full min-w-0'
           : isCarddex
             ? 'flex-1 w-full max-w-[1720px] mx-auto px-4 lg:px-8 py-4'
@@ -218,7 +218,7 @@ function onWeekChange(e: Event): void {
 
     <!-- ══════════ 页脚 ══════════ -->
     <footer
-      v-if="!isHome && !isCarddex && !isBuilder && store.currentView !== 'rulebook'"
+      v-if="!isHome && !isCarddex && !isBuilder && store.currentView !== 'cardmaker' && store.currentView !== 'rulebook'"
       class="px-4 lg:px-8 pb-8 max-w-[1720px] mx-auto w-full"
     >
       <div class="rune-rule mb-5"></div>
@@ -232,7 +232,7 @@ function onWeekChange(e: Event): void {
 
     <!-- 规则书使用书内回顶，其余页面共用全局 FAB。 -->
     <button
-      v-if="!isHome && !isBuilder && store.currentView !== 'rulebook' && showTop"
+      v-if="!isHome && !isBuilder && store.currentView !== 'cardmaker' && store.currentView !== 'rulebook' && showTop"
       class="fixed bottom-6 right-6 z-50 w-11 h-11 rounded-full bg-brand text-brand-ink shadow-lg flex items-center justify-center text-lg leading-none transition-transform hover:scale-110 fade-in"
       aria-label="回到顶部"
       title="回到顶部"
