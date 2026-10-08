@@ -18,7 +18,7 @@
     "verify:admin-snapshot": "node scripts/verify-admin-snapshot.mjs",
     "verify:admin-sync": "node scripts/verify-admin-sync.mjs",
     "verify:lua-export": "node --experimental-strip-types --import ./scripts/register-hooks.mjs scripts/verify-lua-export.mjs",
-    "verify:all": "npm run type-check && npm run verify:sanitizer && npm run verify:keywords && npm run verify:print-defaults && npm run verify:admin-logic && npm run verify:admin-rules && npm run verify:admin-sync && npm run verify:sync-review && npm run verify:gallery-sync && npm run verify:qa-sync && npm run verify:carddex-qa && npm run verify:carddex-query && npm run verify:carddex-text && npm run verify:admin-snapshot && npm run verify:lua-export && npm run verify:chain-ui && npm run verify:rank && npm run verify:editorial && npm run verify:cardmaker",
+    "verify:all": "npm run type-check && npm run verify:sanitizer && npm run verify:keywords && npm run verify:print-defaults && npm run verify:admin-logic && npm run verify:admin-rules && npm run verify:admin-sync && npm run verify:sync-review && npm run verify:gallery-sync && npm run verify:qa-sync && npm run verify:carddex-qa && npm run verify:carddex-query && npm run verify:carddex-text && npm run verify:admin-snapshot && npm run verify:lua-export && npm run verify:chain-ui && npm run verify:rank && npm run verify:editorial",
     "verify:chain-ui": "node scripts/verify-chain-ui.mjs",
     "verify:chain-ui:dev": "CHAIN_APP=http://127.0.0.1:5173/ node scripts/verify-chain-ui.mjs",
     "verify:rank": "node --experimental-strip-types --import ./scripts/register-hooks.mjs scripts/verify-rank.mjs",
@@ -36,9 +36,7 @@
     "verify:carddex-scroll": "node scripts/verify-carddex-scroll.mjs",
     "verify:sync-review-ui": "node scripts/verify-sync-review-ui.mjs",
     "verify:sync-review-perf": "node scripts/verify-sync-review-ui.mjs --perf --assert-fast",
-    "verify:ux": "node --experimental-strip-types --import ./scripts/register-hooks.mjs scripts/verify-ux-logic.mjs",
-    "verify:cardmaker": "node --experimental-strip-types --import ./scripts/register-hooks.mjs scripts/verify-cardmaker.mjs",
-    "verify:cardmaker-ui": "node scripts/verify-cardmaker-ui.mjs"
+    "verify:ux": "node --experimental-strip-types --import ./scripts/register-hooks.mjs scripts/verify-ux-logic.mjs"
   },
   "dependencies": {
     "@lucide/vue": "^1.51.0",
@@ -46,13 +44,11 @@
     "echarts": "^5.5.1",
     "gifenc": "^1.0.3",
     "h264-mp4-encoder": "^1.0.12",
-    "konva": "^10.7.1",
     "mediabunny": "^1.61.1",
     "oboe": "^2.1.7",
     "papaparse": "^5.4.1",
     "qrcode": "^1.5.4",
-    "vue": "^3.5.13",
-    "vue-konva": "^4.0.1"
+    "vue": "^3.5.13"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

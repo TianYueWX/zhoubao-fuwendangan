@@ -121,7 +121,6 @@ export interface ToolDef {
  * 说明:英雄与传奇共用一个视图(HeroLegendView),'heroes' 保留为兼容值,不单独登记。
  */
 export const TOOLS: readonly ToolDef[] = Object.freeze([
-  { code: 'cardmaker', label: '卡牌工坊', desc: '自制卡牌、修改卡库卡牌、多图层编辑与高清导出', group: 'reference', source: 'static', badge: '小工具', needsData: false },
   { code: 'builder', label: '构筑卡组', desc: '本机卡组库、自由构筑与快照分享', group: 'reference', source: 'static', needsData: false, inNav: true },
   {
     code: "journal",
