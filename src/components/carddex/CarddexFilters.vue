@@ -92,14 +92,21 @@ function reset(): void {
   draftFilters.value = [];
   draftNumeric.value = clone(props.bounds);
 }
-function rangeStyle(type: "energy" | "returnEnergy" | "power"): Record<string, string> {
-  const { min, max } = props.bounds[type];
-  const span = Math.max(1, max - min);
-  const selected = draftNumeric.value[type];
-  return {
-    "--range-start": `${((selected.min - min) / span) * 100}%`,
-    "--range-end": `${((selected.max - min) / span) * 100}%`,
-  };
+function normalizeRange(type: keyof NumericFilters, edge: "min" | "max"): void {
+  const range = draftNumeric.value[type];
+  const bounds = props.bounds[type];
+  for (const key of ["min", "max"] as const) {
+    const value = Number.isFinite(range[key]) ? Math.round(range[key]) : bounds[key];
+    range[key] = Math.min(bounds.max, Math.max(bounds.min, value));
+  }
+  if (range.min > range.max) range[edge] = range[edge === "min" ? "max" : "min"];
+}
+function scrollRange(event: WheelEvent, type: keyof NumericFilters, edge: "min" | "max"): void {
+  if (!event.deltaY) return;
+  event.preventDefault();
+  normalizeRange(type, edge);
+  draftNumeric.value[type][edge] += event.deltaY < 0 ? 1 : -1;
+  normalizeRange(type, edge);
 }
 function numericLabel(type: "energy" | "returnEnergy" | "power"): string {
   if (type === "energy") return localeText("法力", "Energy");
@@ -138,6 +145,9 @@ const dirtyCount = computed(
       : 0) + (numericDirty.value ? 1 : 0),
 );
 function applyDraft(): void {
+  for (const type of ["energy", "returnEnergy", "power"] as const) {
+    normalizeRange(type, "min");
+  }
   if (!dirtyCount.value) return;
   emit("apply", clone(draftFilters.value), clone(draftNumeric.value));
 }
@@ -171,43 +181,32 @@ function applyDraft(): void {
           v-for="k in ['energy', 'returnEnergy', 'power'] as const"
           :key="k"
           class="range-row"
-          :style="rangeStyle(k)"
         >
-          <label>{{ numericLabel(k) }}</label>
+          <span class="range-label">{{ numericLabel(k) }}</span>
           <div class="range-values">
             <input
               v-model.number="draftNumeric[k].min"
               type="number"
+              inputmode="numeric"
               :aria-label="`${numericLabel(k)} ${localeText('最小值', 'minimum')}`"
+              :title="localeText('滚轮调整，也可直接输入', 'Scroll to adjust or type a number')"
               :min="bounds[k].min"
               :max="draftNumeric[k].max"
+              step="1"
+              @change="normalizeRange(k, 'min')"
+              @wheel="scrollRange($event, k, 'min')"
             /><span>—</span
             ><input
               v-model.number="draftNumeric[k].max"
               type="number"
+              inputmode="numeric"
               :aria-label="`${numericLabel(k)} ${localeText('最大值', 'maximum')}`"
-              :min="draftNumeric[k].min"
-              :max="bounds[k].max"
-            />
-          </div>
-          <div class="range-sliders">
-            <input
-              v-model.number="draftNumeric[k].min"
-              class="range-min"
-              type="range"
-              :aria-label="`${numericLabel(k)} ${localeText('最小值', 'minimum')}`"
-              :min="bounds[k].min"
-              :max="draftNumeric[k].max"
-              step="1"
-            />
-            <input
-              v-model.number="draftNumeric[k].max"
-              class="range-max"
-              type="range"
-              :aria-label="`${numericLabel(k)} ${localeText('最大值', 'maximum')}`"
+              :title="localeText('滚轮调整，也可直接输入', 'Scroll to adjust or type a number')"
               :min="draftNumeric[k].min"
               :max="bounds[k].max"
               step="1"
+              @change="normalizeRange(k, 'max')"
+              @wheel="scrollRange($event, k, 'max')"
             />
           </div>
         </div>
@@ -475,7 +474,7 @@ function applyDraft(): void {
   gap: 8px 12px;
   margin-bottom: 13px;
 }
-.range-row > label {
+.range-label {
   grid-column: 1;
   font-size: 12px;
   font-weight: 650;
@@ -488,94 +487,20 @@ function applyDraft(): void {
   gap: 5px;
 }
 .range-values input {
-  width: 54px;
-  height: 27px;
-  padding: 3px;
+  width: 60px;
+  height: 34px;
+  padding: 5px;
   border: 1px solid var(--color-card-border);
   border-radius: 5px;
   background: var(--color-page-bg);
   text-align: center;
-  font-size: 12px;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
 }
 .range-values input:focus-visible {
   border-color: var(--color-brand);
   outline: 2px solid var(--color-brand-soft);
   outline-offset: 1px;
-}
-.range-sliders {
-  position: relative;
-  grid-column: 1 / -1;
-  height: 20px;
-  margin: 0 7px;
-}
-.range-sliders::before,
-.range-sliders::after {
-  position: absolute;
-  top: 8px;
-  height: 4px;
-  border-radius: 99px;
-  content: "";
-  pointer-events: none;
-}
-.range-sliders::before {
-  right: 0;
-  left: 0;
-  background: var(--color-panel-border);
-}
-.range-sliders::after {
-  left: var(--range-start);
-  right: calc(100% - var(--range-end));
-  background: var(--color-brand);
-}
-.range-sliders input[type="range"] {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 20px;
-  margin: 0;
-  appearance: none;
-  background: transparent;
-  pointer-events: none;
-  outline: none;
-}
-.range-min {
-  z-index: 2;
-}
-.range-max {
-  z-index: 3;
-}
-.range-sliders input[type="range"]:focus-visible {
-  z-index: 4;
-}
-.range-sliders input[type="range"]::-webkit-slider-runnable-track {
-  height: 4px;
-  background: transparent;
-}
-.range-sliders input[type="range"]::-moz-range-track {
-  height: 4px;
-  background: transparent;
-}
-.range-sliders input[type="range"]::-webkit-slider-thumb {
-  width: 14px;
-  height: 14px;
-  margin-top: -5px;
-  appearance: none;
-  border: 2px solid var(--color-brand);
-  border-radius: 50%;
-  background: var(--color-card-bg);
-  box-shadow: 0 1px 4px var(--color-shadow);
-  pointer-events: auto;
-  cursor: grab;
-}
-.range-sliders input[type="range"]::-moz-range-thumb {
-  width: 10px;
-  height: 10px;
-  border: 2px solid var(--color-brand);
-  border-radius: 50%;
-  background: var(--color-card-bg);
-  box-shadow: 0 1px 4px var(--color-shadow);
-  pointer-events: auto;
-  cursor: grab;
 }
 .filter-foot {
   display: grid;
