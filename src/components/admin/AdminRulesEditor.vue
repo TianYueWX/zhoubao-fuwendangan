@@ -28,6 +28,7 @@ import {
   ancestorPath,
   bookCounts,
   buildRuleTree,
+  collectDescendants,
   defaultExpanded,
   filterByBook,
   hasChildren,
@@ -287,13 +288,22 @@ function closeDrawer(): void {
   confirmDiscard.value = false;
 }
 
-/** 父规则候选:排除自己与自己的后代(防环) */
+/** 父规则候选:排除自己与自己的全部后代(防环),并收窄到同一本规则书。
+ *
+ *  旧写法对**每个候选**都调一次 wouldCreateCycle → 内部又重算一次
+ *  collectDescendants(cur) —— 同一个 cur 被算上千遍,是 O(n²·后代数)。
+ *  这里改成先把 cur 的后代算一次,再整体过滤,复杂度降到 O(n·后代数)。 */
 const parentOptions = computed(() => {
   const cur = editing.value;
   if (!cur) return [];
+  const blocked = new Set<string>([
+    cur.rule_number,
+    ...collectDescendants(allRules.value, cur.rule_number)
+  ]);
+  const book = cur.rules_book ?? '';
   return scopedRules.value
-    .filter((r) => r.rule_number !== cur.rule_number)
-    .filter((r) => !wouldCreateCycle(allRules.value, cur.rule_number, r.rule_number))
+    .filter((r) => !blocked.has(r.rule_number))
+    .filter((r) => book === '' || (r.rules_book ?? '') === book)
     .map((r) => ({ key: r.rule_number, label: `${r.rule_number} ${truncate(r.text_zh ?? r.text_en, 20)}`.trim() }));
 });
 
@@ -430,6 +440,9 @@ function onDragOver(event: DragEvent, rule: Rule): void {
   const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
   const offset = event.clientY - rect.top;
   const mode: DropMode = offset < rect.height * 0.28 ? 'before' : offset > rect.height * 0.72 ? 'after' : 'child';
+  // 只有落点(条目/分区)真的变了才写状态,否则每次 pointermove 都会触发整页重渲
+  const prev = dropTarget.value;
+  if (prev && prev.number === rule.rule_number && prev.mode === mode) return;
   dropTarget.value = { number: rule.rule_number, mode };
 }
 
@@ -610,6 +623,16 @@ onMounted(loadRules);
             v-for="n in flatNodes"
             :id="ruleRowId(n.rule.rule_number)"
             :key="n.rule.rule_number"
+            v-memo="[
+              n.rule.rule_number, n.rule.text_zh, n.rule.text_en, n.rule.is_heading,
+              n.rule.parent_number, n.rule.sort_order, n.rule.level, n.rule.rules_book,
+              n.depth, n.open, n.hasChildren, language,
+              selected.has(n.rule.rule_number),
+              located === n.rule.rule_number,
+              activeNumber === n.rule.rule_number,
+              dragging === n.rule.rule_number,
+              dropTarget && dropTarget.number === n.rule.rule_number ? dropTarget.mode : ''
+            ]"
             class="rule-row"
             :class="{
               chapter: n.rule.is_heading,
@@ -801,8 +824,9 @@ onMounted(loadRules);
 <style scoped>
 .rules-reader {
   --rules-drawer-w: clamp(340px, 30vw, 460px);
-  transition: padding-right 0.2s ease;
 }
+/* 抽屉开合时书页让位:刻意不做 padding 过渡 ——
+   这片容器里可能铺着上千行,过渡 200ms 会让整页每帧重排(明显卡顿)。 */
 .rules-reader.drawer-open {
   padding-right: calc(var(--rules-drawer-w) + 24px);
 }
