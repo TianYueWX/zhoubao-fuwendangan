@@ -5,7 +5,7 @@
  * 不依赖浏览器 —— 直接跑 src/tools/catalog.ts 的纯函数。
  *   node --experimental-strip-types --import ./scripts/register-hooks.mjs scripts/verify-section-menu.mjs
  * ================================================================ */
-import { activeGroupOf, sectionMenuItems, TOOLS } from '@/tools/catalog';
+import { activeGroupOf, backTargetOf, sectionMenuItems, TOOLS } from '@/tools/catalog';
 
 let pass = 0;
 let fail = 0;
@@ -87,6 +87,17 @@ check('已登录列出全部 7 个编辑部页面',
 
 console.log('\n== 7. 工具台无栏目菜单 ==');
 check('home → 空', sectionMenuItems('home', { hasPackages: true, isEditorialAdmin: true }).length === 0);
+
+console.log('\n== 8. backTargetOf:上下文返回 ==');
+const sameTarget = (view, expected) => {
+  const t = backTargetOf(view);
+  return t.view === expected.view && t.label === expected.label;
+};
+check('期刊系 → 返回期刊 #/journal', ['journal', 'archive', 'issue', 'import', 'overview', 'cards', 'legendary', 'region', 'decks'].every((v) => sameTarget(v, { view: 'journal', label: '返回期刊' })));
+check('编辑部子页 → 返回编辑部 #/editorial', sameTarget('editorial-cards', { view: 'editorial', label: '返回编辑部' }));
+check('参考资料(含构筑卡组) → 返回首页', ['builder', 'rules', 'carddex', 'chain', 'rank', 'games', 'booster'].every((v) => sameTarget(v, { view: 'home', label: '返回首页' })));
+check('云端 → 返回首页', sameTarget('qa', { view: 'home', label: '返回首页' }));
+check('工具台 → 返回首页(自我)', sameTarget('home', { view: 'home', label: '返回首页' }));
 
 console.log(`\n结果: ${pass} 通过 / ${fail} 失败`);
 process.exit(fail === 0 ? 0 : 1);

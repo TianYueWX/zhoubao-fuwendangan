@@ -25,9 +25,20 @@ import {
 import { editorialUnlocked } from '@/tools/editorialAccess';
 import { isEditorialAdmin } from '@/tools/sources/auth';
 
+/** bar = 全站报头(高 56px);compact = 自带顶栏的页面(构筑卡组) */
+const props = withDefaults(defineProps<{ size?: "bar" | "compact" }>(), {
+  size: "bar",
+});
+
 const open = ref(false);
 const rootEl = ref<HTMLElement | null>(null);
 const buttonEl = ref<HTMLButtonElement | null>(null);
+
+const buttonClass = computed(() =>
+  props.size === "compact"
+    ? "flex items-center gap-1.5 h-10 text-[13px] text-ink-muted hover:text-brand transition-colors"
+    : "flex items-center gap-1.5 h-14 text-sm text-ink-muted hover:text-brand transition-colors",
+);
 
 /** 当前所在栏目(内容层次级路由归档/期号正文归入期刊) */
 const activeGroup = computed(() => activeGroupOf(store.currentView));
@@ -94,7 +105,7 @@ watch(() => store.currentView, () => {
     <button
       ref="buttonEl"
       type="button"
-      class="flex items-center gap-1.5 h-14 text-sm text-ink-muted hover:text-brand transition-colors"
+      :class="buttonClass"
       aria-haspopup="menu"
       :aria-expanded="open"
       :title="`${group.label} · 页面切换`"

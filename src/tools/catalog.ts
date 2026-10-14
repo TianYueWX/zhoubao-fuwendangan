@@ -493,6 +493,23 @@ export function sectionMenuItems(
   return items;
 }
 
+/** 报头「返回」的目标与文案 */
+export interface BackTarget {
+  view: string;
+  label: string;
+}
+
+/**
+ * 上下文返回:期刊 / 编辑部回各自栏目首页,其余栏目(无 hub)回工具台。
+ * 与 sectionMenuItems 同源,避免「菜单能到、返回到不了」的层级断裂。
+ */
+export function backTargetOf(view: string): BackTarget {
+  const group = activeGroupOf(view);
+  if (group === "journal") return { view: "journal", label: "返回期刊" };
+  if (group === "editorial") return { view: "editorial", label: "返回编辑部" };
+  return { view: HOME_CODE, label: "返回首页" };
+}
+
 /** 历史兼容:曾把某个工具当首页 */
 export function homeTool(): ToolDef {
   return TOOLS.find((t) => t.home) ?? TOOLS[0]!;

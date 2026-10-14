@@ -9,7 +9,7 @@ import {
   weekBuckets,
 } from "@/store/analysis";
 import { navigate, startRouter, syncUrl } from "@/router/hash";
-import { activeGroupOf, findTool, HOME_CODE } from "@/tools/catalog";
+import { backTargetOf, findTool, HOME_CODE } from "@/tools/catalog";
 import { setSourceState, setToolState } from "@/tools/state";
 import { probeSupabase } from "@/tools/sources/supabase";
 import { bootstrapAuth } from "@/tools/sources/auth";
@@ -120,18 +120,7 @@ const isJournalSection = computed(
 );
 
 /* ── 上下文返回:期刊/编辑部回各自栏目首页,其余栏目回工具台 ── */
-const backTarget = computed(() => {
-  const group = activeGroupOf(store.currentView);
-  if (group === "journal") return { view: "journal" };
-  if (group === "editorial") return { view: "editorial" };
-  return { view: homeCode };
-});
-const backLabel = computed(() => {
-  const target = backTarget.value.view;
-  if (target === "journal") return "返回期刊";
-  if (target === "editorial") return "返回编辑部";
-  return "返回首页";
-});
+const back = computed(() => backTargetOf(store.currentView));
 
 /* ── 期刊次级条:周次 + 样本数 ── */
 const weeks = computed(() => weekBuckets());
@@ -164,9 +153,9 @@ function onWeekChange(e: Event): void {
           ></span>
           <button
             class="text-sm text-ink-muted hover:text-brand transition-colors shrink-0"
-            @click="navigate(backTarget)"
+            @click="navigate(back)"
           >
-            <ArrowLeft :size="15" aria-hidden="true" /> {{ backLabel }}
+            <ArrowLeft :size="15" aria-hidden="true" /> {{ back.label }}
           </button>
         </div>
         <div
