@@ -101,7 +101,7 @@ Riftbound(符文战场)城市挑战赛赛事数据的纯前端分析工具,按�
 | 总览 | `#/editorial` | 5 个工具的入口 |
 | 卡牌校勘 | `#/editorial/cards` | 单卡全字段 + 印刷版本子表 + 转移绑定 |
 | 批量校勘 | `#/editorial/batch` | 内联编辑、批量禁限/数值 ±N/改系列、差异预览 |
-| 规则校勘 | `#/editorial/rules` | 规则书树形编辑 + 子串检索 + 防环 |
+| 规则校勘 | `#/editorial/rules` | 规则书阅读式排版,**双击段落**右侧抽屉编辑 + 子串检索 + 拖拽改层级/防环 |
 | 资源与发布 | `#/editorial/resources` | 系列 CRUD、图标库、版本发布标记 |
 | 数据同步 | `#/editorial/sync` | 官方接口拉取 → 逐条编辑／勾选字段 → 分阶段提交／SQL／CSV |
 

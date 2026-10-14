@@ -107,10 +107,18 @@ let navSeq = 0;
  * 注意:只改 hash 属于同文档导航,浏览器不会重新执行模块脚本 —— 那样
  * onMounted / bootstrapAuth 都不会重跑,「刷新后仍…」这类断言会**假通过**。
  * 因此每次都在 hash 前挂一个自增查询参数,确保是一次完整加载。
+ *
+ * 另注:部分 headless chrome 只回 `Page.frameStartedNavigating` 事件,
+ * 不回 `Page.navigate` 的响应 —— 这里 fire-and-forget,绝不 await 该响应,
+ * 否则会永远挂在导航这一步(CDP 无响应可等)。
  */
 async function goto(hash = '') {
   navSeq += 1;
-  await cdp('Page.navigate', { url: `${APP}?nav=${navSeq}${hash}` });
+  ws.send(JSON.stringify({
+    id: ++msgId,
+    method: 'Page.navigate',
+    params: { url: `${APP}?nav=${navSeq}${hash}` }
+  }));
   await sleep(1800);
 }
 
@@ -553,53 +561,45 @@ await evalJs(`(() => {
   b?.click();
 })()`);
 await sleep(2500);
-const tree = await evalJs(`(() => {
-  const rows = [...document.querySelectorAll('aside button')].filter(b => b.querySelector('.font-mono'));
+const page = await evalJs(`(() => {
+  const rows = [...document.querySelectorAll('.rule-row')];
   return {
     rows: rows.length,
     first: rows.slice(0, 3).map(r => r.innerText.replace(/\\s+/g, ' ').trim()),
-    realNumbers: rows.filter(r => /^\\d/.test(r.innerText.trim())).length,
-    guides: document.querySelectorAll('aside span.border-l').length
+    realNumbers: rows.filter(r => /^\\d/.test(r.dataset.ruleNumber || '')).length,
+    depths: [...new Set(rows.map(r => Number(r.dataset.depth)))].sort((a, b) => a - b)
   };
 })()`);
-check('树渲染出真实规则节点', tree.rows > 5 && tree.realNumbers > 5, JSON.stringify(tree.first));
-check('未展开时顶层无缩进导线(depth=0)', tree.guides === 0, `导线 ${tree.guides} 条`);
+check('书页渲染出真实规则段落', page.rows > 5 && page.realNumbers > 5, JSON.stringify(page.first));
+check('默认从顶层铺开(depth 含 0)', page.depths.includes(0), `层级 ${JSON.stringify(page.depths)}`);
 
-/* 展开全部 → 出现嵌套节点与缩进导线 */
+/* 展开全部 → 出现更深层级 */
 const expandProbe = await evalJs(`(async () => {
-  const count = () => [...document.querySelectorAll('aside button')].filter(b => b.querySelector('.font-mono')).length;
+  const count = () => document.querySelectorAll('.rule-row').length;
   const before = count();
   [...document.querySelectorAll('button')].find(b => b.textContent.trim() === '展开全部')?.click();
   await new Promise(r => setTimeout(r, 1600));
   const afterExpand = count();
-  const guides = document.querySelectorAll('aside span.border-l').length;
-  const depths = new Set([...document.querySelectorAll('aside button')]
-    .filter(b => b.querySelector('.font-mono'))
-    .map(b => b.querySelectorAll('span.border-l').length));
+  const maxDepth = Math.max(0, ...[...document.querySelectorAll('.rule-row')].map(r => Number(r.dataset.depth)));
   [...document.querySelectorAll('button')].find(b => b.textContent.trim() === '收起全部')?.click();
   await new Promise(r => setTimeout(r, 900));
   const afterCollapse = count();
-  return { before, afterExpand, afterCollapse, guides, depths: [...depths].sort((a, b) => a - b).slice(0, 6) };
+  return { before, afterExpand, afterCollapse, maxDepth };
 })()`);
-check('展开全部显示更多节点', expandProbe.afterExpand > expandProbe.before, JSON.stringify(expandProbe));
-check('展开后绘制出缩进导线', expandProbe.guides > 0, `导线 ${expandProbe.guides} 条`);
-check(
-  '导线层数随节点层级递增',
-  expandProbe.depths.length >= 3,
-  `出现的层级 ${JSON.stringify(expandProbe.depths)}`
-);
-check('收起全部后节点减少', expandProbe.afterCollapse < expandProbe.afterExpand, JSON.stringify(expandProbe));
+check('展开全部显示更多段落', expandProbe.afterExpand > expandProbe.before, JSON.stringify(expandProbe));
+check('展开后出现更深层级', expandProbe.maxDepth >= 2, `最大层级 ${expandProbe.maxDepth}`);
+check('收起全部后段落减少', expandProbe.afterCollapse < expandProbe.afterExpand, JSON.stringify(expandProbe));
 
 /* 中文子串检索:这是相对后台 FTS 的关键改进 */
 const searchProbe = await evalJs(`(async () => {
-  const input = document.querySelector('aside input.filter-select');
+  const input = document.querySelector('input.rules-search');
   const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
   setter.call(input, '法术');
   input.dispatchEvent(new Event('input', { bubbles: true }));
   await new Promise(r => setTimeout(r, 900));
   const t = document.body.innerText;
   const total = (t.match(/共\\s*(\\d+)\\s*条,仅显示前 200 条/) || [])[1];
-  const items = [...document.querySelectorAll('aside button')].filter(b => b.querySelector('.font-mono'));
+  const items = [...document.querySelectorAll('.rules-search-hit')];
   return { total: total ? Number(total) : items.length, items: items.length, sample: items[0]?.innerText.replace(/\\s+/g,' ').trim() ?? '' };
 })()`);
 check(
@@ -608,52 +608,66 @@ check(
   `命中 ${searchProbe.total} 条,样本「${searchProbe.sample}」`
 );
 
-/* 点结果定位:退出检索态并选中 */
+/* 点结果定位:退出检索态并高亮该书页段落(不打开抽屉) */
 const locateProbe = await evalJs(`(async () => {
-  const first = [...document.querySelectorAll('aside button')].find(b => b.querySelector('.font-mono'));
-  first?.click();
-  await new Promise(r => setTimeout(r, 900));
-  const t = document.body.innerText;
-  const input = document.querySelector('aside input.filter-select');
+  document.querySelector('.rules-search-hit')?.click();
+  await new Promise(r => setTimeout(r, 1000));
+  const input = document.querySelector('input.rules-search');
+  const row = document.querySelector('.rule-row.located');
   return {
     searchCleared: input ? input.value === '' : null,
-    selected: t.includes('条目字段'),
-    hasParentField: t.includes('候选已排除自身及其全部后代,防止成环'),
-    ruleNo: (t.match(/规则编号/) ? (document.querySelector('section input')?.value ?? '') : '')
+    located: document.querySelectorAll('.rule-row.located').length,
+    locatedNumber: row?.dataset.ruleNumber ?? '',
+    drawerOpen: document.querySelectorAll('.rules-drawer.open').length
   };
 })()`);
-check('点检索结果后退出检索态', locateProbe.searchCleared === true, JSON.stringify(locateProbe));
-check('定位后右侧编辑器载入条目', locateProbe.selected === true, JSON.stringify(locateProbe));
-check('父规则下拉声明了防环', locateProbe.hasParentField === true);
-check('载入真实规则编号', /^[0-9]/.test(String(locateProbe.ruleNo)), String(locateProbe.ruleNo));
+check('点检索结果后退出检索态并定位', locateProbe.searchCleared === true && locateProbe.located === 1, JSON.stringify(locateProbe));
+check('定位不打开编辑抽屉(编辑靠双击)', locateProbe.drawerOpen === 0, JSON.stringify(locateProbe));
+check('定位到真实规则编号', /^[0-9]/.test(String(locateProbe.locatedNumber)), String(locateProbe.locatedNumber));
+
+/* 双击段落 → 右侧抽屉载入 */
+const editProbe = await evalJs(`(async () => {
+  document.querySelector('.rule-row')?.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+  await new Promise(r => setTimeout(r, 700));
+  const drawer = document.querySelector('.rules-drawer.open');
+  const numInput = drawer?.querySelector('input[placeholder="如 053.1"]');
+  const text = drawer?.textContent ?? '';
+  return {
+    open: !!drawer,
+    title: drawer?.querySelector('.drawer-title')?.innerText.replace(/\\s+/g, ' ').trim() ?? '',
+    ruleNo: numInput ? numInput.value : '',
+    hasParentHint: text.includes('候选已排除自身及其全部后代,防止成环'),
+    leafHint: /叶子节点,可删除|含子节点,不可删除/.test(document.body.innerText)
+  };
+})()`);
+check('双击段落打开编辑抽屉', editProbe.open === true && /编辑|新增/.test(editProbe.title), JSON.stringify(editProbe));
+check('抽屉载入真实规则编号', /^[0-9]/.test(String(editProbe.ruleNo)), String(editProbe.ruleNo));
+check('父规则下拉声明了防环', editProbe.hasParentHint === true);
+check('明确标注是否可删', editProbe.leafHint === true);
 
 /* 叶子判定与新增子规则预填 */
 const childProbe = await evalJs(`(async () => {
-  const t0 = document.body.innerText;
-  const leafHint = /叶子节点,可删除/.test(t0);
-  const branchHint = /含子节点,不可删除/.test(t0);
   [...document.querySelectorAll('button')].find(b => b.textContent.trim() === '新增子规则')?.click();
   await new Promise(r => setTimeout(r, 700));
-  const t1 = document.body.innerText;
-  const sel = [...document.querySelectorAll('section select')][0];
+  const drawer = document.querySelector('.rules-drawer.open');
+  const sel = drawer?.querySelector('select');
   return {
-    leafHint, branchHint,
-    newBadge: t1.includes('未保存'),
+    title: drawer?.querySelector('.drawer-title')?.innerText.replace(/\\s+/g, ' ').trim() ?? '',
+    newBadge: (drawer?.innerText ?? '').includes('未保存'),
     parentPrefilled: sel ? sel.value : null,
     deleteDisabled: [...document.querySelectorAll('button')].find(b => b.textContent.trim() === '删除节点')?.disabled ?? null
   };
 })()`);
-check('明确标注是否可删', childProbe.leafHint || childProbe.branchHint, JSON.stringify(childProbe));
-check('新增子规则进入未保存态', childProbe.newBadge === true, JSON.stringify(childProbe));
+check('新增子规则进入未保存态', childProbe.newBadge === true && /新增/.test(childProbe.title), JSON.stringify(childProbe));
 check('新增时预填父规则', !!childProbe.parentPrefilled, `父=${childProbe.parentPrefilled}`);
 check('未保存的新增条目不可删除', childProbe.deleteDisabled === true, JSON.stringify(childProbe));
 
 /* 未授权保存必须被拒 */
 const ruleWrite = await evalJs(`(async () => {
-  const inputs = [...document.querySelectorAll('section input')];
-  const numInput = inputs.find(i => !i.type || i.type === 'text');
+  const drawer = document.querySelector('.rules-drawer.open');
+  const numInput = drawer.querySelector('input[placeholder="如 053.1"]');
   const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
-  setter.call(numInput, 'ZZZ-P3-RULE');
+  setter.call(numInput, '9999');
   numInput.dispatchEvent(new Event('input', { bubbles: true }));
   await new Promise(r => setTimeout(r, 400));
   [...document.querySelectorAll('button')].find(b => b.textContent.trim() === '保存修改')?.click();
