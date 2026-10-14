@@ -9,12 +9,13 @@ import {
   weekBuckets,
 } from "@/store/analysis";
 import { navigate, startRouter, syncUrl } from "@/router/hash";
-import { findTool, HOME_CODE } from "@/tools/catalog";
+import { activeGroupOf, findTool, HOME_CODE } from "@/tools/catalog";
 import { setSourceState, setToolState } from "@/tools/state";
 import { probeSupabase } from "@/tools/sources/supabase";
 import { bootstrapAuth } from "@/tools/sources/auth";
 import { loadEditorialUnlock } from "@/tools/editorialAccess";
 import { ViewComponents } from "@/components/view";
+import SectionMenu from "@/components/SectionMenu.vue";
 
 let stopRouter: (() => void) | null = null;
 
@@ -118,6 +119,20 @@ const isJournalSection = computed(
     findTool(store.currentView)?.group === "journal",
 );
 
+/* ── 上下文返回:期刊/编辑部回各自栏目首页,其余栏目回工具台 ── */
+const backTarget = computed(() => {
+  const group = activeGroupOf(store.currentView);
+  if (group === "journal") return { view: "journal" };
+  if (group === "editorial") return { view: "editorial" };
+  return { view: homeCode };
+});
+const backLabel = computed(() => {
+  const target = backTarget.value.view;
+  if (target === "journal") return "返回期刊";
+  if (target === "editorial") return "返回编辑部";
+  return "返回首页";
+});
+
 /* ── 期刊次级条:周次 + 样本数 ── */
 const weeks = computed(() => weekBuckets());
 const sampleCount = computed(() => {
@@ -141,12 +156,19 @@ function onWeekChange(e: Event): void {
       class="masthead-solid sticky top-0 z-50 shrink-0"
     >
       <div class="px-4 lg:px-8 h-14 flex items-center justify-between gap-3">
-        <button
-          class="text-sm text-ink-muted hover:text-brand transition-colors"
-          @click="navigate({ view: homeCode })"
-        >
-          <ArrowLeft :size="15" aria-hidden="true" /> 返回首页
-        </button>
+        <div class="min-w-0 flex items-center gap-2 sm:gap-3">
+          <SectionMenu />
+          <span
+            class="hidden sm:inline-block w-px h-5 bg-panel-border shrink-0"
+            aria-hidden="true"
+          ></span>
+          <button
+            class="text-sm text-ink-muted hover:text-brand transition-colors shrink-0"
+            @click="navigate(backTarget)"
+          >
+            <ArrowLeft :size="15" aria-hidden="true" /> {{ backLabel }}
+          </button>
+        </div>
         <div
           id="global-page-actions"
           class="min-w-0 flex items-center justify-end"

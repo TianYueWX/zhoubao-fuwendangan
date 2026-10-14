@@ -411,6 +411,88 @@ export function groupIdOf(code: string): ToolGroupId | null {
 /** 站点主入口(工具台)的视图 code —— 首页不是工具,故为固定值 */
 export const HOME_CODE = "home";
 
+/**
+ * 当前视图所在的一级栏目。
+ * 内容层次级路由不强绑工具:往期归档 / 期号正文归入「期刊」栏目。
+ * 工具台不属于任何栏目 → null。
+ */
+export function activeGroupOf(view: string): ToolGroupId | null {
+  if (view === HOME_CODE) return null;
+  if (view === "archive" || view === "issue") return "journal";
+  return findTool(view)?.group ?? null;
+}
+
+/** 报头栏目菜单的一条:跳转目标、显示文案与当前态 */
+export interface SectionMenuItem {
+  key: string;
+  label: string;
+  /** 点击后跳转的路由视图 */
+  view: string;
+  title: string;
+  /** 需要数据包但当前未载入:置灰但可点(页内给引导) */
+  dimmed: boolean;
+  active: boolean;
+}
+
+/**
+ * 当前栏目下的报头菜单条目。
+ *   − 期刊栏目:本期 / 往期 + 数据管理与各分析工具
+ *   − 其余栏目:该栏目下**全部已登记工具**(不只 inNav)
+ *   − 需登录的栏目未过门禁时只留栏目首页,避免列出点了就撞门禁的死链
+ * 纯函数:不读运行时状态,由调用方把 hasPackages / isEditorialAdmin 传进来。
+ */
+export function sectionMenuItems(
+  view: string,
+  opts: { hasPackages: boolean; isEditorialAdmin: boolean },
+): SectionMenuItem[] {
+  const group = activeGroupOf(view);
+  if (!group) return [];
+  const items: SectionMenuItem[] = [];
+
+  if (group === "journal") {
+    items.push({
+      key: "journal",
+      label: "本期",
+      view: "journal",
+      title: "本期周报",
+      dimmed: false,
+      active: view === "journal" || view === "issue",
+    });
+    items.push({
+      key: "archive",
+      label: "往期",
+      view: "archive",
+      title: "往期归档",
+      dimmed: false,
+      active: view === "archive",
+    });
+  }
+
+  let tools = toolsOf(group);
+  // 期刊本体入口已由「本期」承载,不重复
+  if (group === "journal") tools = tools.filter((t) => t.code !== "journal");
+  if (tools.some((t) => t.requiresAuth) && !opts.isEditorialAdmin) {
+    tools = tools.filter((t) => t.code === group);
+  }
+
+  for (const t of tools) {
+    const dimmed = !!(
+      t.needsData &&
+      !opts.hasPackages &&
+      t.source === "local"
+    );
+    items.push({
+      key: t.code,
+      label: t.short ?? t.label,
+      view: t.code,
+      title: dimmed ? `${t.label} · 需先载入数据包` : t.label,
+      dimmed,
+      active: view === t.code,
+    });
+  }
+  return items;
+}
+
 /** 历史兼容:曾把某个工具当首页 */
 export function homeTool(): ToolDef {
   return TOOLS.find((t) => t.home) ?? TOOLS[0]!;

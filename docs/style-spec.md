@@ -128,21 +128,21 @@ sans   : system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial,
 `src/tools/catalog.ts` 的工具注册表;导航、首页工具台、路由、状态徽章全部由它派生。
 
 ```
-栏目(报头一级导航,可扩展)
+栏目(报头栏目菜单,可扩展)
 ├─ 工具台  #/                        所有工具的入口(不属于任何栏目)
 ├─ 周报期刊 #/journal   ← 栏目,含 7 个工具
 │    ├─ #/journal 本期周报   #/archive 往期   #/issue/{pkgId} 期号正文
 │    └─ #/import 数据管理 · #/overview · #/cards · #/legendary · #/region · #/decks
 ├─ 云端内容 #/blog · #/qa            (Supabase,未配置时标「未配置」)
-├─ 参考资料 #/rules · #/carddex      (随站点发布的静态资料)
+├─ 参考资料 #/builder · #/rules · #/carddex · #/chain · #/rank · #/games · #/booster
 └─ 编辑部   #/editorial              (隐藏栏目,见 §10)
-     └─ #/editorial/{cards|batch|rules|resources|sync}
+     └─ #/editorial/{cards|batch|rules|qa|resources|sync}
 ```
 
 ```
 ┌───────────────────────────────────────────────────────────────┐
-│ 报头 sticky h-14:刊名·拉丁铭文 │ 栏目导航(工具台 + 各栏目)│ 期号状态 │
-│ ── 栏目条(仅栏目内页面 h-12):本期/往期 + 该栏目下工具 tab ── │
+│ 报头 sticky h-14:[☰ 栏目菜单] 返回 ……… #global-page-actions ……… │
+│ ── 期刊栏目内另起一行 h-12:范围条(周次选择 + 样本数)──        │
 │ ── hairline ──                                                │
 ├───────────────────────────────────────────────────────────────┤
 │ main:max-w-1720 居中,px-4/lg:px-8,py-8(当前工具视图)         │
@@ -151,10 +151,12 @@ sans   : system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial,
 └───────────────────────────────────────────────────────────────┘
 ```
 
+「栏目菜单」= 报头左侧下拉面板(`src/components/SectionMenu.vue`),列出**当前栏目全部已登记页面**;条目与上下文返回目标由 `src/tools/catalog.ts` 的 `sectionMenuItems()` / `activeGroupOf()` 派生。首页 / 构筑卡组 / 结算链 / 规则书隐藏报头,故不出菜单。
+
 ### 4.0 扩展一个工具(两步,零改动导航/路由/首页)
 
 1. `src/tools/catalog.ts` 登记:`{ code, label, desc, group, source, needsData?, badge? }`
-   —— `code` 即路由(`#/{code}`),`inNav` 决定是否进栏目条,`short` 是栏目条短标签。
+   —— `code` 即路由(`#/{code}`),`inNav` 决定是否进首页工具台的分区卡;报头栏目菜单列出该栏目**全部**已登记工具,`short` 是菜单短标签。
 2. `src/components/view/index.ts` 映射到组件;内容未接入时用 `ToolPlaceholder`。
 
 **数据源抽象**(`src/tools/state.ts` + `src/tools/sources/`):
@@ -241,7 +243,7 @@ sans   : system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial,
 | Error | 就地红字(`#C04437` / `--color-delta-down`)+ 可重试按钮,不整页失败 |
 | 过渡 | 统一 200ms(背景/边框/颜色);入场 `.fade-in` = 400ms `opacity 0→1 + translateY(10→0)` |
 | 动效可达 | 必须尊重 `prefers-reduced-motion`(全局已降为 0.01ms) |
-| 无障碍 | 对比度 ≥AA(正文 13.5:1);栏目条 `aria-label="卷宗导航"`、Tabs `role="tab"`、周次 `aria-label`、图标按钮给 `title` |
+| 无障碍 | 对比度 ≥AA(正文 13.5:1);栏目菜单 `aria-haspopup="menu"` / 面板 `role="menu"`、Esc 关闭、焦点回到触发按钮、周次 `aria-label`、图标按钮给 `title` |
 
 ---
 
@@ -268,8 +270,8 @@ sans   : system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial,
 | ① 可见性 | **连点报头刊名 5 次**(相邻两次间隔 ≤ 3 秒)解锁「编辑部」栏目 | `src/tools/editorialAccess.ts` |
 | ② 授权 | 登录且 `app_metadata.role === 'admin'` | `src/tools/sources/auth.ts` + 服务端 RLS |
 
-- 未解锁时,栏目在**报头、栏目条、工具台正文**三处均不存在;深链 `#/editorial/*` 只渲染门禁页。
-- 解锁只代表「看得见入口」,**不代表有权限** —— 未登录时栏目条只留「编辑部」一项,不列出 5 个工具(避免列出点了就撞门禁的死链)。
+- 未解锁时,栏目在**报头栏目菜单、工具台正文**两处均不存在;深链 `#/editorial/*` 只渲染门禁页。
+- 解锁只代表「看得见入口」,**不代表有权限** —— 未登录时栏目菜单只留「编辑部」一项,不列出 6 个工具(避免列出点了就撞门禁的死链)。
 - 进度反馈:第 2 次敲击起,刊名下方长出一条朱砂细线(复用栏目激活下划线的语言);未解锁时行为与普通返回工具台完全一致,不留痕迹。
 - 解锁状态持久化(`localStorage`),刷新不丢。
 

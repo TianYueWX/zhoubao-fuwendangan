@@ -9,6 +9,7 @@ import { ArrowRight } from '@lucide/vue';
 import { computed, ref } from 'vue';
 import { store, runStoredAnalysis, loadCardData, loadSlotFile, SLOT_KINDS, inferPackLabel } from '@/store/analysis';
 import { SLOT_META } from '@/store/analysis';
+import { navigate } from '@/router/hash';
 import { detectSlotFromFilename, parseCSVFile } from '@/utils/dataParser';
 import { parseJsonAuto } from '@/utils/streamJson';
 import FileDrop from '@/components/FileDrop.vue';
@@ -18,11 +19,12 @@ import PackagePanel from '@/components/PackagePanel.vue';
 import SectionHeading from '@/components/SectionHeading.vue';
 import type { RawRow } from '@/types';
 
-/** 分析并入档为「期」;停留在数据页以便继续管理多包 */
+/** 分析并入档为「期」后跳到新生成的期号正文;数据页仍可从栏目菜单回来管理多包 */
 function runAndGo(): void {
-  if (runStoredAnalysis()) {
-    store.draftLabel = '';
-  }
+  if (!runStoredAnalysis()) return;
+  store.draftLabel = '';
+  const id = store.activePackageId;
+  if (id) navigate({ view: 'issue', issueId: id });
 }
 
 /* ── 批量上传:一次选择多个文件,按文件名自动对号入座 ── */
