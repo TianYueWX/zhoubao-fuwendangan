@@ -329,6 +329,7 @@ function cardFinishLabel(card: OpenedPack["cards"][number]): string {
                   <strong>{{ set }}</strong><small>{{ setName(set) }}</small>
                 </button>
               </div>
+              <p v-if="!setReady" class="set-hint">该系列卡池尚未同步完整，暂时无法开包。</p>
             </div>
             <div class="field-block">
               <span class="field-label">开包方式</span>
@@ -343,7 +344,7 @@ function cardFinishLabel(card: OpenedPack["cards"][number]): string {
             </div>
             <div class="probability-note">
               <span class="note-seal">估</span>
-              <p><strong>概率模型为非官方估算</strong> · 每包 7 普通、3 不凡、2 稀有以上、1 闪卡与 1 Token／符文。Special 卡按系列估算概率替换卡槽；Signature 约 1/720，UNL Ultimate 约 1/1368。整盒不设保底。</p>
+              <p><strong>概率模型为非官方估算</strong> · 每包 7 普通、3 不凡、2 稀有以上、1 闪卡与 1 Token／符文。Special 卡按系列估算概率替换卡槽；Signature 约 1/720，UNL Ultimate 约 1/1368，RAD Ultimate 约 1/4000。整盒不设保底。</p>
             </div>
             <p v-if="notice" class="booster-notice" role="alert">{{ notice }}</p>
             <button class="open-sealed-button" type="button" :disabled="!setReady || (openKind === 'box' && !!inProgressBox)" @click="startOpening">
@@ -478,10 +479,11 @@ function cardFinishLabel(card: OpenedPack["cards"][number]): string {
 .sealed-panel { display: grid; grid-template-columns: minmax(0, 1fr) minmax(210px, 300px); min-height: 430px; border: 1px solid var(--pack-line); background: var(--pack-paper); }
 .sealed-panel__controls { display: flex; flex-direction: column; padding: clamp(20px, 4vw, 42px); }
 .field-block + .field-block { margin-top: 25px; }.field-label { display: block; margin-bottom: 11px; color: var(--pack-muted); font-size: 10px; font-weight: 700; letter-spacing: .11em; }
-.set-options { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 7px; }
+.set-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(78px, 1fr)); gap: 7px; }
 .set-options button { min-height: 65px; border: 1px solid var(--pack-line); padding: 10px 7px; background: transparent; color: var(--pack-ink); text-align: left; cursor: pointer; transition: border-color .15s, background .15s; }
 .set-options button.selected { border-color: var(--pack-green); background: rgba(45, 102, 87, .07); box-shadow: inset 0 -2px var(--pack-green); }
 .set-options strong, .set-options small { display: block; }.set-options strong { font: 800 13px ui-monospace, monospace; }.set-options small { margin-top: 5px; color: var(--pack-muted); font-size: 9px; }
+.set-hint { margin: 8px 0 0; color: #9b4938; font-size: 10px; }
 .kind-options { display: flex; width: min(100%, 300px); border: 1px solid var(--pack-line); }.kind-options button { flex: 1; border: 0; padding: 10px 12px; background: transparent; color: var(--pack-muted); font-size: 12px; cursor: pointer; }.kind-options button + button { border-left: 1px solid var(--pack-line); }.kind-options button.selected { background: var(--pack-ink); color: #f7f2e6; }.kind-options small { margin-left: 4px; opacity: .72; }
 .resume-callout { display: flex; justify-content: space-between; gap: 12px; margin-top: 19px; border-left: 2px solid var(--pack-gold); padding: 9px 12px; background: rgba(193, 163, 107, .1); color: var(--pack-muted); font-size: 11px; }.resume-callout b { color: var(--pack-ink); }
 .probability-note { display: flex; align-items: flex-start; gap: 10px; margin-top: auto; padding-top: 25px; }.probability-note p { margin: 0; color: var(--pack-muted); font-size: 10px; line-height: 1.75; }.probability-note strong { color: var(--pack-ink); }.note-seal { display: grid; width: 24px; height: 24px; flex: none; place-items: center; border: 1px solid var(--pack-gold); color: #8d7040; font: 12px "Noto Serif SC", serif; }

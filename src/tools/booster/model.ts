@@ -1,6 +1,6 @@
 import { restSelectAll } from "@/tools/sources/rest";
 
-export const BOOSTER_SETS = ["OGN", "SFD", "UNL", "VEN"] as const;
+export const BOOSTER_SETS = ["OGN", "SFD", "UNL", "VEN", "RAD"] as const;
 export type BoosterSet = (typeof BOOSTER_SETS)[number];
 export type BoosterFinish = "base" | "alt" | "overnumber" | "signature" | "ultimate";
 export type BoosterRarity = "common" | "uncommon" | "rare" | "epic" | "showcase" | "token";
@@ -46,7 +46,15 @@ const SET_NAMES: Record<BoosterSet, string> = {
   SFD: "Spiritforged",
   UNL: "Unleashed",
   VEN: "Vendetta",
+  RAD: "Radiance",
 };
+
+/**
+ * 超编卡里其实属于 Ultimate 的例外（其余超编卡走 pools.overnumber）。
+ * UNL-238 终极纳什男爵、RAD-184 Packed Amphitheater。
+ * 用完整卡号精确匹配，避免把同系列的普通超编卡误判成 Ultimate。
+ */
+const ULTIMATE_CARD_NOS = new Set(["UNL-238", "RAD-184"]);
 
 export function setName(set: BoosterSet): string {
   return SET_NAMES[set];
@@ -129,8 +137,8 @@ export function buildBoosterCards(bases: Row[], prints: Row[]): BoosterCard[] {
     const imagePrint = group.prints.find((print) => text(print.img_cdn)) ?? preferred;
     const categories = list(group.base.card_category);
     const rarity = rarityOf(preferred, categories);
-    let finish = group.finish;
-    if (finish === "overnumber" && group.series === "UNL" && group.cardNo.includes("238")) finish = "ultimate";
+    // Ultimate 在卡表里仍标成「超编」或「异画」，只能按卡号认。
+    const finish: BoosterFinish = ULTIMATE_CARD_NOS.has(group.cardNo) ? "ultimate" : group.finish;
     cards.push({
       key,
       series: group.series,
@@ -242,10 +250,16 @@ export function drawPack(cards: readonly BoosterCard[], series: BoosterSet, pack
     packCards[index] = drawFrom(pool, pool, slot);
   };
 
-  // Alt Art ~1/12 packs; Overnumbered ~1/72. UNL's 1/72 branch includes its
-  // Ultimate Baron Nashor estimate (~1/1,368 packs, or 1/19 of that branch).
+  // Alt Art ~1/12 packs. The special rare slot is Overnumbered ~1/72.
+  // UNL's branch yields Ultimate Baron Nashor ~1/1,368 packs (1/19 of that
+  // branch); RAD instead gives its Ultimate its own ~1/4,000-pack roll (0.025%).
   if (Math.random() < 1 / 12) replaceRareSlot(pools.alt, "异画");
-  if (Math.random() < 1 / 72) {
+  const overnumberHit = Math.random() < 1 / 72;
+  if (series === "RAD") {
+    const ultimateHit = pools.ultimate.length > 0 && Math.random() < 1 / 4000;
+    if (ultimateHit) replaceRareSlot(pools.ultimate, "Ultimate");
+    else if (overnumberHit) replaceRareSlot(pools.overnumber, "超编");
+  } else if (overnumberHit) {
     const ultimateHit = series === "UNL" && pools.ultimate.length > 0 && Math.random() < 1 / 19;
     replaceRareSlot(ultimateHit ? pools.ultimate : pools.overnumber, ultimateHit ? "Ultimate" : "超编");
   }
