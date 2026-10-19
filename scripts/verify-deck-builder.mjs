@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { cardIndex, newDeck, copyDeck, addEntry, setQuantity, entryKey, entryFromRecord, resolveEntry, moveEntry, changePrint, hasNeeko, validateDeck, countDeck, parseDeck } from '../src/tools/deckbuilder/model.ts';
 import { saveDraft, readLibrary, saveLocal, listLocal, deleteLocal, STORAGE_KEY } from '../src/tools/deckbuilder/storage.ts';
 import { exportText, importText, exportCode, importCode, exportTTS, importTTS, encodeSnapshot, decodeSnapshot, importAny, fromEventDeck } from '../src/tools/deckbuilder/formats.ts';
+import { buildDeckSheet, chooseSheetColumns } from '../src/tools/deckbuilder/sheet.ts';
 
 let passed=0;
 async function test(name,fn){await fn();passed++;console.log(`✓ ${name}`);}
@@ -53,5 +54,24 @@ await test('TTS 每项一张，额外传奇按类型恢复，不把末段生成�
 });
 await test('赛事卡组复制保留跨分区同卡数量及来源，编辑不影响来源',()=>{
   const source={hero:'英雄',playerName:'测试选手',activityName:'测试赛事',date:'2026-10-05',rank:1,cardTokens:['OGN-001','OGN-003',...Array(39).fill('OGN-004'),...Array(3).fill('OGN-006'),...Array(12).fill('OGN-007'),'OGN-004'],cards:new Map([['OGN-004',40]])};const d=fromEventDeck(source,index);assert.equal(d.zones.main[0].quantity,39);assert.equal(d.zones.side[0].quantity,1);assert(d.description.includes('测试赛事'));d.zones.main[0].quantity=3;assert.equal(source.cardTokens.length,57);assert.equal(source.cards.get('OGN-004'),40);
+});
+await test('A4 卡组页汇总传奇/英雄与符文颜色，并按排序属性重排分区',()=>{
+  const redRune=record('OGN-010','赤色符文','符文',{colors:['red']});
+  const idx=cardIndex([neeko,legend,champion,unit,spell,field,rune,redRune]);
+  const d=addEntry(fixture(),'rune',e(redRune,2));
+  const sheet=buildDeckSheet(d,idx,'type');
+  assert.equal(sheet.legend?.cardNo,'OGN-001');
+  assert.equal(sheet.champion?.cardNo,'OGN-003');
+  assert.deepEqual(sheet.runes.map(r=>[r.color,r.count]),[['red',2],['green',12]]);
+  assert.deepEqual(sheet.sections.map(s=>s.zone),['main','battlefield','side','additional']);
+  assert.deepEqual(sheet.sections.map(s=>s.count),[39,3,2,1]);
+  const names=buildDeckSheet(d,idx,'name').sections[0].entries.map(x=>resolveEntry(x,idx).name);
+  assert.deepEqual(names,[...names].sort((a,b)=>a.localeCompare(b,'zh-CN')));
+  const cheap=record('OGN-011','低费单位','单位',{energy:1});
+  const expensive=record('OGN-012','高费单位','单位',{energy:6});
+  const energySorted=buildDeckSheet(addEntry(addEntry(newDeck(),'main',e(expensive)),'main',e(cheap)),cardIndex([cheap,expensive]),'energy');
+  assert.deepEqual(energySorted.sections[0].entries.map(x=>x.cardNo),['OGN-011','OGN-012']);
+  const columns=chooseSheetColumns(sheet.sections);
+  assert(columns>=7&&columns<=16);
 });
 console.log(`\n${passed} 项构筑核心检查通过。`);
