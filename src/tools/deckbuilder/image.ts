@@ -1,5 +1,48 @@
 import { ZONES, LABELS, countZone, resolveEntry, kind, type BuilderDeck, type CardIndex, type DeckEntry, type Zone } from './model';
 
+/** 与 Cloudflare Pages Function / Vite 中间件共用同一路径。 */
+const IMAGE_PROXY_PATH = '/api/card-image';
+
+/**
+ * 卡图 CDN 不返回 CORS 头，Canvas 不能直接 fetch 像素。http(s) 下改走同源
+ * 转发；file:// 等没有服务端的场景保持原地址，失败后仍降级为卡名占位。
+ */
+function proxiedImageUrl(remote: string): string | null {
+  if (typeof location === 'undefined' || location.protocol === 'file:') return null;
+  try {
+    const proxy = new URL(IMAGE_PROXY_PATH, location.origin);
+    proxy.searchParams.set('url', remote);
+    return proxy.toString();
+  } catch {
+    return null;
+  }
+}
+
+async function loadImageBitmap(remote: string): Promise<ImageBitmap | null> {
+  const proxy = proxiedImageUrl(remote);
+  const candidates = proxy ? [proxy, remote] : [remote];
+  for (const [i, url] of candidates.entries()) {
+    try {
+      const response = await fetch(url, { mode: 'cors', credentials: 'omit', signal: AbortSignal.timeout(10000) });
+      if (!response.ok) {
+        // 静态托管没有 Functions 时，才回退到直连（一些 CDN 未来可能开放 CORS）。
+        if (i === 0 && [404, 405, 501].includes(response.status)) continue;
+        return null;
+      }
+      const blob = await response.blob();
+      if (!blob.type.startsWith('image/')) {
+        // SPA 静态服务器可能把未知路径回退成 index.html。
+        if (i === 0) continue;
+        return null;
+      }
+      return await createImageBitmap(blob);
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
 export async function buildDeckImage(deck: BuilderDeck, index: CardIndex, problems: number): Promise<{ blob: Blob; missing: number }> {
   const width = 1500, padding = 48, columns = 6, gap = 18, cardWidth = (width - 2 * padding - (columns - 1) * gap) / columns, cellHeight = cardWidth * 1040 / 744 + 64;
   const groups: { label: string; entries: DeckEntry[]; zone: Zone }[] = [];
@@ -23,8 +66,7 @@ export async function buildDeckImage(deck: BuilderDeck, index: CardIndex, proble
   const images = new Map<string, ImageBitmap | null>();
   const urls = [...new Set(groups.flatMap(g => g.entries.map(e => resolveEntry(e, index).print?.imageUrl || resolveEntry(e, index).print?.ttsUrl || '').filter(Boolean)))];
   for (let i = 0; i < urls.length; i += 6) await Promise.all(urls.slice(i, i + 6).map(async url => {
-    try { const response = await fetch(url, { mode: 'cors', credentials: 'omit', signal: AbortSignal.timeout(10000) }); if (!response.ok) throw new Error(); images.set(url, await createImageBitmap(await response.blob())); }
-    catch { images.set(url, null); }
+    images.set(url, await loadImageBitmap(url));
   }));
   let missing = 0, y = 180;
   for (const group of groups) {

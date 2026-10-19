@@ -146,4 +146,11 @@ Cloudflare Pages 配置:框架预设 None,构建命令 `npm run build`,输出目
 `cardCommonQa` 端点不返回 CORS 头的问题。本地 `npm run dev` / `npm run preview`
 由 Vite 将同一路径代理到官方接口。
 
+卡图 CDN 同样不返回 CORS 头，而分享的卡组图片需要把卡图读进 Canvas。为此新增
+`GET /api/card-image?url=…` 同源转发（`functions/api/card-image.ts`），只允许
+`cdn.playloltcg.com`、`cmsassets.rgpub.io`、`steamusercontent-a.akamaihd.net`
+三个域名，并限制为光栅图与 20 MB 以内。部署时 `functions/` 必须随 `dist/` 一起发布；
+本地 dev / preview 由 Vite 中间件提供同一路径。用 `file://` 直接打开时没有服务端，
+卡图仍会降级为卡名、编号占位。
+
 数据仅供竞技参考 · Riot Games 与本工具无关。

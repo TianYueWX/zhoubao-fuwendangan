@@ -292,3 +292,18 @@
 - 浏览器验收只点击可见且可用的按钮，避免所有分区同时展示后误点隐藏的移牌菜单。测试阻止外部字体请求，避免字体服务延迟阻塞页面启动，并在等待失败时输出页面状态。
 - `npm run build`、9 项构筑核心检查、26 项卡牌效果文本检查及 14 项浏览器验收通过。新增检查覆盖 320／390 手机、1024 桌面且卡组栏缩至 20%、1680 桌面，核对传奇与英雄并排、所有分区保留、只显示卡名、紧凑卡图和数量按钮完整可用。新截图为 `shots/deck-builder/compact-desktop.png` 和 `compact-mobile.png`。
 - 真实云端初始化状态沿用前述实施记录；本轮管理员流程仍使用 REST 测试数据。
+
+**卡图 CORS 修复 · 2026-10-19**
+
+- 分享卡组图片原先把 `img_cdn` 直接交给浏览器 `fetch`。三个卡图 CDN 都不返回
+  `Access-Control-Allow-Origin`，`<img>` 能显示，但 Canvas 无法取得像素，因此生成图片时
+  所有卡图都被记为缺失，只留下卡名与编号。
+- 新增同源转发 `GET /api/card-image?url=…`：生产环境由
+  `functions/api/card-image.ts` 处理，本地 `dev` / `preview` 由 Vite 中间件复用同一份
+  `functions/api/_card-image.ts`。只放行 `cdn.playloltcg.com`、`cmsassets.rgpub.io`、
+  `steamusercontent-a.akamaihd.net` 的 https 地址，限制为 PNG/JPEG/WebP/AVIF/GIF 且不超过
+  20 MB，并在跟随重定向后再次校验最终域名。
+- `src/tools/deckbuilder/image.ts` 改为优先从同源地址取图；静态托管没有 Functions 时仍会
+  回退直连，`file://` 或无网络时继续保留卡名、编号占位。
+- 真实浏览器验证：包含传奇、英雄、单位、法术、装备、战场、符文的测试卡组生成
+  1500×3367 PNG，状态为“图片已生成”，卡图正常绘制；转发函数对白名单外地址返回 400。

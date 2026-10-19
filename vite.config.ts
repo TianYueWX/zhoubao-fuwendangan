@@ -1,6 +1,8 @@
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
 import vue from '@vitejs/plugin-vue';
 import { fileURLToPath, URL } from 'node:url';
+import type { IncomingMessage, ServerResponse } from 'node:http';
+import { CARD_IMAGE_PATH, handleCardImage } from './functions/api/_card-image';
 
 const riftboundProxy = {
   target: 'https://lol-api.playloltcg.com',
@@ -20,12 +22,49 @@ const galleryProxy = (list: string) => ({
     path.replace(/^\/api\/riftbound\/gallery\/[^?]+/, `${galleryUpstream}/riftbound_gallery_${list}`)
 });
 
+// 卡图 CDN 不返回 CORS 头，分享图片在 Canvas 里取不到像素。生产环境由
+// functions/api/card-image.ts 转发；dev / preview 用同一份处理逻辑挂在 Vite 上。
+function cardImageProxy(): Plugin {
+  const middleware = async (
+    req: IncomingMessage,
+    res: ServerResponse,
+    next: (err?: unknown) => void
+  ): Promise<void> => {
+    const url = new URL(req.url ?? '/', 'http://127.0.0.1');
+    if (url.pathname !== CARD_IMAGE_PATH) {
+      next();
+      return;
+    }
+    try {
+      const response = await handleCardImage(
+        new Request(url, { method: req.method ?? 'GET' })
+      );
+      res.statusCode = response.status;
+      response.headers.forEach((value, key) => res.setHeader(key, value));
+      res.end(Buffer.from(await response.arrayBuffer()));
+    } catch {
+      res.statusCode = 502;
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+      res.end('卡图转发失败');
+    }
+  };
+  return {
+    name: 'card-image-proxy',
+    configureServer(server) {
+      server.middlewares.use(middleware);
+    },
+    configurePreviewServer(server) {
+      server.middlewares.use(middleware);
+    }
+  };
+}
+
 // https://vitejs.dev/config/
 export default defineConfig({
   // 关键:相对路径 base 同时兼容 file:// 与子路径部署(Cloudflare Pages)
   base: './',
 
-  plugins: [vue()],
+  plugins: [cardImageProxy(), vue()],
   worker: { format: 'es' },
 
   resolve: {
