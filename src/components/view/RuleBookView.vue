@@ -60,6 +60,31 @@ let readingAnchorActive = false;
 let previousOverflowAnchor = '';
 const bookName = computed(() => store.currentRuleBook);
 const bookRules = computed(() => allRules.value.filter((rule) => (rule.rules_book || "（未分类）") === bookName.value));
+const bookHeading = computed(() => {
+  const raw = (bookName.value || "").trim();
+  if (!raw) return { title: "", edition: "" };
+  const match = raw.match(/^(.*?)_(\d{6})$/);
+  if (!match) return { title: raw, edition: "" };
+  const title = (match[1] ?? "").trim() || raw;
+  const code = match[2] ?? "";
+  const year = 2000 + Number(code.slice(0, 2));
+  const month = Number(code.slice(2, 4));
+  const day = Number(code.slice(4, 6));
+  const date = new Date(Date.UTC(year, month - 1, day));
+  const valid = date.getUTCFullYear() === year
+    && date.getUTCMonth() === month - 1
+    && date.getUTCDate() === day;
+  return valid
+    ? { title, edition: `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}` }
+    : { title: raw, edition: "" };
+});
+/** 规则 level 若从 1 起算,先归一化到 0,避免所有根条目都缩进一级。 */
+const levelBase = computed(() => {
+  const levels = bookRules.value
+    .map((rule) => rule.level)
+    .filter((level): level is number => typeof level === "number");
+  return levels.length && Math.min(...levels) > 0 ? Math.min(...levels) : 0;
+});
 const ruleIndexes = computed(() => {
   const byBookAndNumber = new Map<string, Rule>();
   const byNumber = new Map<string, Rule[]>();
@@ -95,11 +120,31 @@ const favoriteItems = computed(() => favorites.value.map((favorite) => ({
   rule: ruleIndexes.value.byBookAndNumber.get(`${favorite.book}\u0000${favorite.number}`),
 })));
 const shareRule = computed(() => selectedRules.value.length === 1 ? selectedRules.value[0] : null);
-const renderedRules = computed(() => flatRules.value.map(({ item, depth }) => ({
-  item,
-  depth,
-  lines: displayLines(item).map(textParts),
-})));
+function dottedDepth(ruleNumber: string): number {
+  return ruleNumber.split(".").length - 1;
+}
+
+/**
+ * 显示层级:树的 parent 链是首选,但库里的 parent_number 可能整本为空。
+ * 编号点数是稳定的兜底(100.1 → 1),所以两者取大;
+ * 只有当树与编号都没有层级时,才退回库里的 level。
+ */
+function effectiveDepth(rule: Rule, treeDepth: number): number {
+  const dots = dottedDepth(rule.rule_number);
+  const stored = Math.max(0, (rule.level ?? levelBase.value) - levelBase.value);
+  const storedFallback = treeDepth === 0 && dots === 0 ? stored : 0;
+  return Math.max(treeDepth, dots, storedFallback);
+}
+
+const renderedRules = computed(() => flatRules.value.map(({ item, depth }) => {
+  const displayDepth = effectiveDepth(item, depth);
+  return {
+    item,
+    depth: displayDepth,
+    centered: Boolean(item.is_heading) && displayDepth <= 1,
+    lines: displayLines(item).map(textParts),
+  };
+}));
 
 function displayLines(rule: Rule): string[] {
   if (language.value === "zh") return [rule.text_zh || rule.text_en || "暂无正文"];
@@ -642,18 +687,24 @@ watch(bookName, () => {
         <div class="reader-top-anchor">
           <button v-show="showReaderTop && !selectionMode && !textSelection && !(mobileViewport && cardPanelOpen)" class="reader-top-button" type="button" :aria-label="language === 'en' ? 'Back to top' : '回到顶部'" :title="language === 'en' ? 'Back to top' : '回到顶部'" @click="scrollToBookTop"><ArrowUp :size="19" aria-hidden="true" /></button>
         </div>
+        <header v-if="bookHeading.title" class="book-heading">
+          <h1>{{ bookHeading.title }}</h1>
+          <p v-if="bookHeading.edition" class="book-edition">{{ bookHeading.edition }}</p>
+        </header>
         <article
-          v-for="{ item, depth, lines } in renderedRules"
+          v-for="{ item, depth, centered, lines } in renderedRules"
           :id="ruleId(item.rule_number)"
           :key="item.id"
           :data-rule-number="item.rule_number"
+          :data-depth="depth"
           class="rule-row"
-          :class="{ selected: selected.has(item.rule_number), chapter: item.is_heading }"
+          :class="{ selected: selected.has(item.rule_number), chapter: item.is_heading, centered }"
           :style="{ '--depth': depth }"
         >
           <div class="rule-copy">
+            <button v-if="centered" class="rule-number heading-number" :aria-label="language === 'en' ? `${selected.has(item.rule_number) ? 'Deselect' : 'Select'} rule ${item.rule_number}` : `${selected.has(item.rule_number) ? '取消选择' : '选择'}规则 ${item.rule_number}`" :aria-pressed="selected.has(item.rule_number)" :title="language === 'en' ? 'Select this rule' : '点击编号选择整条规则'" @click="selectRule(item.rule_number)">{{ item.rule_number }}</button>
             <p v-for="(parts, lineIndex) in lines" :key="lineIndex" class="rule-line" :class="{ 'english-line': language === 'both' && lineIndex > 0 }">
-              <button v-if="lineIndex === 0" class="rule-number" :aria-label="language === 'en' ? `${selected.has(item.rule_number) ? 'Deselect' : 'Select'} rule ${item.rule_number}` : `${selected.has(item.rule_number) ? '取消选择' : '选择'}规则 ${item.rule_number}`" :aria-pressed="selected.has(item.rule_number)" :title="language === 'en' ? 'Select this rule' : '点击编号选择整条规则'" @click="selectRule(item.rule_number)">{{ item.rule_number }}</button>
+              <button v-if="lineIndex === 0 && !centered" class="rule-number" :aria-label="language === 'en' ? `${selected.has(item.rule_number) ? 'Deselect' : 'Select'} rule ${item.rule_number}` : `${selected.has(item.rule_number) ? '取消选择' : '选择'}规则 ${item.rule_number}`" :aria-pressed="selected.has(item.rule_number)" :title="language === 'en' ? 'Select this rule' : '点击编号选择整条规则'" @click="selectRule(item.rule_number)">{{ item.rule_number }}</button>
               <span class="rule-text">
                 <template v-for="(part, partIndex) in parts" :key="partIndex"><button v-if="part.book" class="rule-reference" @click="onReferenceClick($event, part)">{{ part.text }}</button><span v-else>{{ part.text }}</span></template>
               </span>
@@ -756,12 +807,30 @@ watch(bookName, () => {
 .reader-top-button { display: grid; place-items: center; flex: none; width: 44px; height: 44px; border: 1px solid var(--reader-border); border-radius: 50%; color: var(--ink); background: var(--paper); box-shadow: 0 3px 14px #0002; pointer-events: auto; }
 .reader-top-button:hover { color: var(--reader-accent); background: var(--reader-soft); }
 .reader-top-button:focus-visible { outline: 2px solid var(--reader-accent); outline-offset: 3px; }
-.rule-row { margin-top: 1.25em; margin-left: calc(min(var(--depth), 5) * 1.25em); padding: .12em .35em; border-radius: 2px; scroll-margin-top: 80px; touch-action: pan-y; cursor: text; }
+.rule-row { --rule-indent: 1em; margin-top: 1.25em; margin-left: calc(min(var(--depth), 5) * var(--rule-indent)); padding: .12em .35em; border-radius: 2px; scroll-margin-top: 80px; touch-action: pan-y; cursor: text; }
 .rule-row.chapter { margin-top: 2.4em; }
+.book-heading { padding: .2em 0 2.8em; text-align: center; }
+.book-heading h1 { margin: 0; color: var(--ink); font: 700 1.9em/1.35 "Noto Serif SC", "Songti SC", "Noto Serif", Georgia, serif; letter-spacing: .12em; overflow-wrap: anywhere; }
+.book-edition { margin: .6em 0 0; color: var(--muted-ink); font: 600 .68em/1.5 ui-monospace, monospace; letter-spacing: .2em; }
+.book-heading::after { content: ""; display: block; width: 2.5em; height: 1px; margin: 1.4em auto 0; background: color-mix(in srgb, var(--reader-accent) 40%, transparent); }
+.book-heading + .rule-row { margin-top: 0; }
 .rule-row.selected { background: #f7e7a7; color: #242018; }
 .theme-dark .rule-row.selected { background: #594b26; color: #fff8e7; }
+.rule-row.chapter.centered { margin-top: 3.2em; margin-left: 0; text-align: center; }
+.rule-row.chapter.centered[data-depth="1"] { margin-top: 2.5em; }
+.book-heading + .rule-row.chapter.centered { margin-top: 0; }
+.rule-row.centered .rule-copy { text-align: center; }
+.rule-row.centered .heading-number { display: block; width: fit-content; margin: 0 auto .4em; padding: 2px 6px; text-align: center; font-size: .66em; letter-spacing: .1em; }
+.rule-row.centered[data-depth="1"] .heading-number { font-size: .62em; }
+.rule-row.centered .rule-line { display: block; text-align: center; line-height: 1.65; }
+.rule-row.centered[data-depth="0"] .rule-line:first-child { font-size: 1.35em; }
+.rule-row.centered[data-depth="1"] .rule-line:first-child { font-size: 1.16em; }
+.rule-row.centered .rule-text { display: inline; }
+.rule-row.centered.selected { background: transparent; }
+.rule-row.centered.selected .rule-copy { display: inline-block; max-width: 100%; padding: .2em .85em; border-radius: 2px; background: #f7e7a7; color: #242018; }
+.theme-dark .rule-row.centered.selected .rule-copy { background: #594b26; color: #fff8e7; }
 .rule-copy { font-family: "Noto Serif SC", "Songti SC", "Noto Serif", Georgia, serif; }
-.rule-line { display: grid; grid-template-columns: 4.7em minmax(0, 1fr); align-items: baseline; margin: 0; font: 400 1em/1.95 "Noto Serif SC", "Songti SC", "Noto Serif", Georgia, serif; overflow-wrap: anywhere; white-space: pre-wrap; }
+.rule-line { display: grid; grid-template-columns: minmax(4.7em, max-content) minmax(0, 1fr); align-items: baseline; margin: 0; font: 400 1em/1.95 "Noto Serif SC", "Songti SC", "Noto Serif", Georgia, serif; overflow-wrap: anywhere; white-space: pre-wrap; }
 .rule-row.chapter .rule-line { font-weight: 700; }
 .rule-row.chapter .rule-line:first-child { font-size: 1.12em; }
 .rule-number { justify-self: start; padding: 4px 5px; margin-left: -5px; text-align: left; color: #8a7652; font: 600 .8em/1.6 ui-monospace, monospace; white-space: nowrap; cursor: pointer; user-select: none; }
@@ -853,8 +922,15 @@ watch(bookName, () => {
   .icon-control { width: 34px; height: 38px; }
   .language-switch button { min-width: 28px; padding: 6px; }
   .reader-document { width: 100%; min-height: calc(100vh - 48px); margin-top: 7px; padding: 28px 18px 90px; }
-  .rule-row { margin-left: calc(min(var(--depth), 4) * .55em); padding-inline: .2em; }
-  .rule-line { grid-template-columns: 3.8em minmax(0, 1fr); }
+  .book-heading { padding-bottom: 1.9em; }
+  .book-heading h1 { font-size: 1.55em; letter-spacing: .08em; }
+  .book-edition { font-size: .62em; }
+  .rule-row { --rule-indent: .7em; margin-left: calc(min(var(--depth), 3) * var(--rule-indent)); padding-inline: .2em; }
+  .rule-row.chapter.centered { margin-top: 2.6em; }
+  .rule-row.chapter.centered[data-depth="1"] { margin-top: 2em; }
+  .rule-row.centered[data-depth="0"] .rule-line:first-child { font-size: 1.22em; }
+  .rule-row.centered[data-depth="1"] .rule-line:first-child { font-size: 1.08em; }
+  .rule-line { grid-template-columns: minmax(3.8em, max-content) minmax(0, 1fr); }
   .selection-bar { gap: 0; width: calc(100vw - 16px); justify-content: space-between; padding: 5px 4px; }
   .selection-bar button { padding: 9px 6px; font-size: 10px; }
   .selection-count { padding: 0 5px; font-size: 10px; }
