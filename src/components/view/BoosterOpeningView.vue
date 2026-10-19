@@ -12,6 +12,7 @@ import {
   buildBoosterCards,
   loadBoosterBases,
   loadBoosterPrints,
+  missingBoosterPools,
   newId,
   setName,
   type BoosterCard,
@@ -52,11 +53,8 @@ const currentPack = computed(() => {
 });
 const currentPackRevealed = computed(() => !!currentPack.value?.cards.length && currentPack.value.cards.every((card) => card.revealed));
 const inProgressBox = computed(() => records.value.find((record) => record.kind === "box" && record.status === "inProgress") ?? null);
-const setCards = computed(() => cardPool.value.filter((card) => card.series === selectedSeries.value));
-const setReady = computed(() => {
-  const set = new Set(setCards.value.map((card) => card.rarity));
-  return ["common", "uncommon", "rare", "epic", "token"].every((rarity) => set.has(rarity as BoosterCard["rarity"]));
-});
+const missingPools = computed(() => missingBoosterPools(cardPool.value, selectedSeries.value));
+const setReady = computed(() => missingPools.value.length === 0);
 const currentBoxSummary = computed(() => activeRecord.value?.kind === "box" ? summarize(activeRecord.value.packs) : null);
 const historyCount = computed(() => records.value.length);
 
@@ -177,7 +175,7 @@ function makeRecord(kind: "pack" | "box"): OpeningRecord {
 function startOpening(): void {
   notice.value = "";
   if (!setReady.value) {
-    notice.value = `${selectedSeries.value} 的卡牌数据不完整，暂时无法模拟开包。`;
+    notice.value = `${selectedSeries.value} 卡池资料不完整（缺少${missingPools.value.join("、")}），暂时无法模拟开包。`;
     return;
   }
   if (openKind.value === "box" && inProgressBox.value) {
@@ -329,7 +327,7 @@ function cardFinishLabel(card: OpenedPack["cards"][number]): string {
                   <strong>{{ set }}</strong><small>{{ setName(set) }}</small>
                 </button>
               </div>
-              <p v-if="!setReady" class="set-hint">该系列卡池尚未同步完整，暂时无法开包。</p>
+              <p v-if="!setReady" class="set-hint">该系列卡池尚未同步完整（缺少 {{ missingPools.join("、") }}），暂时无法开包。</p>
             </div>
             <div class="field-block">
               <span class="field-label">开包方式</span>

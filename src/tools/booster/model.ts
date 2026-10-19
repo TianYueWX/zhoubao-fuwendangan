@@ -201,6 +201,24 @@ function poolsFor(cards: readonly BoosterCard[], series: BoosterSet): Pools {
   };
 }
 
+function missingFromPools(pools: Pools): string[] {
+  const missing: string[] = [];
+  if (!pools.common.length) missing.push("普通");
+  if (!pools.uncommon.length) missing.push("不凡");
+  if (!pools.rare.length) missing.push("稀有");
+  if (!pools.epic.length) missing.push("史诗");
+  if (!pools.tokenRune.length) missing.push("Token／符文");
+  return missing;
+}
+
+/**
+ * 与 drawPack 的卡池要求保持一致。
+ * 注意不能要求「Token」稀有度：RAD 没有指示物卡，Token／符文槽由符文填充。
+ */
+export function missingBoosterPools(cards: readonly BoosterCard[], series: BoosterSet): string[] {
+  return missingFromPools(poolsFor(cards, series));
+}
+
 function makeDraw(card: BoosterCard, slot: string): DrawnCard {
   return { ...card, slot, revealed: false };
 }
@@ -221,8 +239,8 @@ function foilCard(pools: Pools): BoosterCard | null {
 
 export function drawPack(cards: readonly BoosterCard[], series: BoosterSet, packNumber: number): OpenedPack {
   const pools = poolsFor(cards, series);
-  if (!pools.common.length || !pools.uncommon.length || !pools.rare.length || !pools.epic.length || !pools.tokenRune.length)
-    throw new Error(`${series} 卡池资料不完整，暂时无法开包。`);
+  const missing = missingFromPools(pools);
+  if (missing.length) throw new Error(`${series} 卡池资料不完整（缺少${missing.join("、")}），暂时无法开包。`);
 
   const packCards: DrawnCard[] = [];
   for (let i = 0; i < 7; i += 1) packCards.push(drawFrom(pools.common, pools.uncommon, "普通"));
