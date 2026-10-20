@@ -257,7 +257,7 @@ const effectPreview = computed(() => {
     kr: form.value.effect_kr,
     tw: form.value.effect_tw
   }[effectTab.value];
-  return renderEffectPreview(text);
+  return renderEffectPreview(text, form.value.card_color_list);
 });
 
 async function save(publish: boolean): Promise<void> {
@@ -984,7 +984,7 @@ onMounted(async () => {
               plain
               small
               title="效果文本"
-              note="支持 {{标记}} 内联标签;预览经标签白名单过滤,不会执行库中的脚本"
+              note="支持 {{标记}} 内联标签;{{C}} 按本牌颜色渲染;预览经标签白名单过滤,不会执行库中的脚本"
             />
             <div class="flex rounded-lg overflow-hidden border border-card-border w-fit mb-3">
               <button

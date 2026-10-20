@@ -7,6 +7,10 @@
  *   那份服务编辑部校对预览,只认「白名单标签 + {{标记}} → 高亮 span」;
  *   这份服务卡牌详情弹窗,标记要换成**卡图图标**(card_icons),没有图标才退化成高亮文字。
  *
+ * 另有一类特殊标记 `{{C}}`:它表示**本牌所属色域的符文**(不是任意色),
+ * 必须按卡牌自身的 colors 换算成对应图标;解析规则见 utils/runeText.ts。
+ * 调用方没传 colors 时保持旧行为,避免其它入口把 C 误显示成 A。
+ *
  * ⚠ 顺序是这里唯一的坑,也是 2026-10-02 修的那个 bug:
  *   必须**先按原文切标记,再对每一段各转义一次**。
  *   先整串转义、再在已转义的串上切标记,标记内层就会被转义两遍 ——
@@ -16,11 +20,19 @@
  *   键被转义成 `绝念&gt;` 就一个都命中不了,条件变体图标集体退化成乱码文本。
  * ============================================================== */
 
+import { isColorMarker, runeRefs, type RuneRef } from "@/utils/runeText";
+
 /** 渲染 `{{标记}}` 需要的图标信息(card_icons 的一行) */
 export interface RichIcon {
   name: string;
   url: string;
   isWhite: boolean;
+}
+
+/** 渲染上下文:`{{C}}` 需要卡牌自身的色域才能解析 */
+export interface RichTextOptions {
+  /** cards_base.card_color_list;不传 = 不解析 C(保持旧行为) */
+  colors?: readonly string[];
 }
 
 /** effect_en 这类「库里存着真 HTML」的文本,只放行段落与强调类标签 */
@@ -86,17 +98,40 @@ function whitelistTags(raw: string): string {
   return doc.body.innerHTML;
 }
 
+/** 多色符文之间的分隔符:纯文本斜杠,视觉由 CardEffectText 的样式弱化 */
+const COLOR_SEPARATOR = '<span class="effect-color-sep">/</span>';
+
+function iconHtml(icon: RichIcon, alt: string): string {
+  const cls = icon.isWhite ? "effect-icon white-source" : "effect-icon";
+  return `<img class="${cls}" src="${escapeHtmlText(icon.url)}" alt="${escapeHtmlText(alt)}">`;
+}
+
+/** {{C}} 的一枚色域图标:先按主名(红色)查,再按备用名(狂怒)查 */
+function runeIconHtml(
+  rune: RuneRef,
+  iconMap: ReadonlyMap<string, RichIcon>,
+): string {
+  for (const name of rune.candidates) {
+    const icon = iconMap.get(name);
+    if (icon) return iconHtml(icon, rune.label);
+  }
+  return `<strong>${escapeHtmlText(rune.label)}</strong>`;
+}
+
 /**
  * 效果文本 → 安全 HTML。
- * @param raw   库里的原文(effect_cn 是纯文本 + `{{标记}}`;effect_en 是真 HTML)
- * @param icons card_icons 全量,用于把标记换成图标
+ * @param raw     库里的原文(effect_cn 是纯文本 + `{{标记}}`;effect_en 是真 HTML)
+ * @param icons   card_icons 全量,用于把标记换成图标
+ * @param options 渲染上下文;`colors` 用于解析 `{{C}}`(本牌色域符文)
  */
 export function richEffectText(
   raw: string,
   icons: readonly RichIcon[] = [],
+  options: RichTextOptions = {},
 ): string {
   if (!raw) return "";
   const iconMap = new Map(icons.map((i) => [i.name, i]));
+  const runes = runeRefs(options.colors);
   const isHtml = /<\/?[a-z][\s\S]*>/i.test(raw);
   // 换行只在纯文本路径转 <br>:HTML 路径原样交给浏览器排版(与改造前一致)
   const safe = isHtml
@@ -104,14 +139,16 @@ export function richEffectText(
     : escapeHtmlText(raw).replace(/\r?\n/g, "<br>");
 
   return safe.replace(MARKUP_RE, (_all, inner: string) => {
-      // safe 已经是转义过的文本,所以这里取到的标记要先还原成字面量,
-      // 否则 `绝念>` 会以 `绝念&gt;` 的形态去查图标表,必然落空。
-      const mark = decodeHtmlEntities(inner.trim());
-      const icon = iconMap.get(mark);
-      if (icon) {
-        const cls = icon.isWhite ? "effect-icon white-source" : "effect-icon";
-        return `<img class="${cls}" src="${escapeHtmlText(icon.url)}" alt="${escapeHtmlText(mark)}">`;
-      }
-      return `<strong>${escapeHtmlText(mark)}</strong>`;
-    });
+    // safe 已经是转义过的文本,所以这里取到的标记要先还原成字面量,
+    // 否则 `绝念>` 会以 `绝念&gt;` 的形态去查图标表,必然落空。
+    const mark = decodeHtmlEntities(inner.trim());
+    // {{C}} 要在普通图标查找之前处理:它是按卡牌颜色动态解析的占位符,
+    // 即便以后图标表里真有一行叫 C,也不该拿它顶替。
+    if (runes && isColorMarker(mark)) {
+      return runes.map((rune) => runeIconHtml(rune, iconMap)).join(COLOR_SEPARATOR);
+    }
+    const icon = iconMap.get(mark);
+    if (icon) return iconHtml(icon, mark);
+    return `<strong>${escapeHtmlText(mark)}</strong>`;
+  });
 }

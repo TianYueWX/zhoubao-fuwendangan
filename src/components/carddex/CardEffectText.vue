@@ -4,7 +4,7 @@ import { richEffectText } from './richText';
 import type { CardBase, CardIcon, CarddexLocale } from './types';
 
 const props = withDefaults(defineProps<{
-  base: Pick<CardBase, 'effectCn' | 'effectEn' | 'effectKr' | 'effectTw'>;
+  base: Pick<CardBase, 'effectCn' | 'effectEn' | 'effectKr' | 'effectTw' | 'colors'>;
   icons: readonly CardIcon[];
   locale?: CarddexLocale;
 }>(), { locale: 'zh' });
@@ -17,7 +17,11 @@ const languages = [
 ] as const;
 const effects = computed(() => languages
   .filter(({ field }) => props.base[field])
-  .map(({ field, lang }) => ({ field, lang, html: richEffectText(props.base[field], props.icons) })));
+  .map(({ field, lang }) => ({
+    field,
+    lang,
+    html: richEffectText(props.base[field], props.icons, { colors: props.base.colors }),
+  })));
 </script>
 
 <template>
@@ -70,5 +74,12 @@ const effects = computed(() => languages
 }
 .effect :deep(.effect-icon.white-source) {
   filter: invert(1);
+}
+/* 多色符文的斜杠:弱化、贴着图标,不做成第二装饰 */
+.effect :deep(.effect-color-sep) {
+  margin-inline: 2px;
+  color: var(--color-text-subtle);
+  font-size: 0.92em;
+  font-weight: 500;
 }
 </style>

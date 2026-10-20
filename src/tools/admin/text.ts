@@ -11,7 +11,12 @@
  *   1. 先按标签白名单过滤(只留段落/强调类标签),并**丢弃全部属性**;
  *   2. 再把 `{{标记}}` 换成高亮 span,标记内部文本做转义;
  *   3. 输出可以安全地交给 v-html。
+ *
+ * 特殊标记 `{{C}}`(本牌色域符文)在预览里显示成中文色名,与 `{{紫色}}`
+ * 的预览观感一致;解析规则与卡牌详情共用 utils/runeText.ts。
  * ============================================================== */
+
+import { isColorMarker, runeRefs } from '@/utils/runeText';
 
 const ALLOWED_TAGS = new Set(['p', 'br', 'b', 'strong', 'i', 'em', 'span', 'sub', 'sup', 'u']);
 
@@ -47,12 +52,23 @@ export function sanitizeCardText(input: string | null | undefined): string {
 
 /**
  * 效果文本预览:白名单过滤 + `{{标记}}` 高亮。
+ * @param input  库里的原文(纯文本 + `{{标记}}`)
+ * @param colors cards_base.card_color_list,用于把 `{{C}}` 显示成色名;
+ *               不传时保持旧行为(原样显示标记)
  * 返回值可安全用于 v-html。
  */
-export function renderEffectPreview(input: string | null | undefined): string {
+export function renderEffectPreview(
+  input: string | null | undefined,
+  colors?: readonly string[] | null,
+): string {
   const safe = sanitizeCardText(input);
+  const runes = runeRefs(colors);
   return safe.replace(/\{\{([^{}]+)\}\}/g, (_m, inner: string) => {
-    return `<span class="effect-mark">${escapeHtml(inner.trim())}</span>`;
+    const mark = inner.trim();
+    if (runes && isColorMarker(mark)) {
+      return `<span class="effect-mark">${escapeHtml(runes.map((rune) => rune.label).join('/'))}</span>`;
+    }
+    return `<span class="effect-mark">${escapeHtml(mark)}</span>`;
   });
 }
 

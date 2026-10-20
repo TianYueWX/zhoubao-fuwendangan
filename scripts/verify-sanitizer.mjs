@@ -16,6 +16,9 @@ import { dirname, resolve } from 'node:path';
 // 直接用 node 的类型剥离跑 TS 源码(项目已有同款做法,见 package.json 的 smoke)
 const here = dirname(fileURLToPath(import.meta.url));
 const target = resolve(here, '../src/tools/admin/text.ts');
+// text.ts 依赖 @/utils/runeText(以及 @/types),子进程也要挂项目同款解析钩子,
+// 否则 `@/` 别名在 node 里解析不到。
+const loader = new URL('./register-hooks.mjs', import.meta.url).href;
 
 const runner = `
 import { sanitizeCardText, renderEffectPreview, extractMarks } from ${JSON.stringify(target)};
@@ -71,7 +74,7 @@ console.log(\`\\n──────── 结果:\${results.length - failed} 通
 process.exit(failed === 0 ? 0 : 1);
 `;
 
-const out = spawnSync(process.execPath, ['--experimental-strip-types', '--input-type=module', '-e', runner], {
+const out = spawnSync(process.execPath, ['--experimental-strip-types', '--import', loader, '--input-type=module', '-e', runner], {
   encoding: 'utf8',
   stdio: ['ignore', 'pipe', 'pipe']
 });
