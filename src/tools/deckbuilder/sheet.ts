@@ -30,8 +30,8 @@ export interface DeckSheetData {
   sections: SheetSection[];
 }
 
-const COLOR_ORDER = ['red', 'green', 'blue', 'yellow', 'purple', 'orange', 'colorless'] as const;
-const TYPE_ORDER = ['单位', '法术', '装备', '其他'] as const;
+export const COLOR_ORDER = ['red', 'green', 'blue', 'yellow', 'purple', 'orange', 'colorless'] as const;
+export const TYPE_ORDER = ['单位', '法术', '装备', '其他'] as const;
 
 /* A4 版面常量（mm），与 DeckSheet.vue 的 CSS 保持一致。 */
 const PAGE_W = 210;
@@ -84,7 +84,8 @@ function sortedEntries(entries: readonly DeckEntry[], index: CardIndex, sort: Sh
     .map(({ entry }) => entry);
 }
 
-function runeColors(deck: BuilderDeck, index: CardIndex): RuneColorCount[] {
+/** 符文按颜色统计（多色卡计入每种颜色）。 */
+export function runeColorCounts(deck: BuilderDeck, index: CardIndex): RuneColorCount[] {
   const counts = new Map<CardColor, number>();
   for (const entry of deck.zones.rune) {
     const record = resolveEntry(entry, index).record;
@@ -115,7 +116,7 @@ export function buildDeckSheet(deck: BuilderDeck, index: CardIndex, sort: SheetS
   return {
     legend: deck.zones.legend[0] ?? null,
     champion: deck.zones.champion[0] ?? null,
-    runes: runeColors(deck, index),
+    runes: runeColorCounts(deck, index),
     sections
   };
 }

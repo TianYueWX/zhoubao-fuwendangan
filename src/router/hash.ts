@@ -41,6 +41,10 @@ export interface Route {
   builderPage?: 'library' | 'edit' | 'cloud' | 'share';
   builderId?: string;
   builderSnapshot?: string;
+  /** view === 'deck' 时的卡组 id */
+  deckId?: string;
+  /** 卡组来自本机还是云端 */
+  deckScope?: 'local' | 'cloud';
 }
 
 export function parseHash(hash: string): Route {
@@ -58,6 +62,17 @@ export function parseHash(hash: string): Route {
     } catch { return { view: 'builder', builderPage: 'library' }; }
   }
 
+  // 卡组详情:#/deck/{id},云端用 ?scope=cloud
+  if (head === 'deck') {
+    const scope = new URLSearchParams(hash.split('?')[1] ?? '').get('scope') === 'cloud' ? 'cloud' : 'local';
+    try {
+      return tail
+        ? { view: 'deck', deckId: decodeURIComponent(tail), deckScope: scope }
+        : { view: 'builder', builderPage: 'library' };
+    } catch {
+      return { view: 'builder', builderPage: 'library' };
+    }
+  }
   // 内容层特例:期号正文
   if (head === 'issue') {
     return tail ? { view: 'issue', issueId: decodeURIComponent(tail) } : { view: 'archive' };
@@ -95,6 +110,10 @@ export function routeToHash(route: Route): string {
     const page = route.builderPage ?? 'library';
     return `#/builder${page === 'library' ? '' : `/${page}`}${route.builderId ? `/${encodeURIComponent(route.builderId)}` : ''}${page === 'share' && route.builderSnapshot ? `?s=${encodeURIComponent(route.builderSnapshot)}` : ''}`;
   }
+  if (route.view === 'deck') {
+    if (!route.deckId) return '#/builder';
+    return `#/deck/${encodeURIComponent(route.deckId)}${route.deckScope === 'cloud' ? '?scope=cloud' : ''}`;
+  }
   if (route.view === 'issue') {
     return route.issueId ? `#/issue/${encodeURIComponent(route.issueId)}` : '#/archive';
   }
@@ -118,6 +137,9 @@ export function routeToHash(route: Route): string {
 /** 当前 store 状态 → 路由 */
 export function currentRoute(): Route {
   if (store.currentView === 'builder') return { view: 'builder', builderPage: store.currentBuilderPage, builderId: store.currentBuilderId, builderSnapshot: store.currentBuilderSnapshot };
+  if (store.currentView === 'deck') {
+    return { view: 'deck', deckId: store.currentDeckId, deckScope: store.currentDeckScope };
+  }
   if (store.currentView === 'issue') {
     return { view: 'issue', issueId: store.currentIssueId };
   }
@@ -137,6 +159,13 @@ export function applyRoute(route: Route): void {
     store.currentBuilderId = route.builderId ?? '';
     store.currentBuilderSnapshot = route.builderSnapshot ?? '';
     store.currentView = 'builder';
+    return;
+  }
+  if (route.view === 'deck') {
+    store.currentDeckId = route.deckId ?? '';
+    store.currentDeckScope = route.deckScope ?? 'local';
+    store.currentView = route.deckId ? 'deck' : 'builder';
+    if (!route.deckId) store.currentBuilderPage = 'library';
     return;
   }
   if (route.view === 'issue') {

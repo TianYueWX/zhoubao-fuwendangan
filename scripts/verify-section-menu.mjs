@@ -93,8 +93,10 @@ const sameTarget = (view, expected) => {
   const t = backTargetOf(view);
   return t.view === expected.view && t.label === expected.label;
 };
-check('期刊系 → 返回期刊 #/journal', ['journal', 'archive', 'issue', 'import', 'overview', 'cards', 'legendary', 'region', 'decks'].every((v) => sameTarget(v, { view: 'journal', label: '返回期刊' })));
+check('期刊系子页 → 返回期刊 #/journal', ['archive', 'issue', 'import', 'overview', 'cards', 'legendary', 'region', 'decks'].every((v) => sameTarget(v, { view: 'journal', label: '返回期刊' })));
 check('编辑部子页 → 返回编辑部 #/editorial', sameTarget('editorial-cards', { view: 'editorial', label: '返回编辑部' }));
+check('期刊首页 → 返回首页(栏目首页之上是工具台)', sameTarget('journal', { view: 'home', label: '返回首页' }));
+check('编辑部首页 → 返回首页(栏目首页之上是工具台)', sameTarget('editorial', { view: 'home', label: '返回首页' }));
 check('参考资料(含构筑卡组) → 返回首页', ['builder', 'rules', 'carddex', 'chain', 'rank', 'games', 'booster'].every((v) => sameTarget(v, { view: 'home', label: '返回首页' })));
 check('云端 → 返回首页', sameTarget('qa', { view: 'home', label: '返回首页' }));
 check('工具台 → 返回首页(自我)', sameTarget('home', { view: 'home', label: '返回首页' }));

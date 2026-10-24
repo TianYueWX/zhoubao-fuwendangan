@@ -40,7 +40,7 @@ function closeMenu():void {menu.value?.hidePopover();}
         </div>
       </div>
     </div>
-    <span v-else class="readonly-count">×{{ entry.quantity }}</span>
+    <span v-else-if="!graphic" class="readonly-count">×{{ entry.quantity }}</span>
   </article>
 </template>
 

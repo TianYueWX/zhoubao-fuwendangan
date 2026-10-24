@@ -21,6 +21,7 @@ import CarddexView from "./CarddexView.vue";
 import RegionView from "./RegionView.vue";
 import DecksView from "./DecksView.vue";
 import DeckBuilderView from "./DeckBuilderView.vue";
+import DeckDetailView from "./DeckDetailView.vue";
 import ChainBoardView from "./ChainBoardView.vue";
 import RankLadderView from "./RankLadderView.vue";
 import GamesView from "./GamesView.vue";
@@ -57,6 +58,7 @@ export const ViewComponents: Record<string, unknown> = {
   region: RegionView,
   decks: DecksView,
   builder: DeckBuilderView,
+  deck: DeckDetailView,
 
   /* 云端内容 */
   blog: placeholder,

@@ -500,13 +500,22 @@ export interface BackTarget {
 }
 
 /**
- * 上下文返回:期刊 / 编辑部回各自栏目首页,其余栏目(无 hub)回工具台。
+ * 上下文返回:期刊 / 编辑部子页回各自栏目首页;
+ * 栏目首页自身没有更上一级的栏目,与其余栏目一样回工具台。
  * 与 sectionMenuItems 同源,避免「菜单能到、返回到不了」的层级断裂。
  */
 export function backTargetOf(view: string): BackTarget {
   const group = activeGroupOf(view);
-  if (group === "journal") return { view: "journal", label: "返回期刊" };
-  if (group === "editorial") return { view: "editorial", label: "返回编辑部" };
+  if (group === "journal") {
+    return view === "journal"
+      ? { view: HOME_CODE, label: "返回首页" }
+      : { view: "journal", label: "返回期刊" };
+  }
+  if (group === "editorial") {
+    return view === "editorial"
+      ? { view: HOME_CODE, label: "返回首页" }
+      : { view: "editorial", label: "返回编辑部" };
+  }
   return { view: HOME_CODE, label: "返回首页" };
 }
 

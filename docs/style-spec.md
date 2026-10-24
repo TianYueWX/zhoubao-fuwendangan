@@ -151,7 +151,7 @@ sans   : system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial,
 └───────────────────────────────────────────────────────────────┘
 ```
 
-「栏目菜单」= 报头左侧下拉面板(`src/components/SectionMenu.vue`),列出**当前栏目全部已登记页面**;条目与上下文返回目标由 `src/tools/catalog.ts` 的 `sectionMenuItems()` / `backTargetOf()` 派生。首页 / 结算链 / 规则书隐藏全站报头;构筑卡组用自己的顶栏,同样内置该菜单(`size="compact"`)与上下文返回。
+「栏目菜单」= 报头左侧下拉面板(`src/components/SectionMenu.vue`),列出**当前栏目全部已登记页面**;条目与上下文返回目标由 `src/tools/catalog.ts` 的 `sectionMenuItems()` / `backTargetOf()` 派生。返回键在栏目子页回栏目首页,在栏目首页(含工具台)上则回工具台;当返回目标是栏目首页时,报头另给一个「首页」图标直达工具台。首页 / 结算链 / 规则书隐藏全站报头;构筑卡组用自己的顶栏,同样内置该菜单(`size="compact"`)与上下文返回。
 
 ### 4.0 扩展一个工具(两步,零改动导航/路由/首页)
 

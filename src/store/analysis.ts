@@ -187,6 +187,9 @@ export const store = reactive({
   currentBuilderPage: 'library' as 'library' | 'edit' | 'cloud' | 'share',
   currentBuilderId: '',
   currentBuilderSnapshot: '',
+  /** 卡组详情页(仅 currentView === 'deck' 时有意义) */
+  currentDeckId: '',
+  currentDeckScope: 'local' as 'local' | 'cloud',
 
   get isReady(): boolean {
     const deckReady =

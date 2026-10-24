@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
-import { ArrowLeft, ArrowUp } from "@lucide/vue";
+import { ArrowLeft, ArrowUp, House } from "@lucide/vue";
 import {
   store,
   runStoredAnalysis,
@@ -111,6 +111,7 @@ const homeCode = HOME_CODE;
 const isHome = computed(() => store.currentView === homeCode);
 const isCarddex = computed(() => store.currentView === "carddex");
 const isBuilder = computed(() => store.currentView === "builder");
+const isDeck = computed(() => store.currentView === "deck");
 
 const isJournalSection = computed(
   () =>
@@ -121,6 +122,9 @@ const isJournalSection = computed(
 
 /* ── 上下文返回:期刊/编辑部回各自栏目首页,其余栏目回工具台 ── */
 const back = computed(() => backTargetOf(store.currentView));
+
+/* 返回键只回到栏目首页时,另给一个直达工具台(首页)的出口 */
+const showHomeLink = computed(() => back.value.view !== homeCode);
 
 /* ── 期刊次级条:周次 + 样本数 ── */
 const weeks = computed(() => weekBuckets());
@@ -139,9 +143,9 @@ function onWeekChange(e: Event): void {
     任一祖先出现 overflow:hidden 都会吃掉后代的 position:sticky，
     所以这里的 overflow 一律不加。
   -->
-  <div class="flex flex-col min-h-screen" :class="{ 'ux-readable': ['chain', 'overview', 'cards', 'legendary', 'region', 'decks', 'builder', 'games', 'rank'].includes(store.currentView) }">
+  <div class="flex flex-col min-h-screen" :class="{ 'ux-readable': ['chain', 'overview', 'cards', 'legendary', 'region', 'decks', 'builder', 'deck', 'games', 'rank'].includes(store.currentView) }">
     <header
-      v-if="!isHome && !isBuilder && store.currentView !== 'chain' && store.currentView !== 'rulebook'"
+      v-if="!isHome && !isBuilder && !isDeck && store.currentView !== 'chain' && store.currentView !== 'rulebook'"
       class="masthead-solid sticky top-0 z-50 shrink-0"
     >
       <div class="px-4 lg:px-8 h-14 flex items-center justify-between gap-3">
@@ -156,6 +160,16 @@ function onWeekChange(e: Event): void {
             @click="navigate(back)"
           >
             <ArrowLeft :size="15" aria-hidden="true" /> {{ back.label }}
+          </button>
+          <button
+            v-if="showHomeLink"
+            class="flex items-center gap-1 text-sm text-ink-muted hover:text-brand transition-colors shrink-0"
+            title="返回首页"
+            aria-label="返回首页"
+            @click="navigate({ view: homeCode })"
+          >
+            <House :size="15" aria-hidden="true" />
+            <span class="hidden sm:inline">首页</span>
           </button>
         </div>
         <div
