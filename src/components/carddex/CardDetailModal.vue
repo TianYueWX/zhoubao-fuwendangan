@@ -14,16 +14,21 @@ import type {
   DisplayCard,
 } from "./types";
 
-const props = defineProps<{
-  item: DisplayCard | null;
-  record: CardRecord | null;
-  locale: CarddexLocale;
-  icons: CardIcon[];
-  qa: CardQa[];
-  isPinned: (p: CardPrint) => boolean;
-  canPrev: boolean;
-  canNext: boolean;
-}>();
+const props = withDefaults(
+  defineProps<{
+    item: DisplayCard | null;
+    record: CardRecord | null;
+    locale: CarddexLocale;
+    icons: CardIcon[];
+    qa: CardQa[];
+    isPinned: (p: CardPrint) => boolean;
+    canPrev: boolean;
+    canNext: boolean;
+    /** 卡池页只读卡面，不需要收藏标记。 */
+    showPin?: boolean;
+  }>(),
+  { showPin: true },
+);
 const emit = defineEmits<{
   close: [];
   prev: [];
@@ -165,7 +170,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey));
               <span class="qa-badge">{{ qa.length }}</span>
             </button>
             <button
-              v-if="selected"
+              v-if="showPin && selected"
               type="button"
               :class="{ pinned: isPinned(selected) }"
               @click="emit('pin', selected)"
@@ -249,7 +254,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey));
               <ArrowLeft :size="14" aria-hidden="true" /> {{ locale === "zh" ? "上一张" : "Previous" }}
             </button>
             <button
-              v-if="selected"
+              v-if="showPin && selected"
               type="button"
               :class="{ pinned: isPinned(selected) }"
               @click="emit('pin', selected)"

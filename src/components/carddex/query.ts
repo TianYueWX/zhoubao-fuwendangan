@@ -311,6 +311,28 @@ export function buildDisplayCards(
   return sortDisplayCards(out, state.sort);
 }
 
+/**
+ * 印本模式，但同号的多语言各自成格（卡池按「印版 + 语言」逐格记账）。
+ * 其余筛选、排序语义与 buildDisplayCards 完全一致。
+ */
+export function buildPrintCards(
+  records: readonly CardRecord[],
+  state: CarddexQueryState,
+): DisplayCard[] {
+  const out: DisplayCard[] = [];
+  for (const record of records) {
+    for (const print of record.prints) {
+      if (
+        !baseMatches(record, [print], state) ||
+        !printMatchesFacet(record.base, print, state)
+      )
+        continue;
+      out.push({ key: printKey(print), base: record.base, print });
+    }
+  }
+  return sortDisplayCards(out, state.sort);
+}
+
 export function facetOptions(
   records: readonly CardRecord[],
   mode: ResultMode,

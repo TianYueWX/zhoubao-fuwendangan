@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import {
   ArrowLeft,
   ArrowUpDown,
@@ -22,6 +22,8 @@ import DeckEntryView from '@/components/deckbuilder/DeckEntry.vue';
 import DeckSortDialog from '@/components/deckbuilder/DeckSortDialog.vue';
 import ShareDeck from '@/components/deckbuilder/ShareDeck.vue';
 import { useBuilderCatalog } from '@/tools/deckbuilder/catalog';
+import { buildHeldIndex, deckHolding } from '@/tools/collection/model';
+import { useHeld } from '@/tools/collection/useHeld';
 import {
   LABELS,
   LIMITS,
@@ -52,7 +54,7 @@ import {
 } from '@/tools/deckbuilder/sort';
 import type { CardPrint } from '@/components/carddex/types';
 
-const { index, icons, loading: catalogLoading } = useBuilderCatalog();
+const { records, index, icons, loading: catalogLoading } = useBuilderCatalog();
 
 const isCloud = computed(() => store.currentDeckScope === 'cloud');
 const deck = ref<BuilderDeck | null>(null);
@@ -83,6 +85,15 @@ const neeko = computed(() => Boolean(deck.value && hasNeeko(deck.value, index.va
 const runes = computed(() => (deck.value ? runeColorCounts(deck.value, index.value) : []));
 const runeTotal = computed(() => (deck.value ? countZone(deck.value, 'rune') : 0));
 const total = computed(() => (deck.value ? countDeck(deck.value) : 0));
+/* 持有完成度:只在管理员登录后出现,其余情况不改变既有信息。 */
+const held = useHeld(records);
+const heldReady = computed(() => isEditorialAdmin.value && held.ready.value);
+const holding = computed(() => {
+  if (!deck.value || !heldReady.value) return null;
+  return deckHolding(deck.value, records.value, buildHeldIndex(held.entries.value, records.value));
+});
+onMounted(() => { void held.load(); });
+watch(heldReady, (ready) => { if (ready) void held.load(); });
 const stats = computed(() => (deck.value ? deckStats(deck.value, index.value, includeSide.value) : null));
 const fingerprint = (value: BuilderDeck): string => JSON.stringify([value.name, value.description]);
 const dirty = computed(() =>
@@ -344,6 +355,7 @@ function colorLabel(color: string): string {
           <input v-model="deck.name" class="rail-name" aria-label="卡组名称" maxlength="200" placeholder="卡组名称" />
           <p class="rail-meta">
             {{ stateLabel }} · 共 {{ total }} 张
+            <span v-if="holding" class="rail-held">持有 {{ holding.owned }} / {{ holding.total }}</span>
           </p>
 
           <nav class="rail-tabs" role="tablist">
@@ -596,6 +608,7 @@ function colorLabel(color: string): string {
   outline: 2px solid var(--color-brand);
   outline-offset: 3px;
 }
+.rail-held { display: inline-block; margin-left: 8px; color: var(--color-brand); font-variant-numeric: tabular-nums; }
 .rail-meta {
   margin: 0 0 14px;
   color: var(--color-text-muted);

@@ -13,6 +13,19 @@ import { computed, onMounted, ref } from 'vue';
 import { signIn, authState } from '@/tools/sources/auth';
 import { isSupabaseConfigured } from '@/tools/sources/config';
 
+/**
+ * 标题/导语/按钮文案可覆盖：卡池页复用同一道门，但自称「卡池门禁」。
+ * 默认值保持原样，编辑部其余页面不受影响。
+ */
+withDefaults(
+  defineProps<{
+    title?: string;
+    lead?: string;
+    submitLabel?: string;
+  }>(),
+  { title: '编务门禁', lead: '', submitLabel: '登入编务' },
+);
+
 const email = ref('');
 const password = ref('');
 const busy = ref(false);
@@ -49,8 +62,9 @@ async function submit(): Promise<void> {
   <div class="fade-in max-w-[820px] mx-auto">
     <header>
       <h1 class="font-display font-black text-ink leading-tight text-[28px] lg:text-[38px]">
-        编务门禁
+        {{ title }}
       </h1>
+      <p v-if="lead" class="mt-3 max-w-[520px] text-sm text-ink-muted leading-relaxed">{{ lead }}</p>
       <div class="hairline mt-7"></div>
     </header>
 
@@ -112,7 +126,7 @@ VITE_SUPABASE_ANON_KEY=&lt;anon / publishable key&gt;</pre>
           class="btn-brand mt-6 w-full px-4 py-2 text-sm"
           :disabled="busy"
         >
-          {{ busy ? '核对中…' : '登入编务' }}
+          {{ busy ? '核对中…' : submitLabel }}
         </button>
       </form>
 

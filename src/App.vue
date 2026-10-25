@@ -110,6 +110,7 @@ const needsCodeProp = computed(() =>
 const homeCode = HOME_CODE;
 const isHome = computed(() => store.currentView === homeCode);
 const isCarddex = computed(() => store.currentView === "carddex");
+const isCollection = computed(() => store.currentView === "collection");
 const isBuilder = computed(() => store.currentView === "builder");
 const isDeck = computed(() => store.currentView === "deck");
 
@@ -230,7 +231,7 @@ function onWeekChange(e: Event): void {
           ? 'w-full'
           : isBuilder || store.currentView === 'rulebook'
             ? 'flex-1 w-full min-w-0'
-          : isCarddex
+          : isCarddex || isCollection
             ? 'flex-1 w-full max-w-[1720px] mx-auto px-4 lg:px-8 py-4'
             : 'flex-1 w-full max-w-[1720px] mx-auto px-4 lg:px-8 py-8'
       "

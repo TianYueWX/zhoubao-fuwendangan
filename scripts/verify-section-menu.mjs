@@ -38,6 +38,7 @@ const groupCases = {
   builder: 'reference',
   rules: 'reference',
   carddex: 'reference',
+  collection: 'reference',
   chain: 'reference',
   rank: 'reference',
   games: 'reference',
@@ -72,6 +73,12 @@ check('列全部 7 个已登记工具(含未进 inNav 的小工具)',
   JSON.stringify(keys(ref)) === JSON.stringify(['builder', 'rules', 'carddex', 'chain', 'rank', 'games', 'booster']),
   JSON.stringify(keys(ref)));
 check('当前项 carddex 高亮', ref.find((i) => i.key === 'carddex').active === true && ref.filter((i) => i.active).length === 1);
+check('访客看不到需登录的「我的卡池」', !keys(ref).includes('collection'), JSON.stringify(keys(ref)));
+const refAdmin = sectionMenuItems('carddex', { hasPackages: false, isEditorialAdmin: true });
+check('管理员多出「我的卡池」,排在卡牌查询之后',
+  JSON.stringify(keys(refAdmin)) === JSON.stringify(['builder', 'rules', 'carddex', 'collection', 'chain', 'rank', 'games', 'booster']),
+  JSON.stringify(keys(refAdmin)));
+check('部分工具需登录时,栏目其它入口不被清空', keys(refAdmin).length > 1);
 
 console.log('\n== 5. 云端栏目菜单 ==');
 const cloud = sectionMenuItems('qa', { hasPackages: false, isEditorialAdmin: false });
@@ -97,7 +104,7 @@ check('期刊系子页 → 返回期刊 #/journal', ['archive', 'issue', 'import
 check('编辑部子页 → 返回编辑部 #/editorial', sameTarget('editorial-cards', { view: 'editorial', label: '返回编辑部' }));
 check('期刊首页 → 返回首页(栏目首页之上是工具台)', sameTarget('journal', { view: 'home', label: '返回首页' }));
 check('编辑部首页 → 返回首页(栏目首页之上是工具台)', sameTarget('editorial', { view: 'home', label: '返回首页' }));
-check('参考资料(含构筑卡组) → 返回首页', ['builder', 'rules', 'carddex', 'chain', 'rank', 'games', 'booster'].every((v) => sameTarget(v, { view: 'home', label: '返回首页' })));
+check('参考资料(含构筑卡组) → 返回首页', ['builder', 'rules', 'carddex', 'collection', 'chain', 'rank', 'games', 'booster'].every((v) => sameTarget(v, { view: 'home', label: '返回首页' })));
 check('云端 → 返回首页', sameTarget('qa', { view: 'home', label: '返回首页' }));
 check('工具台 → 返回首页(自我)', sameTarget('home', { view: 'home', label: '返回首页' }));
 

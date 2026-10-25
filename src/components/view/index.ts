@@ -18,6 +18,7 @@ import OverviewView from "./OverviewView.vue";
 import HeroLegendView from "./HeroLegendView.vue";
 import CardsView from "./CardsView.vue";
 import CarddexView from "./CarddexView.vue";
+import CollectionView from "./CollectionView.vue";
 import RegionView from "./RegionView.vue";
 import DecksView from "./DecksView.vue";
 import DeckBuilderView from "./DeckBuilderView.vue";
@@ -68,6 +69,8 @@ export const ViewComponents: Record<string, unknown> = {
   rules: RulesQaView,
   rulebook: RuleBookView,
   carddex: CarddexView,
+  /* 我的卡池:管理员私有的持有台账 */
+  collection: CollectionView,
 
   /* 小工具:结算链推演(卡池来自内置卡表,无需数据包) */
   chain: ChainBoardView,

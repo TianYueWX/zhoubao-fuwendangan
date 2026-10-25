@@ -231,6 +231,16 @@ export const TOOLS: readonly ToolDef[] = Object.freeze([
     unavailableHint: "需要配置公开只读的 Supabase 卡牌数据源",
   },
   {
+    code: "collection",
+    label: "我的卡池",
+    short: "卡池",
+    desc: "管理员私有的持有卡台账:按印本 + 语言逐张记账,并与构筑页连通",
+    group: "reference",
+    source: "supabase",
+    requiresAuth: true,
+    unavailableHint: "需要管理员登录,以及已经建好的 web_collection 表",
+  },
+  {
     code: "chain",
     short: "结算链",
     label: "结算链推演",
@@ -471,8 +481,10 @@ export function sectionMenuItems(
   let tools = toolsOf(group);
   // 期刊本体入口已由「本期」承载,不重复
   if (group === "journal") tools = tools.filter((t) => t.code !== "journal");
-  if (tools.some((t) => t.requiresAuth) && !opts.isEditorialAdmin) {
-    tools = tools.filter((t) => t.code === group);
+  // 需要管理员的工具只藏它自己；整组都需登录时才收敛到栏目首页。
+  if (!opts.isEditorialAdmin) {
+    const open = tools.filter((t) => !t.requiresAuth);
+    tools = open.length ? open : tools.filter((t) => t.code === group);
   }
 
   for (const t of tools) {
