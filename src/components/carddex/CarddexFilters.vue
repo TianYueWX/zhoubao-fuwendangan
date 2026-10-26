@@ -625,7 +625,7 @@ function applyDraft(): void {
   background: #953f38;
   border-color: #953f38;
 }
-.facet:is(.include, .require, .exclude) img {
+.color-facet:is(.include, .require, .exclude) img {
   filter: brightness(0) invert(1);
 }
 /* 已经反过色的白图标落到实底芯片上要还原，否则会变成黑块。 */
