@@ -7,12 +7,13 @@
  * 改动即时上云（乐观更新 + 合并 + 失败重试）。
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { ChevronDown, Download, RefreshCw, Search, X } from "@lucide/vue";
+import { ArrowUpDown, Download, RefreshCw, Search, X } from "@lucide/vue";
 import EditorialGate from "@/components/admin/EditorialGate.vue";
 import CardDetailModal from "@/components/carddex/CardDetailModal.vue";
+import CarddexSortDialog from "@/components/carddex/CarddexSortDialog.vue";
 import CollectionFilters from "@/components/collection/CollectionFilters.vue";
 import CollectionTile from "@/components/collection/CollectionTile.vue";
-import type { ActiveFilter, CarddexLocale, FilterType } from "@/components/carddex/types";
+import type { ActiveFilter, CarddexLocale, FilterType, SortRule } from "@/components/carddex/types";
 import { authState, isEditorialAdmin } from "@/tools/sources/auth";
 import { useBuilderCatalog } from "@/tools/deckbuilder/catalog";
 import { languageLabel, printVersion } from "@/tools/collection/model";
@@ -24,21 +25,15 @@ import {
   type CollectionItem,
 } from "@/tools/collection/query";
 import {
+  DEFAULT_SORT,
   readUi,
   writeUi,
-  type CollectionSort,
   type CollectionUi,
   type CollectionViewMode,
 } from "@/tools/collection/storage";
 import { useCollection } from "@/tools/collection/useCollection";
 
 const LOCALE: CarddexLocale = "zh";
-const SORTS: { id: CollectionSort; label: string }[] = [
-  { id: "default", label: "默认 · 系列 → 印本号 → 简中先" },
-  { id: "name", label: "名称" },
-  { id: "quantity", label: "持有数量（多 → 少）" },
-  { id: "updated", label: "最近更新" },
-];
 const FILTER_LABELS: Record<FilterType, string> = {
   series: "系列",
   category: "类别",
@@ -161,8 +156,11 @@ function setView(view: CollectionViewMode): void {
   ui.value = { ...ui.value, view };
 }
 
-function setSort(sort: CollectionSort): void {
-  ui.value = { ...ui.value, sort };
+function applySort(rules: SortRule[]): void {
+  ui.value = {
+    ...ui.value,
+    sort: rules.length ? rules.map((rule) => ({ ...rule })) : DEFAULT_SORT.map((rule) => ({ ...rule })),
+  };
   sortOpen.value = false;
 }
 
@@ -359,30 +357,15 @@ function closeDrawer(): void {
               </button>
             </div>
 
-            <div class="sort-wrap">
-              <button
-                type="button"
-                class="tool-btn"
-                :aria-expanded="sortOpen"
-                aria-haspopup="listbox"
-                @click="sortOpen = !sortOpen"
-              >
-                排序<ChevronDown :size="12" aria-hidden="true" />
-              </button>
-              <div v-if="sortOpen" class="sort-menu" role="listbox" aria-label="排序方式">
-                <button
-                  v-for="option in SORTS"
-                  :key="option.id"
-                  type="button"
-                  role="option"
-                  :aria-selected="ui.sort === option.id"
-                  :class="{ active: ui.sort === option.id }"
-                  @click="setSort(option.id)"
-                >
-                  {{ option.label }}
-                </button>
-              </div>
-            </div>
+            <button
+              type="button"
+              class="tool-btn"
+              aria-haspopup="dialog"
+              @click="sortOpen = true"
+            >
+              <ArrowUpDown :size="13" aria-hidden="true" /> 排序
+              <b>{{ ui.sort.length }}</b>
+            </button>
 
             <button
               type="button"
@@ -502,6 +485,13 @@ function closeDrawer(): void {
       </div>
     </Teleport>
 
+    <CarddexSortDialog
+      :open="sortOpen"
+      :locale="LOCALE"
+      :rules="ui.sort"
+      @close="sortOpen = false"
+      @apply="applySort"
+    />
     <CardDetailModal
       v-if="detailItem && detailRecord"
       :item="detailItem"
@@ -654,10 +644,6 @@ function closeDrawer(): void {
   color: var(--color-brand-ink);
 }
 
-.sort-wrap {
-  position: relative;
-}
-
 .tool-btn {
   display: inline-flex;
   align-items: center;
@@ -688,40 +674,6 @@ function closeDrawer(): void {
   color: var(--color-brand);
   font-size: 9px;
   font-variant-numeric: tabular-nums;
-}
-
-.sort-menu {
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
-  z-index: 40;
-  min-width: 210px;
-  padding: 4px;
-  border: 1px solid var(--color-card-border);
-  border-radius: 8px;
-  background: var(--color-card-bg);
-  box-shadow: 0 14px 30px -22px var(--color-shadow);
-}
-
-.sort-menu button {
-  display: block;
-  width: 100%;
-  padding: 7px 9px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--color-text-muted);
-  font-size: 11px;
-  text-align: left;
-  cursor: pointer;
-}
-
-.sort-menu button:hover {
-  background: var(--color-brand-soft);
-}
-
-.sort-menu button.active {
-  color: var(--color-brand);
 }
 
 .active-strip {

@@ -2,14 +2,50 @@
  * 卡池的本机状态：一份「已确认的云端快照」缓存，加一份「还没写成功的格子」清单。
  * 刷新页面时先把缓存画出来，再拉云端；失败的格子从 pending 里继续重试。
  */
-import type { ActiveFilter, NumericFilters } from "@/components/carddex/types";
+import type { ActiveFilter, NumericFilters, SortField, SortRule } from "@/components/carddex/types";
 import { entriesFromSnapshot, toSnapshot, type CollectionEntry, type CollectionMap } from "./model";
 
 export const CACHE_KEY = "rune.collection.v1";
 export const UI_KEY = "rune.collection.ui.v1";
 
 export type CollectionViewMode = "owned" | "all";
-export type CollectionSort = "default" | "name" | "quantity" | "updated";
+
+/** 排序规则与卡牌查询同款：一条主序 + 若干备序，最后回落到默认次序。 */
+export const DEFAULT_SORT: SortRule[] = [{ id: "default-card-no", field: "cardNo", asc: true }];
+
+const SORT_FIELDS: readonly SortField[] = [
+  "name",
+  "cardNo",
+  "category",
+  "color",
+  "series",
+  "rarity",
+  "power",
+  "energy",
+  "returnEnergy",
+];
+
+function isSortField(value: unknown): value is SortField {
+  return typeof value === "string" && (SORT_FIELDS as readonly string[]).includes(value);
+}
+
+function readSort(value: unknown): SortRule[] {
+  // 旧版本存的是固定枚举，迁移成等价的一条规则。
+  if (value === "name") return [{ id: "name", field: "name", asc: true }];
+  if (!Array.isArray(value)) return DEFAULT_SORT.map((rule) => ({ ...rule }));
+  const rules: SortRule[] = [];
+  for (const raw of value) {
+    if (!raw || typeof raw !== "object") continue;
+    const rule = raw as Partial<SortRule>;
+    if (!isSortField(rule.field)) continue;
+    rules.push({
+      id: typeof rule.id === "string" && rule.id ? rule.id : `${rule.field}-${rules.length}`,
+      field: rule.field,
+      asc: rule.asc !== false,
+    });
+  }
+  return rules.length ? rules : DEFAULT_SORT.map((rule) => ({ ...rule }));
+}
 
 export interface CollectionCache {
   formatVersion: 1;
@@ -21,7 +57,7 @@ export interface CollectionCache {
 
 export interface CollectionUi {
   view: CollectionViewMode;
-  sort: CollectionSort;
+  sort: SortRule[];
   filters: ActiveFilter[];
   numeric: NumericFilters;
   languages: string[];
@@ -37,7 +73,7 @@ const DEFAULT_NUMERIC: NumericFilters = {
 
 export const DEFAULT_UI: CollectionUi = {
   view: "owned",
-  sort: "default",
+  sort: DEFAULT_SORT,
   filters: [],
   numeric: DEFAULT_NUMERIC,
   languages: [],
@@ -113,8 +149,7 @@ export function readUi(): CollectionUi {
   const raw = readRaw<Partial<CollectionUi>>(UI_KEY);
   if (!raw || typeof raw !== "object") return { ...DEFAULT_UI };
   const view: CollectionViewMode = raw.view === "all" ? "all" : "owned";
-  const sort: CollectionSort =
-    raw.sort === "name" || raw.sort === "quantity" || raw.sort === "updated" ? raw.sort : "default";
+  const sort = readSort(raw.sort);
   return {
     view,
     sort,

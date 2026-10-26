@@ -10,6 +10,8 @@ import type {
   DisplayCard,
   FilterType,
   NumericFilters,
+  SortField,
+  SortRule,
 } from "@/components/carddex/types";
 import {
   collectionKey,
@@ -18,7 +20,7 @@ import {
   type CollectionMap,
   type CollectionVersion,
 } from "./model";
-import type { CollectionSort, CollectionViewMode } from "./storage";
+import { DEFAULT_SORT, type CollectionViewMode } from "./storage";
 
 export interface CollectionItem extends DisplayCard {
   /** 这一格的持有数量；0 表示没有。 */
@@ -29,7 +31,7 @@ export interface CollectionItem extends DisplayCard {
 export interface CollectionQueryInput {
   search: string;
   view: CollectionViewMode;
-  sort: CollectionSort;
+  sort: SortRule[];
   filters: ActiveFilter[];
   numeric: NumericFilters;
   languages: string[];
@@ -79,7 +81,7 @@ export function buildCollectionItems(
     banned: "all",
     filters: input.filters,
     numeric: input.numeric,
-    sort: [{ id: "collection-card-no", field: "cardNo", asc: true }],
+    sort: [],
   };
   const languages = new Set(input.languages.map((v) => v.toUpperCase()));
   const versions = new Set(input.versions);
@@ -106,21 +108,67 @@ function defaultOrder(a: CollectionItem, b: CollectionItem): number {
   );
 }
 
-export function sortItems(items: CollectionItem[], sort: CollectionSort): CollectionItem[] {
+const TEXT_FIELDS = new Set<SortField>(["name", "cardNo", "category", "color", "series", "rarity"]);
+
+function numeric(value: number | null | undefined): number {
+  return typeof value === "number" ? value : -1;
+}
+
+function sortValue(item: CollectionItem, field: SortField): string | number {
+  const { base, print } = item;
+  if (TEXT_FIELDS.has(field)) {
+    switch (field) {
+      case "name":
+        return base.nameCn || "";
+      case "cardNo":
+        return print?.cardNo || base.cardNo;
+      case "category":
+        return base.categories[0] ?? "";
+      case "color":
+        return base.colors[0] ?? "";
+      case "series":
+        return base.series || "";
+      default:
+        return print?.rarity || base.rarity || "";
+    }
+  }
+  switch (field) {
+    case "power":
+      return numeric(base.power);
+    case "energy":
+      return numeric(base.energy);
+    default:
+      return numeric(base.returnEnergy);
+  }
+}
+
+function compareField(a: CollectionItem, b: CollectionItem, field: SortField, asc: boolean): number {
+  const left = sortValue(a, field);
+  const right = sortValue(b, field);
+  let diff: number;
+  if (typeof left === "number" && typeof right === "number") {
+    diff = left - right;
+  } else if (field === "cardNo") {
+    diff = String(left).localeCompare(String(right), undefined, { numeric: true });
+  } else if (field === "name") {
+    diff = String(left).localeCompare(String(right), "zh-CN");
+  } else {
+    diff = String(left).localeCompare(String(right));
+  }
+  return asc ? diff : -diff;
+}
+
+/** 多条件排序：逐条比规则，全相等时回落到「系列 → 印本号 → 简中先」。 */
+export function sortItems(items: readonly CollectionItem[], rules: readonly SortRule[]): CollectionItem[] {
   const out = [...items];
-  if (sort === "name") {
-    out.sort((a, b) => a.base.nameCn.localeCompare(b.base.nameCn, "zh-CN") || defaultOrder(a, b));
-    return out;
-  }
-  if (sort === "quantity") {
-    out.sort((a, b) => b.quantity - a.quantity || defaultOrder(a, b));
-    return out;
-  }
-  if (sort === "updated") {
-    out.sort((a, b) => (b.updatedAt || "").localeCompare(a.updatedAt || "") || defaultOrder(a, b));
-    return out;
-  }
-  out.sort(defaultOrder);
+  const active = rules.length ? rules.filter((rule) => rule && rule.field) : DEFAULT_SORT;
+  out.sort((a, b) => {
+    for (const rule of active) {
+      const diff = compareField(a, b, rule.field, rule.asc !== false);
+      if (diff !== 0) return diff;
+    }
+    return defaultOrder(a, b);
+  });
   return out;
 }
 

@@ -133,7 +133,7 @@ try {
     assert.equal((await rows()).length,1,JSON.stringify(await rows()));
     assert.equal(await js("document.querySelectorAll('.collection-tile').length"),1);
   });
-  await test('切到全部卡:整张卡表逐印本成格,搜索与排序可用',async()=>{
+  await test('切到全部卡:整张卡表逐印本成格,搜索与多条件排序可用',async()=>{
     await clickText('全部卡');
     await wait("document.querySelectorAll('.collection-tile').length>10");
     const total=await js("Number(document.querySelector('.result-count').textContent.replace(/[^0-9]/g,''))");
@@ -143,19 +143,24 @@ try {
     assert.equal(await js("document.querySelectorAll('.collection-tile').length"),1);
     await js("(()=>{const el=document.querySelector('.search-box input');el.value='';el.dispatchEvent(new Event('input',{bubbles:true}))})()");
     await sleep(400);
-    await click('.sort-wrap .tool-btn');
-    await wait("document.querySelector('.sort-menu')");
-    await clickText('持有数量（多 → 少）');
-    const first=await js("document.querySelector('.collection-tile .tile-stepper b').textContent");
-    assert.equal(first,'2');
+    await js("[...document.querySelectorAll('.tool-btn')].find(b=>b.textContent.includes('排序')).click()");
+    await wait("document.querySelector('dialog.dialog')");
+    assert(await js("document.querySelector('dialog.dialog').innerText.includes('多条件排序')"));
+    await js("(()=>{const s=document.querySelector('.rule select');s.value='name';s.dispatchEvent(new Event('change',{bubbles:true}))})()");
+    await click('dialog.dialog .add');
+    assert.equal(await js("document.querySelectorAll('dialog.dialog .rule').length"),2);
+    await click('dialog.dialog footer .primary');
+    await wait("!document.querySelector('dialog.dialog')");
+    assert(await js("document.querySelectorAll('.collection-tile').length>10"));
+    assert.equal(await js("[...document.querySelectorAll('.tool-btn')].find(b=>b.textContent.includes('排序')).querySelector('b').textContent"),'2');
     await shot('desktop-all');
   });
-  await test('刷新后记住「全部卡」与排序,读的是本机 UI 偏好',async()=>{
+  await test('刷新后记住「全部卡」与排序规则,读的是本机 UI 偏好',async()=>{
     await cdp('Page.reload');
     await wait("document.querySelectorAll('.collection-tile').length>10");
     assert(await js("document.querySelector('.mode-switch button:last-child').classList.contains('active')"));
     assert(await js("JSON.parse(localStorage.getItem('rune.collection.ui.v1')).view==='all'"));
-    assert.equal(await js("document.querySelector('.collection-tile .tile-stepper b').textContent"),'2');
+    assert(await js("(()=>{const u=JSON.parse(localStorage.getItem('rune.collection.ui.v1'));return Array.isArray(u.sort)&&u.sort.length===2&&u.sort[0].field==='name'})()"));
   });
   await test('手机 390/430:单列工具条不溢出,筛选变抽屉',async()=>{
     for(const width of [390,430]){

@@ -24,7 +24,7 @@ import {
   toSnapshot,
   totalQuantity,
 } from '@/tools/collection/model';
-import { readCache, readUi, writeCache, writeUi } from '@/tools/collection/storage';
+import { UI_KEY, readCache, readUi, writeCache, writeUi } from '@/tools/collection/storage';
 import { buildCollectionItems, collectionAxes, collectionFacets, sortItems } from '@/tools/collection/query';
 import { buildCarddexData } from '@/components/carddex/data';
 import { readFileSync } from 'node:fs';
@@ -142,7 +142,14 @@ check('坏数据静默丢弃', readCache(owner) === null);
 
 writeUi({ ...readUi(), view: 'all' });
 check('默认视图是「我有的」', readUi().view === 'all');
-check('UI 默认排序 default', readUi().sort === 'default');
+check(
+  'UI 默认排序是一条「编号升序」规则',
+  readUi().sort.length === 1 && readUi().sort[0].field === 'cardNo' && readUi().sort[0].asc === true,
+);
+bucket.set(UI_KEY, JSON.stringify({ sort: 'name' }));
+check('旧版字符串排序迁移成规则', readUi().sort.length === 1 && readUi().sort[0].field === 'name');
+bucket.set(UI_KEY, JSON.stringify({ sort: [{ field: 'nope' }] }));
+check('非法字段回落默认规则', readUi().sort.length === 1 && readUi().sort[0].field === 'cardNo');
 
 console.log('\n== 8. 真实卡表数据通路 ==');
 const csv = (file) => Papa.parse(readFileSync(file, 'utf8'), { header: true, skipEmptyLines: true }).data;
@@ -157,7 +164,7 @@ const liveFacets = collectionFacets(liveRecords);
 check('分面选项与数值边界非空', Object.values(liveFacets.options).every((list) => list.length > 0) && liveFacets.bounds.energy.max > 0);
 const numeric = { energy: { min: 0, max: 99 }, returnEnergy: { min: 0, max: 99 }, power: { min: 0, max: 99 } };
 const query = (overrides = {}) => ({
-  search: '', view: 'all', sort: 'default', filters: [], numeric,
+  search: '', view: 'all', sort: [], filters: [], numeric,
   languages: [], versions: [], ...overrides,
 });
 const seedNo = printRows[0].card_no_extend;
@@ -173,8 +180,29 @@ const ownedItems = buildCollectionItems(liveRecords, query({ view: 'owned' }), l
 check('我有的:只留持有过的印本', ownedItems.length === 2 && ownedItems.every((item) => item.quantity > 0), ownedItems.map((i) => `${i.print.cardNo}/${i.print.language}:${i.quantity}`).join(' '));
 const searched = buildCollectionItems(liveRecords, query({ search: seedNo }), liveEntries);
 check('搜索按印本号命中并回带数量', searched.some((item) => item.print.cardNo === seedNo && item.quantity === 2));
-const sortedByQuantity = sortItems(ownedItems, 'quantity');
-check('按持有数量排序:多的在前', sortedByQuantity[0].quantity === 2, String(sortedByQuantity[0].quantity));
+const byName = sortItems(allItems, [{ id: 'name', field: 'name', asc: true }]);
+check(
+  '自定义排序:卡名升序',
+  byName.length === allItems.length && byName.every((item, i) => i === 0 || item.base.nameCn.localeCompare(byName[i - 1].base.nameCn, 'zh-CN') >= 0),
+);
+const byPowerDesc = sortItems(allItems, [{ id: 'power', field: 'power', asc: false }]);
+check('自定义排序:战力降序', byPowerDesc[0].base.power >= byPowerDesc[byPowerDesc.length - 1].base.power || byPowerDesc[0].base.power === -1);
+const multi = sortItems(allItems, [
+  { id: 'series', field: 'series', asc: true },
+  { id: 'card-no', field: 'cardNo', asc: false },
+]);
+check(
+  '多条件排序:先系列升序,同系列内编号降序',
+  multi.every((item, i) => i === 0 || item.base.series.localeCompare(multi[i - 1].base.series) >= 0),
+  multi.slice(0, 3).map((i) => `${i.base.series}/${i.base.cardNo}`).join(' '),
+);
+const sameSeries = multi.filter((item) => item.base.series === multi[0].base.series);
+check(
+  '多条件排序:同系列内按编号降序',
+  sameSeries.every((item, i) => i === 0 || item.print.cardNo.localeCompare(sameSeries[i - 1].print.cardNo, undefined, { numeric: true }) <= 0),
+  sameSeries.slice(0, 3).map((i) => i.print.cardNo).join(' '),
+);
+check('无规则时回落默认次序(系列优先)', sortItems(allItems, [])[0].base.series === allItems.map((i) => i.base.series).sort()[0]);
 
 console.log(`\n结果: ${pass} 通过 / ${fail} 失败`);
 process.exit(fail === 0 ? 0 : 1);
