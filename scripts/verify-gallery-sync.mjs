@@ -21,8 +21,10 @@ import { toGalleryCard, fetchAllGalleryCards, galleryPath } from '../src/tools/s
 import { parseRetryAfterMs } from '../src/tools/sync/riftboundApi.ts';
 import { fetchGalleryDataset, parseSeriesCodes } from '../src/tools/sync/galleryRun.ts';
 import {
-  createGalleryReview, galleryState, buildGalleryOperation, galleryBaseCandidates, TARGET_FIELDS
+  createGalleryReview, galleryState, buildGalleryOperation, galleryBaseCandidates, TARGET_FIELDS,
+  GALLERY_PRINT_FIELDS
 } from '../src/tools/sync/galleryReview.ts';
+import { rotationFor } from '../src/tools/sync/rotation.ts';
 import { indexExisting } from '../src/tools/sync/reviewIndex.ts';
 import {
   allFieldsSelected, applyFieldSelection, clearFieldSelection, fieldSelectionPlan, selectedFieldCount
@@ -675,6 +677,34 @@ test('手输系列代码：多分隔符、大小写归一、去重、空串', ()
   assert.deepEqual(parseSeriesCodes('v-e-n!'), ['V-E-N']);
   assert.deepEqual(parseSeriesCodes(''), []);
   assert.deepEqual(parseSeriesCodes('   '), []);
+});
+
+test('卡图朝向：战场（含指示物）落库 -90，其余 0', () => {
+  assert.equal(rotationFor('SC', ['战场']), -90);
+  assert.equal(rotationFor('SC', ['战场指示物']), -90);
+  assert.equal(rotationFor('sc', ['指示物战场']), -90);
+  assert.equal(rotationFor('EN', ['战场']), -90);
+  assert.equal(rotationFor('SC', ['单位', '传奇']), 0);
+  assert.equal(rotationFor('SC', null), 0);
+  assert.equal(rotationFor('SC', []), 0);
+});
+
+test('卡图朝向：只在新增时写入，重复同步不回写人工值', () => {
+  assert.equal(GALLERY_PRINT_FIELDS.includes('rotate_deg'), false);
+  const ex = existingSnapshot({
+    prints: [{
+      id: 'print-1', card_id: 'base-1', card_no_extend: 'UNL-131', language: 'EN',
+      rarity_name: '不凡', extend_rarity_name: '平卡', img_cdn: 'https://cdn/old.png',
+      artist: 'Artist', series: 'UNL', flavor_text_cn: null, flavor_text_en: null,
+      is_promo: false, rotate_deg: -90
+    }]
+  });
+  const rows = createGalleryReview(baseDataset());
+  const index = makeIndex(ex, rows);
+  const print = rows.find((r) => r.table === 'card_prints');
+  print.draft.rotate_deg = 0;
+  const st = galleryState(print, rows, ex, index);
+  assert.equal(st.changed.includes('rotate_deg'), false);
 });
 
 console.log(`\n──────── 结果：${passed} 通过 ────────`);

@@ -204,7 +204,14 @@ function printPatch(row: PrintPayload): Record<string, unknown> {
       is_promo: row.is_promo,
       series: row.series,
       flavor_text_cn: row.flavor_text_cn,
-      flavor_text_en: row.flavor_text_en
+      flavor_text_en: row.flavor_text_en,
+      /*
+       * rotate_deg 是 NOT NULL 列：空串/NaN/null 一律落到 0，
+       * 不能走 coerceNumericNulls 的「空转 null」语义，否则写入会被约束拒绝。
+       */
+      rotate_deg: Number.isFinite(Number(row.rotate_deg))
+        ? Number(row.rotate_deg)
+        : 0
     },
     NUMERIC_PRINT_FIELDS
   );

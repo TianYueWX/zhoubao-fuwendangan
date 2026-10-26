@@ -90,7 +90,25 @@ function printFromRow(r: Row): CardPrint {
     series: text(r.series),
     flavorCn: text(r.flavor_text_cn),
     flavorEn: text(r.flavor_text_en),
+    rotateDeg: numberOrNull(r.rotate_deg),
   };
+}
+
+/**
+ * 卡图展示角度。card_prints.rotate_deg 是唯一事实来源。
+ *
+ * 只有该字段缺失（内存里旧结构的缓存、或库还没跑迁移）时才回退到
+ * 「战场」类目推断——正常路径不应再读 categories 来决定朝向。
+ * 回退用子串匹配，和同步侧 rotationFor() 的判定保持一致：
+ * 战场指示物同样画在竖版画布上，缺列时也要按 -90 显示。
+ */
+export function printRotation(
+  categories: readonly string[] | undefined,
+  rotateDeg: number | null | undefined,
+): number {
+  if (typeof rotateDeg === "number" && Number.isFinite(rotateDeg))
+    return rotateDeg;
+  return categories?.some((c) => c.includes("战场")) ? -90 : 0;
 }
 
 export function printKey(p: Pick<CardPrint, "cardNo" | "language">): string {

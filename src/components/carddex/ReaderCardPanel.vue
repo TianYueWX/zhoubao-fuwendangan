@@ -4,7 +4,7 @@ import { ArrowLeft, ArrowUp, Bookmark, BookmarkCheck, Maximize2, Minus, X } from
 import CarddexImage from './CarddexImage.vue';
 import CardEffectText from './CardEffectText.vue';
 import { buildDisplayCards, DEFAULT_QUERY } from './query';
-import { printKey } from './data';
+import { printKey, printRotation } from './data';
 import { loadPins, savePins } from './storage';
 import { useBuilderCatalog } from '@/tools/deckbuilder/catalog';
 import type { CarddexLocale, DisplayCard, PinnedPrint } from './types';
@@ -148,7 +148,7 @@ onUnmounted(() => { window.removeEventListener('storage', syncPins); window.remo
           <button class="detail-back" @click="detail = null"><ArrowLeft :size="15" /> {{ labels.back }}</button>
           <button class="panel-button pin-action" :class="{ pinned: detailPinned }" :disabled="!detail.print" :aria-pressed="detailPinned" @click="togglePin"><BookmarkCheck v-if="detailPinned" :size="16" /><Bookmark v-else :size="16" />{{ detailPinned ? labels.unpin : labels.pin }}</button>
         </div>
-        <CarddexImage :src="detail.print?.imageUrl || ''" :fallback="detail.print?.ttsUrl || ''" :alt="cardTitle(detail)" :landscape="detail.base.categories.includes('战场')" eager />
+        <CarddexImage :src="detail.print?.imageUrl || ''" :fallback="detail.print?.ttsUrl || ''" :alt="cardTitle(detail)" :rotate="printRotation(detail.base.categories, detail.print?.rotateDeg)" eager />
         <h3>{{ cardTitle(detail) }}</h3>
         <p class="detail-meta">{{ detail.print?.cardNo || detail.base.cardNo }} · {{ detail.base.categories.join(' / ') }}<br />{{ labels.energy }} {{ detail.base.energy ?? '—' }} · {{ labels.power }} {{ detail.base.power ?? '—' }}<span v-if="detail.base.banned"> · {{ labels.banned }}</span></p>
         <label v-if="detailRecord?.prints.length" class="print-picker">{{ labels.prints }}<select :value="detail.print ? printKey(detail.print) : ''" @change="selectPrint"><option v-for="print in detailRecord.prints" :key="printKey(print)" :value="printKey(print)">{{ print.cardNo }} · {{ print.language }}</option></select></label>
@@ -163,7 +163,7 @@ onUnmounted(() => { window.removeEventListener('storage', syncPins); window.remo
           <p v-if="!entry.results.length" class="panel-state no-results">{{ labels.noResults }}</p>
           <div class="panel-card-grid">
             <button v-for="card in entry.results.slice(0, entry.limit)" :key="card.key" class="reader-card-tile" :aria-label="cardTitle(card)" @click="detail = card">
-              <CarddexImage :src="card.print?.imageUrl || ''" :fallback="card.print?.ttsUrl || ''" :alt="cardTitle(card)" :landscape="card.base.categories.includes('战场')" />
+              <CarddexImage :src="card.print?.imageUrl || ''" :fallback="card.print?.ttsUrl || ''" :alt="cardTitle(card)" :rotate="printRotation(card.base.categories, card.print?.rotateDeg)" />
               <span>{{ cardTitle(card) }}</span>
             </button>
           </div>
@@ -174,7 +174,7 @@ onUnmounted(() => { window.removeEventListener('storage', syncPins); window.remo
         <p v-if="!pinnedCards.length" class="panel-state">{{ labels.noPins }}</p>
         <div class="panel-card-grid pinned-grid">
           <button v-for="card in pinnedCards.slice(0, pinLimit)" :key="card.key" class="reader-card-tile" :aria-label="cardTitle(card)" @click="detail = card">
-            <CarddexImage :src="card.print?.imageUrl || ''" :fallback="card.print?.ttsUrl || ''" :alt="cardTitle(card)" :landscape="card.base.categories.includes('战场')" />
+            <CarddexImage :src="card.print?.imageUrl || ''" :fallback="card.print?.ttsUrl || ''" :alt="cardTitle(card)" :rotate="printRotation(card.base.categories, card.print?.rotateDeg)" />
             <span>{{ cardTitle(card) }}</span>
           </button>
         </div>

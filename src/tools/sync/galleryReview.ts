@@ -122,7 +122,8 @@ export function createGalleryReview(dataset: GalleryDataset): GalleryReviewRow[]
       img_cdn: print.img_cdn,
       artist: print.artist,
       series: print.series,
-      is_promo: print.is_promo
+      is_promo: print.is_promo,
+      rotate_deg: print.rotate_deg
     }
     const row: GalleryReviewRow = {
       key: `gprint:${print.card_no_extend}:${print.language}`,
@@ -247,7 +248,12 @@ export function galleryState(
     'card_no_extend',
     'language',
     'card_id',
-    ...GALLERY_PRINT_FIELDS
+    ...GALLERY_PRINT_FIELDS,
+    /*
+     * rotate_deg 只在新增时写入：放进 GALLERY_PRINT_FIELDS 会让每次同步
+     * 都把策展人在后台改过的朝向改回计算值。
+     */
+    'rotate_deg'
   ]
   const updateFields = [...GALLERY_PRINT_FIELDS]
   const reason = normalized.error

@@ -11,11 +11,37 @@ const props = withDefaults(
     src: string;
     fallback?: string;
     alt: string;
-    landscape?: boolean;
+    /**
+     * 卡图旋转角（度，CSS 约定，负值逆时针），由 card_prints.rotate_deg 驱动。
+     * ±90 时框切成 1040×744 横版，0/180 保持 744×1040 竖版。
+     */
+    rotate?: number;
     eager?: boolean;
   }>(),
-  { fallback: "", landscape: false, eager: false },
+  { fallback: "", rotate: 0, eager: false },
 );
+
+/** 横版框的宽高比（744/1040 的倒数），旋转 90° 后按此比例放大铺满。 */
+const FRAME_RATIO = 1040 / 744;
+
+const turn = computed(() => {
+  const deg = Number.isFinite(props.rotate) ? props.rotate : 0;
+  return ((deg % 360) + 360) % 360;
+});
+const quarterTurn = computed(() => turn.value % 180 === 90);
+const imgStyle = computed(() => {
+  if (!turn.value) return undefined;
+  /*
+   * Battlefield art is stored on the same portrait canvas as regular cards.
+   * Contain the whole canvas first, then scale by the frame ratio so the
+   * rotated result fills the landscape frame instead of leaving bars.
+   */
+  const scale = quarterTurn.value ? FRAME_RATIO : 1;
+  return {
+    transform: `rotate(${turn.value}deg) scale(${scale})`,
+    transformOrigin: "center",
+  };
+});
 
 const host = ref<HTMLElement | null>(null);
 const visible = ref(props.eager);
@@ -75,7 +101,7 @@ onBeforeUnmount(() => observer?.disconnect());
 </script>
 
 <template>
-  <div ref="host" class="carddex-image" :class="{ landscape }">
+  <div ref="host" class="carddex-image" :class="{ 'quarter-turn': quarterTurn }">
     <div v-if="!visible" class="image-placeholder"><span></span></div>
     <div v-else-if="failedAll || !remote" class="image-empty">
       {{ alt.slice(0, 8) }}
@@ -84,6 +110,7 @@ onBeforeUnmount(() => observer?.disconnect());
       v-else
       :src="resolved"
       :alt="alt"
+      :style="imgStyle"
       :loading="eager ? 'eager' : 'lazy'"
       @error="onError"
     />
@@ -97,19 +124,8 @@ onBeforeUnmount(() => observer?.disconnect());
   background: rgba(59, 74, 90, 0.07);
   overflow: hidden;
 }
-.carddex-image.landscape {
+.carddex-image.quarter-turn {
   aspect-ratio: 1040 / 744;
-}
-.landscape img {
-  /*
-   * Battlefield art is stored as the same portrait canvas as regular cards.
-   * `cover` crops that canvas before rotation, so the left/right edges vanish.
-   * Fit the complete portrait first, then scale by the portrait/landscape
-   * ratio so the rotated result fills the 1040×744 frame.
-   */
-  object-fit: contain;
-  transform: rotate(-90deg) scale(1.39785);
-  transform-origin: center;
 }
 img {
   width: 100%;

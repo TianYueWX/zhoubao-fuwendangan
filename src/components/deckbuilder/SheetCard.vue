@@ -1,18 +1,27 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 import { resolveEntry, type CardIndex, type DeckEntry } from '@/tools/deckbuilder/model';
+import { printRotation } from '@/components/carddex/data';
 const props = defineProps<{ entry: DeckEntry; index: CardIndex }>();
 const resolved = computed(() => resolveEntry(props.entry, props.index));
 const image = computed(() => resolved.value.print?.imageUrl || resolved.value.print?.ttsUrl || '');
 const failed = ref(false), loaded = ref(false);
 const name = computed(() => resolved.value.name || props.entry.name || props.entry.cardNo);
 const subtitle = computed(() => resolved.value.record?.base.subtitleCn || resolved.value.record?.base.subtitleEn || '');
-const landscape = computed(() => Boolean(resolved.value.record?.base.categories.includes('战场')));
+const rotateDeg = computed(() => printRotation(resolved.value.record?.base.categories, resolved.value.print?.rotateDeg));
+/** 打印页固定 744×1040 竖框，战场图旋转后要缩回竖框内。 */
+const PORTRAIT_RATIO = 744 / 1040;
+const imgStyle = computed(() => {
+  const deg = rotateDeg.value;
+  if (!deg) return undefined;
+  const quarterTurn = Math.abs(deg % 180) === 90;
+  return { transform: `rotate(${deg}deg) scale(${quarterTurn ? PORTRAIT_RATIO : 1})`, transformOrigin: 'center' };
+});
 watch(image, () => { failed.value = false; loaded.value = false; });
 </script>
 <template>
-  <article class="sheet-card" :class="{ landscape, missing: !image || failed }" :data-card="entry.cardNo" :title="name">
-    <img v-if="image && !failed" :src="image" :alt="name" loading="eager" decoding="async" @load="loaded = true" @error="failed = true" />
+  <article class="sheet-card" :class="{ missing: !image || failed }" :data-card="entry.cardNo" :title="name">
+    <img v-if="image && !failed" :src="image" :alt="name" :style="imgStyle" loading="eager" decoding="async" @load="loaded = true" @error="failed = true" />
     <div v-if="!image || failed || !loaded" class="sheet-card-fallback">
       <strong>{{ name }}</strong>
       <small v-if="subtitle">{{ subtitle }}</small>
@@ -34,10 +43,6 @@ watch(image, () => { failed.value = false; loaded.value = false; });
   width: 100%;
   height: 100%;
   object-fit: contain;
-}
-.sheet-card.landscape img {
-  transform: rotate(-90deg) scale(0.7154);
-  transform-origin: center;
 }
 .sheet-card-fallback {
   position: absolute;

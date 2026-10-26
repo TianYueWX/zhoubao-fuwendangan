@@ -2,6 +2,7 @@
 import { Bookmark } from "@lucide/vue";
 import { computed } from "vue";
 import CarddexImage from "./CarddexImage.vue";
+import { printRotation } from "./data";
 import type { CarddexLocale, DisplayCard } from "./types";
 
 const props = defineProps<{
@@ -10,7 +11,9 @@ const props = defineProps<{
   pinned: boolean;
 }>();
 const emit = defineEmits<{ open: []; pin: [] }>();
-const landscape = computed(() => props.item.base.categories.includes("战场"));
+const rotate = computed(() =>
+  printRotation(props.item.base.categories, props.item.print?.rotateDeg),
+);
 const name = computed(() =>
   props.locale === "en"
     ? props.item.base.nameEn || props.item.base.nameCn
@@ -25,7 +28,7 @@ const name = computed(() =>
         :src="item.print?.imageUrl ?? ''"
         :fallback="item.print?.ttsUrl ?? ''"
         :alt="name"
-        :landscape="landscape"
+        :rotate="rotate"
       />
       <span v-if="item.base.banned" class="banned-mark">{{
         locale === "zh" ? "禁" : "BANNED"

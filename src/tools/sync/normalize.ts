@@ -7,6 +7,7 @@
  *   card_icons : name_en / url_en
  */
 import type { ApiCardDetail, ApiKeywordConfig, ApiSearchCard } from './riftboundApi'
+import { rotationFor } from './rotation'
 
 /* ------------------------------------------------------------------ */
 /* 目标行类型                                                          */
@@ -53,6 +54,8 @@ export interface CardPrintRow {
   flavor_text_cn: string | null
   flavor_text_en?: string | null
   is_promo: boolean
+  /** 卡图展示角度：战场横图 -90，其余 0。 */
+  rotate_deg: number
 }
 
 export interface CardIconRow {
@@ -201,7 +204,8 @@ export function buildPrint(detail: ApiCardDetail): CardPrintExportRow {
     artist: emptyToNull(craft?.artist),
     series: emptyToNull(detail.cardSeries) || seriesCodeOf(extend) || null,
     flavor_text_cn: emptyToNull(detail.flavorText),
-    is_promo: isPromo
+    is_promo: isPromo,
+    rotate_deg: rotationFor(language, detail.cardCategoryNameList)
   }
 }
 
@@ -260,7 +264,8 @@ export function buildPrintFromSearch(row: ApiSearchCard, seriesName: string | nu
     artist: emptyToNull(row.artist),
     series: seriesName || seriesCodeOf(extend) || null,
     flavor_text_cn: emptyToNull(row.flavorText),
-    is_promo: isPromo
+    is_promo: isPromo,
+    rotate_deg: rotationFor(language, row.cardCategoryNameList)
   }
 }
 

@@ -84,6 +84,12 @@ export interface CardPrint {
   series: string;
   flavorCn: string;
   flavorEn: string;
+  /**
+   * 卡图展示旋转角（度，CSS 约定，负值逆时针）。
+   * 0 / 180 用 744×1040 竖框，±90 用 1040×744 横框。
+   * null = 库里没有该列（旧缓存或未迁移的库），由 printRotation() 回退到类目规则。
+   */
+  rotateDeg: number | null;
 }
 
 export interface CardRecord {

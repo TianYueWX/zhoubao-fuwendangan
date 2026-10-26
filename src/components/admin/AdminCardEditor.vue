@@ -372,7 +372,8 @@ function addPrintRow(): void {
       is_promo: false,
       series: null,
       flavor_text_cn: null,
-      flavor_text_en: null
+      flavor_text_en: null,
+      rotate_deg: 0
     }
   ];
 }
@@ -1076,6 +1077,7 @@ onMounted(async () => {
                       <th class="text-left font-normal px-2.5 py-2 min-w-[160px]">图片 CDN</th>
                       <th class="text-left font-normal px-2.5 py-2 min-w-[180px]">中文风味</th>
                       <th class="text-left font-normal px-2.5 py-2 min-w-[180px]">英文风味</th>
+                      <th class="text-right font-normal px-2.5 py-2 w-[96px]">卡图朝向</th>
                       <th class="text-right font-normal px-2.5 py-2 w-[70px]">排序</th>
                       <th class="text-center font-normal px-2.5 py-2 w-[60px]">默认</th>
                       <th class="text-center font-normal px-2.5 py-2 w-[60px]">Promo</th>
@@ -1140,6 +1142,14 @@ onMounted(async () => {
                           :placeholder="`继承：${form?.flavor_text_en || '—'}`"
                           :title="row.flavor_text_en || `继承基础卡：${form?.flavor_text_en || '—'}`"
                         />
+                      </td>
+                      <td class="px-2.5 py-1.5">
+                        <select v-model.number="row.rotate_deg" class="filter-select w-full" title="卡图展示角度：战场横图为 -90°">
+                          <option :value="0">正立</option>
+                          <option :value="-90">横图 -90°</option>
+                          <option :value="90">横图 +90°</option>
+                          <option :value="180">倒置 180°</option>
+                        </select>
                       </td>
                       <td class="px-2.5 py-1.5">
                         <input v-model.number="row.print_order" type="number" class="filter-select w-full text-right tabular-nums" />

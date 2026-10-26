@@ -61,6 +61,11 @@ export interface CardPrint {
   flavor_text_cn: string | null;
   /** 留空(null)表示继承基础卡 cards_base.flavor_text_en */
   flavor_text_en: string | null;
+  /**
+   * 卡图展示旋转角(度, CSS 约定, 负值逆时针)。
+   * 0=正立; -90=战场横图。非空默认 0, 只允许 90 的整数倍(库内有 check 约束)。
+   */
+  rotate_deg: number | null;
 }
 
 /** 新建但尚未落库的印刷版本行(id 为空) */

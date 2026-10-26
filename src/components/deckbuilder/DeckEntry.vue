@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, nextTick } from 'vue';
 import CarddexImage from '@/components/carddex/CarddexImage.vue';
+import { printRotation } from '@/components/carddex/data';
 import { LABELS, ZONES, resolveEntry, type DeckEntry, type CardIndex, type Zone } from '@/tools/deckbuilder/model';
 const props = defineProps<{ entry: DeckEntry; zone: Zone; index: CardIndex; graphic: boolean; readonly?: boolean; additionalEnabled: boolean }>();
 const emit = defineEmits<{ quantity: [quantity: number]; inspect: []; move: [to: Zone]; remove: [] }>();
@@ -21,7 +22,7 @@ function closeMenu():void {menu.value?.hidePopover();}
 <template>
   <article class="deck-entry" :class="{ graphic, unresolved: !resolved.record }" :data-card="entry.cardNo">
     <button class="entry-art" type="button" :aria-label="`查看 ${resolved.name} 的印版和详情`" @click="emit('inspect')">
-      <CarddexImage :src="resolved.print?.imageUrl || ''" :fallback="resolved.print?.ttsUrl || ''" :alt="resolved.name" :landscape="resolved.record?.base.categories.includes('战场')" />
+      <CarddexImage :src="resolved.print?.imageUrl || ''" :fallback="resolved.print?.ttsUrl || ''" :alt="resolved.name" :rotate="printRotation(resolved.record?.base.categories, resolved.print?.rotateDeg)" />
       <span v-if="graphic" class="art-count">×{{ entry.quantity }}</span>
     </button>
     <button class="entry-label" type="button" @click="emit('inspect')">

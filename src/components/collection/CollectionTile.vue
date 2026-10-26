@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import CarddexImage from "@/components/carddex/CarddexImage.vue";
+import { printRotation } from "@/components/carddex/data";
 import { languageLabel, printVersion, QUANTITY_MAX } from "@/tools/collection/model";
 import type { CollectionItem } from "@/tools/collection/query";
 
@@ -8,7 +9,9 @@ const props = defineProps<{ item: CollectionItem; dim?: boolean }>();
 const emit = defineEmits<{ open: []; change: [delta: number] }>();
 
 const print = computed(() => props.item.print);
-const landscape = computed(() => props.item.base.categories.includes("战场"));
+const rotate = computed(() =>
+  printRotation(props.item.base.categories, print.value?.rotateDeg),
+);
 const version = computed(() => (print.value ? printVersion(print.value) : "平卡"));
 const owned = computed(() => props.item.quantity > 0);
 const meta = computed(() => {
@@ -30,7 +33,7 @@ const label = computed(
         :src="print.imageUrl"
         :fallback="print.ttsUrl"
         :alt="item.base.nameCn"
-        :landscape="landscape"
+        :rotate="rotate"
       />
       <span v-else class="tile-no-art">无卡图</span>
     </button>

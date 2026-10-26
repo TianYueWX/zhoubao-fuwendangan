@@ -15,6 +15,7 @@ import { navigate } from '@/router/hash';
 import { isEditorialAdmin } from '@/tools/sources/auth';
 import { readSupabaseConfig } from '@/tools/sources/config';
 import CarddexImage from '@/components/carddex/CarddexImage.vue';
+import { printRotation } from '@/components/carddex/data';
 import CardEffectText from '@/components/carddex/CardEffectText.vue';
 import RuneSeal from '@/components/RuneSeal.vue';
 import BuilderModal from '@/components/deckbuilder/BuilderModal.vue';
@@ -33,7 +34,6 @@ import {
   entryKey,
   fullName,
   hasNeeko,
-  kind,
   resolveEntry,
   validateDeck,
   type BuilderDeck,
@@ -502,7 +502,7 @@ function colorLabel(color: string): string {
           :src="inspectInfo.preview?.imageUrl || ''"
           :fallback="inspectInfo.preview?.ttsUrl || ''"
           :alt="fullName(inspectInfo.resolved.record)"
-          :landscape="kind(inspectInfo.resolved.record) === '战场'"
+          :rotate="printRotation(inspectInfo.resolved.record?.base.categories, inspectInfo.preview?.rotateDeg)"
           eager
         />
         <div>

@@ -2,6 +2,7 @@
 import { computed, ref } from "vue";
 import { Minus, Plus, RotateCw, X } from "@lucide/vue";
 import CarddexImage from "./CarddexImage.vue";
+import { printRotation } from "./data";
 import type { CarddexLocale, DisplayCard } from "./types";
 const props = defineProps<{ item: DisplayCard; locale: CarddexLocale }>();
 const scale = ref(1);
@@ -68,7 +69,7 @@ async function download(): Promise<void> {
           :src="item.print?.imageUrl ?? ''"
           :fallback="item.print?.ttsUrl ?? ''"
           :alt="item.base.nameCn"
-          :landscape="item.base.categories.includes('战场')"
+          :rotate="printRotation(item.base.categories, item.print?.rotateDeg)"
           eager
         />
       </div>

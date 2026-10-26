@@ -22,6 +22,7 @@ import {
   normalizeGalleryCode,
   printLanguageOf
 } from './galleryNormalize'
+import { rotationFor } from './rotation'
 
 export type GalleryPrintLanguage = 'EN' | 'SC' | 'KR' | 'TC'
 
@@ -60,6 +61,8 @@ export interface GalleryPrintRow {
   artist: string | null
   series: string | null
   is_promo: boolean
+  /** 卡图展示角度：战场横图 -90，其余 0。只在新增时写入，不覆盖人工修改。 */
+  rotate_deg: number
   name: string | null
   subtitle: string | null
   name_en: string | null
@@ -220,6 +223,7 @@ export async function fetchGalleryDataset(opts: FetchGalleryOptions): Promise<Ga
       artist: card.illustrator,
       series: card.set.id,
       is_promo: false,
+      rotate_deg: rotationFor(language, mapGalleryCategories(card, code.extend)),
       name: text.name ?? text.nameEn,
       subtitle: text.subtitle ?? text.subtitleEn,
       name_en: text.nameEn,

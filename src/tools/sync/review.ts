@@ -67,18 +67,22 @@ export interface ReviewOperation {
 }
 export const INSERT_FIELDS: Record<ReviewTable, readonly string[]> = {
   cards_base: CARDS_BASE_COLUMNS,
-  card_prints: ['card_id', ...CARD_PRINT_COLUMNS],
+  card_prints: ['card_id', ...CARD_PRINT_COLUMNS, 'rotate_deg'],
   card_icons: ['name_zh', 'url', 'storage_type', 'isWhite'],
   series: ['code', 'name_cn', 'name_en', 'release_order', 'is_standard', 'is_active']
 }
 export const UPDATE_FIELDS: Record<ReviewTable, readonly string[]> = {
   cards_base: ['effect_cn'],
+  /**
+   * rotate_deg 刻意不进 UPDATE_FIELDS：卡图朝向由同步给出默认值、由策展人在
+   * 后台修正，重复同步不应该把人工判断改回计算值（与后台「朝向」下拉一致）。
+   */
   card_prints: ['card_id', ...CARD_PRINT_COLUMNS.filter((f) => f !== 'card_no_extend' && f !== 'language')],
   card_icons: ['url', 'storage_type', 'isWhite'],
   series: []
 }
 export const ARRAY_FIELDS = ['card_color_list', 'region', 'tag', 'card_category']
-export const NUMBER_FIELDS = ['energy', 'return_energy', 'power', 'release_order']
+export const NUMBER_FIELDS = ['energy', 'return_energy', 'power', 'release_order', 'rotate_deg']
 export const BOOL_FIELDS = ['is_promo', 'isWhite', 'is_standard', 'is_active']
 /**
  * 官网卡表同步新增的 cards_base 列。小程序流程（UPDATE_FIELDS.cards_base）刻意

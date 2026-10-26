@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { ArrowLeft, ArrowRight, Bookmark, BookmarkCheck, MessageCircle, X } from "@lucide/vue";
 import CarddexImage from "./CarddexImage.vue";
-import { printKey } from "./data";
+import { printKey, printRotation } from "./data";
 import CardEffectText from "./CardEffectText.vue";
 import { segmentQaText } from "@/tools/sync/qa";
 import type {
@@ -45,8 +45,8 @@ const selected = computed(
     props.item?.print ??
     null,
 );
-const landscape = computed(
-  () => props.item?.base.categories.includes("战场") ?? false,
+const rotate = computed(() =>
+  printRotation(props.item?.base.categories, selected.value?.rotateDeg),
 );
 const versionGroups = computed(() => {
   const groups = new Map<string, CardPrint[]>();
@@ -191,7 +191,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey));
               :src="selected.imageUrl"
               :fallback="selected.ttsUrl"
               :alt="item.base.nameCn"
-              :landscape="landscape"
+              :rotate="rotate"
               eager
             />
             <!-- <span>{{
@@ -228,7 +228,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey));
                   :src="versionPreview(group).imageUrl"
                   :fallback="versionPreview(group).ttsUrl"
                   :alt="group.cardNo"
-                  :landscape="landscape"
+                  :rotate="rotate"
                 />
                 <small>{{ group.cardNo }}</small>
               </button>
