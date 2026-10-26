@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { onUnmounted } from "vue";
-import { ArrowUpRight, BarChart3, ClipboardCheck, PackageOpen, Workflow } from "@lucide/vue";
+import { ArrowUpRight, BarChart3, ClipboardCheck, Layers, PackageOpen, Workflow } from "@lucide/vue";
 import { navigate } from "@/router/hash";
 import { editorialUnlocked, knock, resetKnock } from "@/tools/editorialAccess";
+import { isEditorialAdmin } from "@/tools/sources/auth";
 
 const titleCharacters = ["符", "文", "档", "案"];
 
@@ -197,6 +198,17 @@ onUnmounted(() => {
         >
           <PackageOpen :size="18" aria-hidden="true" />
           开卡包
+        </button>
+        <!-- 卡池是管理员私有台账:未登录不出现,避免点了撞门禁 -->
+        <button
+          v-if="isEditorialAdmin"
+          type="button"
+          class="shortcut-btn"
+          title="我的卡池 · 管理员私有的持有卡台账"
+          @click="navigate({ view: 'collection' })"
+        >
+          <Layers :size="18" aria-hidden="true" />
+          我的卡池
         </button>
       </div>
     </div>

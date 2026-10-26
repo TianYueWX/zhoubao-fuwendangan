@@ -142,6 +142,10 @@ check('坏数据静默丢弃', readCache(owner) === null);
 
 writeUi({ ...readUi(), view: 'all' });
 check('默认视图是「我有的」', readUi().view === 'all');
+bucket.delete(UI_KEY);
+check('未持有的卡默认不灰淡', readUi().dimUnowned === false);
+writeUi({ ...readUi(), dimUnowned: true });
+check('「突出持有」开关会记住', readUi().dimUnowned === true);
 check(
   'UI 默认排序是一条「编号升序」规则',
   readUi().sort.length === 1 && readUi().sort[0].field === 'cardNo' && readUi().sort[0].asc === true,

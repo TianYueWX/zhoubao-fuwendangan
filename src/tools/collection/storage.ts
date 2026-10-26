@@ -63,6 +63,8 @@ export interface CollectionUi {
   languages: string[];
   versions: string[];
   sections: Record<string, boolean>;
+  /** 「突出持有」:打开后未持有的卡才转灰淡;默认关,整张表都正常显示。 */
+  dimUnowned: boolean;
 }
 
 const DEFAULT_NUMERIC: NumericFilters = {
@@ -79,6 +81,7 @@ export const DEFAULT_UI: CollectionUi = {
   languages: [],
   versions: [],
   sections: {},
+  dimUnowned: false,
 };
 
 function readRaw<T>(key: string): T | null {
@@ -158,6 +161,7 @@ export function readUi(): CollectionUi {
     languages: Array.isArray(raw.languages) ? raw.languages.map(String) : [],
     versions: Array.isArray(raw.versions) ? raw.versions.map(String) : [],
     sections: raw.sections && typeof raw.sections === "object" ? raw.sections : {},
+    dimUnowned: raw.dimUnowned === true,
   };
 }
 

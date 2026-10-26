@@ -4,7 +4,7 @@ import CarddexImage from "@/components/carddex/CarddexImage.vue";
 import { languageLabel, printVersion, QUANTITY_MAX } from "@/tools/collection/model";
 import type { CollectionItem } from "@/tools/collection/query";
 
-const props = defineProps<{ item: CollectionItem }>();
+const props = defineProps<{ item: CollectionItem; dim?: boolean }>();
 const emit = defineEmits<{ open: []; change: [delta: number] }>();
 
 const print = computed(() => props.item.print);
@@ -23,7 +23,7 @@ const label = computed(
 </script>
 
 <template>
-  <article class="collection-tile" :class="{ empty: !owned }">
+  <article class="collection-tile" :class="{ dim: props.dim }">
     <button type="button" class="tile-art" :aria-label="`查看 ${label}`" @click="emit('open')">
       <CarddexImage
         v-if="print"
@@ -83,7 +83,7 @@ const label = computed(
   box-shadow: 0 10px 22px -18px var(--color-shadow);
 }
 
-.collection-tile.empty .tile-art :deep(img) {
+.collection-tile.dim .tile-art :deep(img) {
   filter: grayscale(0.6);
   opacity: 0.55;
 }

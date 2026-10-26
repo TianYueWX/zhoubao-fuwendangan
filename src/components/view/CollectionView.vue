@@ -7,7 +7,7 @@
  * 改动即时上云（乐观更新 + 合并 + 失败重试）。
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { ArrowUpDown, Download, RefreshCw, Search, X } from "@lucide/vue";
+import { ArrowUpDown, CircleDot, Download, RefreshCw, Search, X } from "@lucide/vue";
 import EditorialGate from "@/components/admin/EditorialGate.vue";
 import CardDetailModal from "@/components/carddex/CardDetailModal.vue";
 import CarddexSortDialog from "@/components/carddex/CarddexSortDialog.vue";
@@ -156,6 +156,9 @@ function setView(view: CollectionViewMode): void {
   ui.value = { ...ui.value, view };
 }
 
+function toggleDim(): void {
+  ui.value = { ...ui.value, dimUnowned: !ui.value.dimUnowned };
+}
 function applySort(rules: SortRule[]): void {
   ui.value = {
     ...ui.value,
@@ -369,6 +372,17 @@ function closeDrawer(): void {
 
             <button
               type="button"
+              class="tool-btn dim-btn"
+              :class="{ on: ui.dimUnowned }"
+              :aria-pressed="ui.dimUnowned"
+              :title="ui.dimUnowned ? '取消突出：未持有的卡恢复正常显示' : '突出持有：把未持有的卡转为灰淡'"
+              @click="toggleDim"
+            >
+              <CircleDot :size="13" aria-hidden="true" /><span class="dim-label">突出持有</span>
+            </button>
+
+            <button
+              type="button"
               class="tool-btn"
               :class="{ on: sidebarOpen || drawerOpen }"
               :aria-expanded="sidebarOpen || drawerOpen"
@@ -427,6 +441,7 @@ function closeDrawer(): void {
               v-for="item in visible"
               :key="item.key"
               :item="item"
+              :dim="ui.dimUnowned && item.quantity < 1"
               @open="openDetail(item)"
               @change="(delta) => change(item, delta)"
             />
@@ -663,6 +678,12 @@ function closeDrawer(): void {
   border-color: var(--color-brand);
 }
 
+.dim-btn.on {
+  border-color: var(--color-brand);
+  background: var(--color-brand-soft);
+  color: var(--color-brand);
+}
+
 .tool-btn b {
   display: inline-grid;
   place-items: center;
@@ -877,6 +898,10 @@ function closeDrawer(): void {
 
   .tools-row {
     gap: 6px;
+  }
+
+  .dim-label {
+    display: none;
   }
 }
 
