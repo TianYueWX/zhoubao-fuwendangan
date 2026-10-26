@@ -581,7 +581,6 @@ function applyDraft(): void {
 }
 .facet.color-facet,
 .facet.icon-facet {
-  width: 38px;
   min-width: 38px;
   justify-content: center;
   padding-inline: 6px;
@@ -591,7 +590,7 @@ function applyDraft(): void {
   height: 21px;
 }
 .facet.icon-facet img {
-  width: 20px;
+  width: 100%;
   height: 20px;
 }
 .colorless-mark {

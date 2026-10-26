@@ -120,7 +120,7 @@ onBeforeUnmount(() => observer?.disconnect());
 <style scoped>
 .carddex-image {
   width: 100%;
-  aspect-ratio: 744 / 1040;
+  /*aspect-ratio: 744 / 1040;*/
   background: rgba(59, 74, 90, 0.07);
   overflow: hidden;
 }
