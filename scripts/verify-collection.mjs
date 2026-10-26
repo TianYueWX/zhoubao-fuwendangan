@@ -27,7 +27,7 @@ import {
 import { UI_KEY, readCache, readUi, writeCache, writeUi } from '@/tools/collection/storage';
 import { buildCollectionItems, collectionAxes, collectionFacets, sortItems } from '@/tools/collection/query';
 import { buildCarddexData } from '@/components/carddex/data';
-import { keywordIcon, standardFacetGroups, STANDARD_FACET_ORDER } from '@/components/carddex/facets';
+import { standardFacetGroups, STANDARD_FACET_ORDER } from '@/components/carddex/facets';
 import { readFileSync } from 'node:fs';
 import Papa from 'papaparse';
 
@@ -209,21 +209,12 @@ check(
 );
 check('无规则时回落默认次序(系列优先)', sortItems(allItems, [])[0].base.series === allItems.map((i) => i.base.series).sort()[0]);
 
-const iconRows = [
-  { name: '迅捷', url: 'https://cdn.example/icon/swift.svg', isWhite: false },
-  { name: '绝念>', url: 'https://cdn.example/icon/banish-variant.svg', isWhite: true },
-];
-check('关键词图标:精确名命中', keywordIcon('迅捷', iconRows)?.url.endsWith('swift.svg'));
-check('关键词图标:条件变体名命中', keywordIcon('绝念', iconRows)?.url.endsWith('banish-variant.svg'));
-check('关键词图标:白图标标记透传', keywordIcon('绝念', iconRows)?.isWhite === true);
-check('关键词图标:查不到返回 null(回落文字)', keywordIcon('回响', iconRows) === null);
-check('关键词图标:空图标表返回 null', keywordIcon('迅捷', []) === null);
-
 const groupOptions = Object.fromEntries(STANDARD_FACET_ORDER.map((id) => [id, []]));
 const standard = standardFacetGroups(groupOptions);
 check('标准分面:八个且顺序不变', standard.length === 8 && standard.every((g, i) => g.id === STANDARD_FACET_ORDER[i]));
-check('标准分面:颜色与关键词带图标', standard.find((g) => g.id === 'color')?.icon === 'rune' && standard.find((g) => g.id === 'keyword')?.icon === 'keyword');
-check('标准分面:其它分面不带图标', standard.filter((g) => g.icon).length === 2);
+check('标准分面:只有颜色带图标', standard.find((g) => g.id === 'color')?.icon === 'rune');
+check('标准分面:关键词不出图标', standard.find((g) => g.id === 'keyword')?.icon === undefined);
+check('标准分面:其它分面不带图标', standard.filter((g) => g.icon).length === 1);
 
 console.log(`\n结果: ${pass} 通过 / ${fail} 失败`);
 process.exit(fail === 0 ? 0 : 1);

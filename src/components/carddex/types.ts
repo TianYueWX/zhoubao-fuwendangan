@@ -31,8 +31,8 @@ export interface FacetGroupDef {
   options?: string[];
   /** 值 → 显示文案（语言码 SC → 简中） */
   display?: Record<string, string>;
-  /** 图标来源：颜色用本地符文图，关键词查 card_icons */
-  icon?: "rune" | "keyword";
+  /** 图标来源：只有颜色用本地符文图，其余分面显示文字 */
+  icon?: "rune";
 }
 
 export interface CardBase {

@@ -19,11 +19,10 @@ import {
   X,
 } from "@lucide/vue";
 import NumericRangePicker from "./NumericRangePicker.vue";
-import { keywordIcon, standardFacetGroups } from "./facets";
+import { standardFacetGroups } from "./facets";
 import type {
   ActiveFilter,
   CarddexLocale,
-  CardIcon,
   FacetGroupDef,
   FilterMode,
   FilterType,
@@ -47,8 +46,6 @@ const props = withDefaults(
     selections?: Record<string, string[]>;
     /** 数值范围插在第几组之前，默认 0（最上） */
     numericAfter?: number;
-    /** 关键词分面查图标用 */
-    icons?: readonly CardIcon[];
     title?: string;
     eyebrow?: string;
   }>(),
@@ -56,7 +53,6 @@ const props = withDefaults(
     groups: () => [],
     selections: () => ({}),
     numericAfter: 0,
-    icons: () => [],
   },
 );
 const emit = defineEmits<{
@@ -147,15 +143,9 @@ interface FacetIcon {
   white: boolean;
 }
 function iconOf(group: FacetGroupDef, value: string): FacetIcon | null {
-  if (group.icon === "rune") {
-    if (value === "colorless") return null;
-    return { url: `${assetBase}runes/${value}.svg`, white: false };
-  }
-  if (group.icon === "keyword") {
-    const hit = keywordIcon(value, props.icons);
-    return hit ? { url: hit.url, white: hit.isWhite } : null;
-  }
-  return null;
+  if (group.icon !== "rune") return null;
+  if (value === "colorless") return null;
+  return { url: `${assetBase}runes/${value}.svg`, white: false };
 }
 function localeText(zh: string, en: string): string {
   return props.locale === "zh" ? zh : en;
@@ -361,9 +351,7 @@ function applyDraft(): void {
               :title="
                 group.icon === 'rune'
                   ? colorLabel(option)
-                  : group.icon === 'keyword'
-                    ? optionLabel(group, option)
-                    : undefined
+                  : optionLabel(group, option)
               "
               :aria-label="
                 group.icon === 'rune'
