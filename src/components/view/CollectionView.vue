@@ -10,10 +10,18 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { ArrowUpDown, CircleDot, Download, RefreshCw, Search, X } from "@lucide/vue";
 import EditorialGate from "@/components/admin/EditorialGate.vue";
 import CardDetailModal from "@/components/carddex/CardDetailModal.vue";
+import CarddexFilters from "@/components/carddex/CarddexFilters.vue";
 import CarddexSortDialog from "@/components/carddex/CarddexSortDialog.vue";
-import CollectionFilters from "@/components/collection/CollectionFilters.vue";
+import { standardFacetGroups } from "@/components/carddex/facets";
 import CollectionTile from "@/components/collection/CollectionTile.vue";
-import type { ActiveFilter, CarddexLocale, FilterType, SortRule } from "@/components/carddex/types";
+import type {
+  ActiveFilter,
+  CarddexLocale,
+  FacetGroupDef,
+  FilterType,
+  NumericFilters,
+  SortRule,
+} from "@/components/carddex/types";
 import { authState, isEditorialAdmin } from "@/tools/sources/auth";
 import { useBuilderCatalog } from "@/tools/deckbuilder/catalog";
 import { languageLabel, printVersion } from "@/tools/collection/model";
@@ -64,6 +72,27 @@ const sentinel = ref<HTMLElement | null>(null);
 const records = computed(() => catalog.records.value);
 const facets = computed(() => collectionFacets(records.value));
 const axes = computed(() => collectionAxes(records.value));
+/** 筛选面板是 carddex 那一份，卡池只是在最前面多两个 toggle 组。 */
+const facetGroups = computed<FacetGroupDef[]>(() => [
+  {
+    id: "language",
+    kind: "toggle",
+    label: ["语言", "Language"],
+    options: axes.value.languages,
+    display: Object.fromEntries(axes.value.languages.map((code) => [code, languageLabel(code)])),
+  },
+  {
+    id: "version",
+    kind: "toggle",
+    label: ["版本", "Version"],
+    options: [...axes.value.versions],
+  },
+  ...standardFacetGroups(facets.value.options),
+]);
+const selections = computed(() => ({
+  language: ui.value.languages,
+  version: ui.value.versions,
+}));
 const items = computed(() =>
   buildCollectionItems(
     records.value,
@@ -80,12 +109,31 @@ const items = computed(() =>
   ),
 );
 const visible = computed(() => items.value.slice(0, visibleCount.value));
+
+// 本机偏好里可能是 0–99 的哨兵值，卡表到了再夹到真实范围。
+watch(
+  () => facets.value.bounds,
+  (bounds) => {
+    if (!records.value.length) return;
+    const next = { ...ui.value.numeric };
+    let changed = false;
+    for (const key of ["energy", "returnEnergy", "power"] as const) {
+      if (next[key].max === 99) {
+        next[key] = { ...bounds[key] };
+        changed = true;
+      }
+    }
+    if (changed) ui.value = { ...ui.value, numeric: next };
+  },
+  { immediate: true, deep: true },
+);
 const filterCount = computed(() =>
   activeFilterCount({
     filters: ui.value.filters,
     languages: ui.value.languages,
     versions: ui.value.versions,
     numeric: ui.value.numeric,
+    bounds: facets.value.bounds,
   }),
 );
 const recordByBaseId = computed(
@@ -179,6 +227,25 @@ function setFilters(value: ActiveFilter[]): void {
   ui.value = { ...ui.value, filters: value };
 }
 
+function applyFilters(
+  filters: ActiveFilter[],
+  numeric: NumericFilters,
+  picked: Record<string, string[]>,
+): void {
+  ui.value = {
+    ...ui.value,
+    filters: filters.map((filter) => ({ ...filter })),
+    numeric: {
+      energy: { ...numeric.energy },
+      returnEnergy: { ...numeric.returnEnergy },
+      power: { ...numeric.power },
+    },
+    languages: [...(picked.language ?? [])],
+    versions: [...(picked.version ?? [])],
+  };
+  if (typeof window !== "undefined" && window.innerWidth < 1024) drawerOpen.value = false;
+}
+
 function removeFilter(target: ActiveFilter): void {
   setFilters(ui.value.filters.filter((f) => f !== target));
 }
@@ -188,7 +255,18 @@ function setSection(id: string, open: boolean): void {
 }
 
 function clearFilters(): void {
-  ui.value = { ...ui.value, filters: [], languages: [], versions: [] };
+  const bounds = facets.value.bounds;
+  ui.value = {
+    ...ui.value,
+    filters: [],
+    languages: [],
+    versions: [],
+    numeric: {
+      energy: { ...bounds.energy },
+      returnEnergy: { ...bounds.returnEnergy },
+      power: { ...bounds.power },
+    },
+  };
 }
 
 function toggleFilters(): void {
@@ -291,10 +369,6 @@ onBeforeUnmount(() => {
 watch(isEditorialAdmin, (admin) => {
   if (admin && collection.phase.value !== "ready") void collection.load();
 });
-
-function closeDrawer(): void {
-  drawerOpen.value = false;
-}
 </script>
 
 <template>
@@ -453,50 +527,45 @@ function closeDrawer(): void {
         </template>
       </main>
 
-      <CollectionFilters
-        v-if="sidebarOpen"
-        :languages="axes.languages"
-        :versions="axes.versions"
-        :options="facets.options"
-        :active-languages="ui.languages"
-        :active-versions="ui.versions"
-        :filters="ui.filters"
-        :sections="ui.sections"
-        @languages="setLanguages"
-        @versions="setVersions"
-        @filters="setFilters"
-        @section="setSection"
-        @clear="clearFilters"
-      />
+      <div v-if="sidebarOpen" class="desktop-filter">
+        <CarddexFilters
+          :locale="LOCALE"
+          :filters="ui.filters"
+          :numeric="ui.numeric"
+          :options="facets.options"
+          :bounds="facets.bounds"
+          :sections="ui.sections"
+          :groups="facetGroups"
+          :selections="selections"
+          :icons="catalog.icons.value"
+          :numeric-after="2"
+          title="筛选卡池"
+          eyebrow="持有台账"
+          @apply="applyFilters"
+          @section="setSection"
+        />
+      </div>
     </div>
 
     <Teleport to="body">
-      <div v-if="drawerOpen" class="drawer-backdrop" role="presentation" @click.self="closeDrawer">
-        <section class="filter-drawer" role="dialog" aria-modal="true" aria-label="筛选">
-          <header>
-            <strong>筛选</strong>
-            <button type="button" aria-label="关闭筛选" @click="closeDrawer"><X :size="16" /></button>
-          </header>
-          <div class="drawer-body">
-            <CollectionFilters
-              :languages="axes.languages"
-              :versions="axes.versions"
-              :options="facets.options"
-              :active-languages="ui.languages"
-              :active-versions="ui.versions"
-              :filters="ui.filters"
-              :sections="ui.sections"
-              @languages="setLanguages"
-              @versions="setVersions"
-              @filters="setFilters"
-              @section="setSection"
-              @clear="clearFilters"
-            />
-          </div>
-          <footer>
-            <button type="button" class="solid-btn" @click="closeDrawer">查看 {{ items.length }} 项</button>
-          </footer>
-        </section>
+      <div v-if="drawerOpen" class="mobile-filter" role="dialog" aria-modal="true" aria-label="筛选卡池">
+        <CarddexFilters
+          :locale="LOCALE"
+          :filters="ui.filters"
+          :numeric="ui.numeric"
+          :options="facets.options"
+          :bounds="facets.bounds"
+          :sections="ui.sections"
+          :groups="facetGroups"
+          :selections="selections"
+          :icons="catalog.icons.value"
+          :numeric-after="2"
+          title="筛选卡池"
+          eyebrow="持有台账"
+          @apply="applyFilters"
+          @section="setSection"
+          @close="drawerOpen = false"
+        />
       </div>
     </Teleport>
 
@@ -818,59 +887,20 @@ function closeDrawer(): void {
   margin: 0 auto;
 }
 
-.drawer-backdrop {
+.desktop-filter {
+  position: sticky;
+  top: var(--collection-top, 104px);
+  align-self: start;
+  /* 视口高度减去吸顶基准与 main 的 py-4 下边距 */
+  height: calc(100vh - var(--collection-top, 104px) - 32px);
+  min-height: 0;
+}
+
+.mobile-filter {
   position: fixed;
   inset: 0;
-  z-index: 60;
-  background: rgba(44, 44, 44, 0.28);
-  display: flex;
-  justify-content: flex-end;
-}
-
-.filter-drawer {
-  display: flex;
-  flex-direction: column;
-  width: min(360px, 92vw);
-  height: 100%;
-  background: var(--color-page-bg);
-  border-left: 1px solid var(--color-panel-border);
-}
-
-.filter-drawer > header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 16px;
-  border-bottom: 1px solid var(--color-row-line);
-}
-
-.filter-drawer > header strong {
-  font-family: var(--font-display);
-  font-size: 13px;
-  letter-spacing: 0.08em;
-}
-
-.filter-drawer > header button {
-  border: 0;
-  background: transparent;
-  color: var(--color-text-muted);
-  cursor: pointer;
-}
-
-.drawer-body {
-  flex: 1;
-  overflow-y: auto;
-  padding: 0 16px 16px;
-}
-
-.filter-drawer > footer {
-  padding: 10px 16px;
-  border-top: 1px solid var(--color-row-line);
-}
-
-.filter-drawer > footer .solid-btn {
-  width: 100%;
-  height: 38px;
+  z-index: 120;
+  background: var(--color-card-bg);
 }
 
 @media (min-width: 1500px) {
@@ -882,6 +912,10 @@ function closeDrawer(): void {
 @media (max-width: 1023px) {
   .workspace {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .desktop-filter {
+    display: none;
   }
 
   .search-box {

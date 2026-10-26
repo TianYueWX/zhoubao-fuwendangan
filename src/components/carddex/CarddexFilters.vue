@@ -1,29 +1,71 @@
 <script setup lang="ts">
+/**
+ * 唯一的筛选面板：卡牌查询与我的卡池共用。
+ *
+ * 草稿制：面板里的改动只写进 draft，必须按「应用」才回传父级；重置只清 draft。
+ * 分面组由 groups 描述——卡牌查询用标准八面（颜色/类别/系列/…），
+ * 卡池在最前面多两个 toggle 组（语言/版本）。
+ * 数值范围固定三行（法力/符能/战力），位置由 numericAfter 决定。
+ */
 import { computed, ref, watch } from "vue";
-import { ChevronDown, Circle, CircleDashed, CircleDot, CircleX, Minus, Plus, X } from "@lucide/vue";
+import {
+  ChevronDown,
+  Circle,
+  CircleDashed,
+  CircleDot,
+  CircleX,
+  Minus,
+  Plus,
+  X,
+} from "@lucide/vue";
 import NumericRangePicker from "./NumericRangePicker.vue";
+import { keywordIcon, standardFacetGroups } from "./facets";
 import type {
   ActiveFilter,
   CarddexLocale,
+  CardIcon,
+  FacetGroupDef,
   FilterMode,
   FilterType,
   NumericFilters,
 } from "./types";
 
-const props = defineProps<{
-  locale: CarddexLocale;
-  filters: ActiveFilter[];
-  numeric: NumericFilters;
-  options: Record<FilterType, string[]>;
-  bounds: Record<
-    "energy" | "returnEnergy" | "power",
-    { min: number; max: number }
-  >;
-  sections: Record<string, boolean>;
-}>();
+const props = withDefaults(
+  defineProps<{
+    locale: CarddexLocale;
+    filters: ActiveFilter[];
+    numeric: NumericFilters;
+    options: Record<FilterType, string[]>;
+    bounds: Record<
+      "energy" | "returnEnergy" | "power",
+      { min: number; max: number }
+    >;
+    sections: Record<string, boolean>;
+    /** 不传 = 标准八面 */
+    groups?: FacetGroupDef[];
+    /** toggle 组的已选值 */
+    selections?: Record<string, string[]>;
+    /** 数值范围插在第几组之前，默认 0（最上） */
+    numericAfter?: number;
+    /** 关键词分面查图标用 */
+    icons?: readonly CardIcon[];
+    title?: string;
+    eyebrow?: string;
+  }>(),
+  {
+    groups: () => [],
+    selections: () => ({}),
+    numericAfter: 0,
+    icons: () => [],
+  },
+);
 const emit = defineEmits<{
-  apply: [filters: ActiveFilter[], numeric: NumericFilters];
-  section: [type: string, open: boolean];
+  apply: [
+    filters: ActiveFilter[],
+    numeric: NumericFilters,
+    selections: Record<string, string[]>,
+  ];
+  section: [id: string, open: boolean];
   close: [];
 }>();
 const assetBase = import.meta.env.BASE_URL;
@@ -32,67 +74,144 @@ function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
 
+const groups = computed<FacetGroupDef[]>(() =>
+  props.groups.length ? props.groups : standardFacetGroups(props.options),
+);
+
 const draftFilters = ref<ActiveFilter[]>([]);
 const draftNumeric = ref<NumericFilters>(clone(props.numeric));
-const rangePicker = ref<{ type: keyof NumericFilters; edge: "min" | "max" } | null>(null);
+const draftSelections = ref<Record<string, string[]>>({});
+const rangePicker = ref<{ type: keyof NumericFilters; edge: "min" | "max" } | null>(
+  null,
+);
 watch(
-  () => [props.filters, props.numeric],
+  () => [props.filters, props.numeric, props.selections],
   () => {
     draftFilters.value = props.filters.map((f) => ({ ...f }));
     draftNumeric.value = clone(props.numeric);
+    draftSelections.value = clone(props.selections);
   },
   { immediate: true, deep: true },
 );
 
-const labels: Record<FilterType, [string, string]> = {
-  color: ["颜色", "Color"],
-  category: ["类别", "Category"],
-  series: ["系列", "Series"],
-  rarity: ["稀有度", "Rarity"],
-  region: ["地区", "Region"],
-  tag: ["标签", "Tag"],
-  keyword: ["关键词", "Keyword"],
-  advancedTag: ["进阶标签", "Advanced tag"],
-};
-const order: FilterType[] = [
-  "color",
-  "category",
-  "series",
-  "rarity",
-  "region",
-  "tag",
-  "keyword",
-  "advancedTag",
-];
 const modeOrder: Array<FilterMode | null> = [
   "include",
   "require",
   "exclude",
   null,
 ];
-function mode(type: FilterType, value: string): FilterMode | null {
+
+function modeOf(groupId: string, value: string): FilterMode | null {
   return (
-    draftFilters.value.find((f) => f.type === type && f.value === value)
+    draftFilters.value.find((f) => f.type === groupId && f.value === value)
       ?.mode ?? null
   );
 }
-function cycle(type: FilterType, value: string): void {
-  const current = mode(type, value);
+function cycle(groupId: string, value: string): void {
+  const current = modeOf(groupId, value);
   const next =
     modeOrder[(modeOrder.indexOf(current) + 1) % modeOrder.length] ?? null;
   draftFilters.value = draftFilters.value.filter(
-    (f) => !(f.type === type && f.value === value),
+    (f) => !(f.type === groupId && f.value === value),
   );
-  if (next) draftFilters.value.push({ type, value, mode: next });
+  if (next) {
+    draftFilters.value.push({ type: groupId as FilterType, value, mode: next });
+  }
 }
-function clearMode(type: FilterType, value: string): void {
+function clearMode(groupId: string, value: string): void {
   draftFilters.value = draftFilters.value.filter(
-    (f) => !(f.type === type && f.value === value),
+    (f) => !(f.type === groupId && f.value === value),
   );
 }
+function isPicked(groupId: string, value: string): boolean {
+  return (draftSelections.value[groupId] ?? []).includes(value);
+}
+function togglePick(groupId: string, value: string): void {
+  const set = new Set(draftSelections.value[groupId] ?? []);
+  if (set.has(value)) set.delete(value);
+  else set.add(value);
+  draftSelections.value = { ...draftSelections.value, [groupId]: [...set] };
+}
+function groupOptions(group: FacetGroupDef): string[] {
+  return group.options ?? props.options[group.id as FilterType] ?? [];
+}
+function optionLabel(group: FacetGroupDef, value: string): string {
+  return group.display?.[value] ?? value;
+}
+function colorLabel(value: string): string {
+  if (value !== "colorless") return value;
+  return props.locale === "zh" ? "无色" : "Colorless";
+}
+interface FacetIcon {
+  url: string;
+  white: boolean;
+}
+function iconOf(group: FacetGroupDef, value: string): FacetIcon | null {
+  if (group.icon === "rune") {
+    if (value === "colorless") return null;
+    return { url: `${assetBase}runes/${value}.svg`, white: false };
+  }
+  if (group.icon === "keyword") {
+    const hit = keywordIcon(value, props.icons);
+    return hit ? { url: hit.url, white: hit.isWhite } : null;
+  }
+  return null;
+}
+function localeText(zh: string, en: string): string {
+  return props.locale === "zh" ? zh : en;
+}
+function groupCount(group: FacetGroupDef): number {
+  if (group.kind === "toggle") return (draftSelections.value[group.id] ?? []).length;
+  return draftFilters.value.filter((f) => f.type === group.id).length;
+}
+function isOpen(id: string): boolean {
+  return props.sections[id] !== false;
+}
+
+const numericIndex = computed(() =>
+  Math.max(0, Math.min(props.numericAfter, Math.max(groups.value.length - 1, 0))),
+);
+function membershipSignature(list: readonly ActiveFilter[]): string {
+  return list
+    .map((f) => `${f.type}:${f.value}:${f.mode}`)
+    .sort()
+    .join("|");
+}
+const filtersDirty = computed(
+  () => membershipSignature(draftFilters.value) !== membershipSignature(props.filters),
+);
+const numericDirty = computed(() =>
+  (["energy", "returnEnergy", "power"] as const).some((k) => {
+    const draft = draftNumeric.value[k];
+    const applied = props.numeric[k];
+    return draft.min !== applied.min || draft.max !== applied.max;
+  }),
+);
+function pickSignature(values: readonly string[] | undefined): string {
+  return [...(values ?? [])].sort().join(",");
+}
+const selectionsDirtyCount = computed(
+  () =>
+    groups.value.filter(
+      (group) =>
+        group.kind === "toggle" &&
+        pickSignature(draftSelections.value[group.id]) !==
+          pickSignature(props.selections[group.id]),
+    ).length,
+);
+const dirtyCount = computed(
+  () =>
+    (filtersDirty.value
+      ? Math.max(draftFilters.value.length, props.filters.length, 1)
+      : 0) +
+    (numericDirty.value ? 1 : 0) +
+    selectionsDirtyCount.value,
+);
+
 function reset(): void {
   draftFilters.value = [];
   draftNumeric.value = clone(props.bounds);
+  draftSelections.value = {};
 }
 function normalizeRange(type: keyof NumericFilters, edge: "min" | "max"): void {
   const range = draftNumeric.value[type];
@@ -119,43 +238,16 @@ function numericLabel(type: "energy" | "returnEnergy" | "power"): string {
   if (type === "returnEnergy") return localeText("符能", "Rune");
   return localeText("战力", "Power");
 }
-function localeText(zh: string, en: string): string {
-  return props.locale === "zh" ? zh : en;
-}
-function selectedCount(type: FilterType): number {
-  return draftFilters.value.filter((f) => f.type === type).length;
-}
-function isOpen(type: string): boolean {
-  return props.sections[type] !== false;
-}
-function filterSignature(filters: readonly ActiveFilter[]): string {
-  return filters
-    .map((f) => `${f.type}:${f.value}:${f.mode}`)
-    .sort()
-    .join("|");
-}
-const filtersDirty = computed(
-  () => filterSignature(draftFilters.value) !== filterSignature(props.filters),
-);
-const numericDirty = computed(() =>
-  (["energy", "returnEnergy", "power"] as const).some((k) => {
-    const draft = draftNumeric.value[k];
-    const applied = props.numeric[k];
-    return draft.min !== applied.min || draft.max !== applied.max;
-  }),
-);
-const dirtyCount = computed(
-  () =>
-    (filtersDirty.value
-      ? Math.max(draftFilters.value.length, props.filters.length, 1)
-      : 0) + (numericDirty.value ? 1 : 0),
-);
 function applyDraft(): void {
   for (const type of ["energy", "returnEnergy", "power"] as const) {
     normalizeRange(type, "min");
   }
-  if (!dirtyCount.value) return;
-  emit("apply", clone(draftFilters.value), clone(draftNumeric.value));
+  emit(
+    "apply",
+    clone(draftFilters.value),
+    clone(draftNumeric.value),
+    clone(draftSelections.value),
+  );
 }
 </script>
 
@@ -163,8 +255,8 @@ function applyDraft(): void {
   <aside class="filter-panel" @keydown.shift.enter.prevent="applyDraft">
     <header class="filter-head">
       <div>
-        <p>{{ locale === "zh" ? "检索条件" : "Filters" }}</p>
-        <strong>{{ locale === "zh" ? "筛选卡牌" : "Refine cards" }}</strong>
+        <p>{{ eyebrow ?? (locale === "zh" ? "检索条件" : "Filters") }}</p>
+        <strong>{{ title ?? (locale === "zh" ? "筛选卡牌" : "Refine cards") }}</strong>
       </div>
       <div class="legend">
         <span class="include"
@@ -182,119 +274,145 @@ function applyDraft(): void {
       </button>
     </header>
     <div class="filter-scroll">
-      <section class="filter-section numeric-section">
-        <div
-          v-for="k in ['energy', 'returnEnergy', 'power'] as const"
-          :key="k"
-          class="range-row"
-        >
-          <span class="range-label">{{ numericLabel(k) }}</span>
-          <div class="range-values">
-            <input
-              v-model.number="draftNumeric[k].min"
-              class="desktop-range-input"
-              type="number"
-              inputmode="numeric"
-              :aria-label="`${numericLabel(k)} ${localeText('最小值', 'minimum')}`"
-              :title="localeText('滚轮调整，也可直接输入', 'Scroll to adjust or type a number')"
-              :min="bounds[k].min"
-              :max="draftNumeric[k].max"
-              step="1"
-              @change="normalizeRange(k, 'min')"
-              @wheel="scrollRange($event, k, 'min')"
-            />
+      <template v-for="(group, index) in groups" :key="group.id">
+        <section v-if="index === numericIndex" class="filter-section numeric-section">
+          <div
+            v-for="k in ['energy', 'returnEnergy', 'power'] as const"
+            :key="k"
+            class="range-row"
+          >
+            <span class="range-label">{{ numericLabel(k) }}</span>
+            <div class="range-values">
+              <input
+                v-model.number="draftNumeric[k].min"
+                class="desktop-range-input"
+                type="number"
+                inputmode="numeric"
+                :aria-label="`${numericLabel(k)} ${localeText('最小值', 'minimum')}`"
+                :title="localeText('滚轮调整，也可直接输入', 'Scroll to adjust or type a number')"
+                :min="bounds[k].min"
+                :max="draftNumeric[k].max"
+                step="1"
+                @change="normalizeRange(k, 'min')"
+                @wheel="scrollRange($event, k, 'min')"
+              />
+              <button
+                type="button"
+                class="touch-range-input"
+                :aria-label="`${numericLabel(k)} ${localeText('最小值', 'minimum')} ${draftNumeric[k].min}`"
+                aria-haspopup="dialog"
+                @click="openRangePicker(k, 'min')"
+              >
+                <span>{{ draftNumeric[k].min }}</span><ChevronDown :size="14" aria-hidden="true" />
+              </button>
+              <span aria-hidden="true">—</span
+              ><input
+                v-model.number="draftNumeric[k].max"
+                class="desktop-range-input"
+                type="number"
+                inputmode="numeric"
+                :aria-label="`${numericLabel(k)} ${localeText('最大值', 'maximum')}`"
+                :title="localeText('滚轮调整，也可直接输入', 'Scroll to adjust or type a number')"
+                :min="draftNumeric[k].min"
+                :max="bounds[k].max"
+                step="1"
+                @change="normalizeRange(k, 'max')"
+                @wheel="scrollRange($event, k, 'max')"
+              />
+              <button
+                type="button"
+                class="touch-range-input"
+                :aria-label="`${numericLabel(k)} ${localeText('最大值', 'maximum')} ${draftNumeric[k].max}`"
+                aria-haspopup="dialog"
+                @click="openRangePicker(k, 'max')"
+              >
+                <span>{{ draftNumeric[k].max }}</span><ChevronDown :size="14" aria-hidden="true" />
+              </button>
+            </div>
+          </div>
+        </section>
+        <section class="filter-section">
+          <button
+            class="section-toggle"
+            type="button"
+            @click="emit('section', group.id, !isOpen(group.id))"
+          >
+            <span>{{ group.label[locale === "zh" ? 0 : 1] }}</span>
+            <small v-if="groupCount(group)">{{ groupCount(group) }}</small>
+            <b><Minus v-if="isOpen(group.id)" :size="14" /><Plus v-else :size="14" /></b>
+          </button>
+          <div v-if="isOpen(group.id)" class="filter-options">
             <button
+              v-for="option in groupOptions(group)"
+              :key="option"
               type="button"
-              class="touch-range-input"
-              :aria-label="`${numericLabel(k)} ${localeText('最小值', 'minimum')} ${draftNumeric[k].min}`"
-              aria-haspopup="dialog"
-              @click="openRangePicker(k, 'min')"
+              :class="[
+                'facet',
+                group.kind === 'toggle'
+                  ? isPicked(group.id, option)
+                    ? 'include'
+                    : null
+                  : modeOf(group.id, option),
+                {
+                  'color-facet': group.icon === 'rune',
+                  'icon-facet': !!iconOf(group, option),
+                },
+              ]"
+              :title="
+                group.icon === 'rune'
+                  ? colorLabel(option)
+                  : group.icon === 'keyword'
+                    ? optionLabel(group, option)
+                    : undefined
+              "
+              :aria-label="
+                group.icon === 'rune'
+                  ? colorLabel(option)
+                  : optionLabel(group, option)
+              "
+              :aria-pressed="
+                group.kind === 'toggle'
+                  ? isPicked(group.id, option)
+                  : !!modeOf(group.id, option)
+              "
+              @click="
+                group.kind === 'toggle'
+                  ? togglePick(group.id, option)
+                  : cycle(group.id, option)
+              "
+              @contextmenu.prevent="
+                group.kind === 'cycle' && clearMode(group.id, option)
+              "
             >
-              <span>{{ draftNumeric[k].min }}</span><ChevronDown :size="14" aria-hidden="true" />
-            </button>
-            <span aria-hidden="true">—</span
-            ><input
-              v-model.number="draftNumeric[k].max"
-              class="desktop-range-input"
-              type="number"
-              inputmode="numeric"
-              :aria-label="`${numericLabel(k)} ${localeText('最大值', 'maximum')}`"
-              :title="localeText('滚轮调整，也可直接输入', 'Scroll to adjust or type a number')"
-              :min="draftNumeric[k].min"
-              :max="bounds[k].max"
-              step="1"
-              @change="normalizeRange(k, 'max')"
-              @wheel="scrollRange($event, k, 'max')"
-            />
-            <button
-              type="button"
-              class="touch-range-input"
-              :aria-label="`${numericLabel(k)} ${localeText('最大值', 'maximum')} ${draftNumeric[k].max}`"
-              aria-haspopup="dialog"
-              @click="openRangePicker(k, 'max')"
-            >
-              <span>{{ draftNumeric[k].max }}</span><ChevronDown :size="14" aria-hidden="true" />
+              <img
+                v-if="iconOf(group, option)"
+                :src="iconOf(group, option)!.url"
+                :class="{ white: iconOf(group, option)!.white }"
+                alt=""
+              />
+              <span
+                v-else-if="group.icon === 'rune' && option === 'colorless'"
+                class="colorless-mark"
+                aria-hidden="true"
+                ><CircleDashed :size="14" aria-hidden="true" /></span
+              >
+              <span v-else>{{ optionLabel(group, option) }}</span>
+              <em
+                v-if="
+                  group.kind === 'cycle' &&
+                  modeOf(group.id, option) &&
+                  !iconOf(group, option)
+                "
+                ><Circle
+                  v-if="modeOf(group.id, option) === 'include'"
+                  :size="12" /><CircleDot
+                  v-else-if="modeOf(group.id, option) === 'require'"
+                  :size="12" /><CircleX v-else :size="12"
+              /></em>
             </button>
           </div>
-        </div>
-      </section>
-      <section v-for="type in order" :key="type" class="filter-section">
-        <button
-          class="section-toggle"
-          type="button"
-          @click="emit('section', type, !isOpen(type))"
-        >
-          <span>{{ labels[type][locale === "zh" ? 0 : 1] }}</span>
-          <small v-if="selectedCount(type)">{{ selectedCount(type) }}</small>
-          <b><Minus v-if="isOpen(type)" :size="14" /><Plus v-else :size="14" /></b>
-        </button>
-        <div v-if="isOpen(type)" class="filter-options">
-          <button
-            v-for="option in options[type]"
-            :key="option"
-            type="button"
-            :class="[
-              'facet',
-              mode(type, option),
-              { 'color-facet': type === 'color' },
-            ]"
-            :title="
-              type === 'color'
-                ? option === 'colorless'
-                  ? locale === 'zh'
-                    ? '无色'
-                    : 'Colorless'
-                  : option
-                : undefined
-            "
-            :aria-label="
-              type === 'color'
-                ? option === 'colorless'
-                  ? locale === 'zh'
-                    ? '无色'
-                    : 'Colorless'
-                  : option
-                : undefined
-            "
-            @click="cycle(type, option)"
-            @contextmenu.prevent="clearMode(type, option)"
-          >
-            <img
-              v-if="type === 'color' && option !== 'colorless'"
-              :src="`${assetBase}runes/${option}.svg`"
-              alt=""
-            />
-            <span v-if="type !== 'color'">{{ option }}</span>
-            <span
-              v-else-if="option === 'colorless'"
-              class="colorless-mark"
-              aria-hidden="true"
-              ><CircleDashed :size="14" aria-hidden="true" /></span
-            >
-            <em v-if="mode(type, option) && type !== 'color'"><Circle v-if="mode(type, option) === 'include'" :size="12" /><CircleDot v-else-if="mode(type, option) === 'require'" :size="12" /><CircleX v-else :size="12" /></em>
-          </button>
-        </div>
-      </section>
+        </section>
+      </template>
     </div>
     <footer class="filter-foot">
       <button type="button" class="reset" @click="reset">
@@ -387,6 +505,7 @@ function applyDraft(): void {
 }
 .filter-scroll {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: 0 16px 14px;
 }
@@ -456,7 +575,12 @@ function applyDraft(): void {
   width: 17px;
   height: 17px;
 }
-.facet.color-facet {
+/* 图标表里的白色素材放到宣纸底色上会看不见，与卡牌详情同一套反色。 */
+.facet img.white {
+  filter: invert(1);
+}
+.facet.color-facet,
+.facet.icon-facet {
   width: 38px;
   min-width: 38px;
   justify-content: center;
@@ -465,6 +589,10 @@ function applyDraft(): void {
 .facet.color-facet img {
   width: 21px;
   height: 21px;
+}
+.facet.icon-facet img {
+  width: 20px;
+  height: 20px;
 }
 .colorless-mark {
   display: inline-grid;
@@ -501,6 +629,10 @@ function applyDraft(): void {
 .facet:is(.include, .require, .exclude) img {
   filter: brightness(0) invert(1);
 }
+/* 已经反过色的白图标落到实底芯片上要还原，否则会变成黑块。 */
+.facet:is(.include, .require, .exclude) img.white {
+  filter: none;
+}
 .numeric-section {
   padding: 15px 0 9px;
 }
@@ -523,7 +655,8 @@ function applyDraft(): void {
   align-items: center;
   gap: 5px;
 }
-.range-values input, .touch-range-input {
+.range-values input,
+.touch-range-input {
   width: 60px;
   height: 34px;
   padding: 5px;
@@ -534,14 +667,19 @@ function applyDraft(): void {
   font-size: 13px;
   font-variant-numeric: tabular-nums;
 }
-.range-values input:focus-visible, .touch-range-input:focus-visible {
+.range-values input:focus-visible,
+.touch-range-input:focus-visible {
   border-color: var(--color-brand);
   outline: 2px solid var(--color-brand-soft);
   outline-offset: 1px;
 }
-.touch-range-input { display: none; }
+.touch-range-input {
+  display: none;
+}
 @media (max-width: 1023px), (pointer: coarse) {
-  .range-values .desktop-range-input { display: none; }
+  .range-values .desktop-range-input {
+    display: none;
+  }
   .touch-range-input {
     display: inline-flex;
     align-items: center;
@@ -552,7 +690,9 @@ function applyDraft(): void {
     color: var(--color-text-primary);
     font-size: 16px;
   }
-  .range-label { font-size: 14px; }
+  .range-label {
+    font-size: 14px;
+  }
 }
 .filter-foot {
   display: grid;

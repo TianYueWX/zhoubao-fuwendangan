@@ -162,6 +162,23 @@ try {
     assert(await js("JSON.parse(localStorage.getItem('rune.collection.ui.v1')).view==='all'"));
     assert(await js("(()=>{const u=JSON.parse(localStorage.getItem('rune.collection.ui.v1'));return Array.isArray(u.sort)&&u.sort.length===2&&u.sort[0].field==='name'})()"));
   });
+  await test('筛选面板与卡牌查询同一套:语言 toggle + 数值范围 + 应用生效',async()=>{
+    await wait("document.querySelectorAll('.desktop-filter .facet').length>0");
+    assert.equal(await js("document.querySelectorAll('.desktop-filter .numeric-section input[type=number]').length"),6,'三个数值范围各两个输入框');
+    const before=await js("Number(document.querySelector('.result-count').textContent.replace(/[^0-9]/g,''))");
+    await js("[...document.querySelectorAll('.desktop-filter .facet')].find(b=>b.textContent.trim()==='简中').click()");
+    assert(await js("!!document.querySelector('.desktop-filter .facet.include')"),'点选后进入 include 态');
+    assert.equal(await js("Number(document.querySelector('.result-count').textContent.replace(/[^0-9]/g,''))"),before,'草稿未应用时不改动结果');
+    await js("[...document.querySelectorAll('.desktop-filter .filter-foot button')].find(b=>b.textContent.includes('应用')).click()");
+    await sleep(300);
+    const after=await js("Number(document.querySelector('.result-count').textContent.replace(/[^0-9]/g,''))");
+    assert(after>0&&after<before,`before=${before} after=${after}`);
+    assert(await js("(()=>{const u=JSON.parse(localStorage.getItem('rune.collection.ui.v1'));return u.languages.length===1&&u.languages[0]==='SC'})()"));
+    await shot('desktop-filtered');
+    await click('.active-clear');
+    await sleep(300);
+    assert.equal(await js("Number(document.querySelector('.result-count').textContent.replace(/[^0-9]/g,''))"),before);
+  });
   await test('手机 390/430:单列工具条不溢出,筛选变抽屉',async()=>{
     for(const width of [390,430]){
       await viewport(width,932);
@@ -169,11 +186,12 @@ try {
       assert.equal(await js("getComputedStyle(document.querySelector('.workspace')).gridTemplateColumns.split(' ').length"),1);
     }
     await js("[...document.querySelectorAll('.tool-btn')].find(b=>b.textContent.includes('筛选')).click()");
-    await wait("document.querySelector('.filter-drawer')");
-    assert(await js("document.querySelector('.filter-drawer').innerText.includes('语言')"));
+    await wait("document.querySelector('.mobile-filter')");
+    assert(await js("document.querySelector('.mobile-filter').innerText.includes('语言')"));
+    assert(await js("document.querySelector('.mobile-filter').innerText.includes('筛选卡池')"));
     await shot('mobile-drawer');
-    await click('.filter-drawer footer .solid-btn');
-    await wait("!document.querySelector('.filter-drawer')");
+    await click('.mobile-filter .mobile-close');
+    await wait("!document.querySelector('.mobile-filter')");
     assert((await js('document.documentElement.scrollWidth'))<=430);
     await shot('mobile');
     await viewport(1680,1050);

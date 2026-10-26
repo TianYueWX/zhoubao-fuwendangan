@@ -12,7 +12,7 @@
 | 用途 | 台账 + 构筑联动(不是交易/估价/统计看板) |
 | 粒度 | **按印版**:同一张卡的平卡、异画、超编、签名超编分开记;简中与英文分开记 |
 | 录入 | 逐张点选加减;**不做**粘贴/CSV/扫码批量导入 |
-| 展示 | 参考卡牌查询页(`#/cards`)的做法:搜索、分面筛选、卡图墙、弹层详情 |
+| 展示 | 参考卡牌查询页(`#/cards`)的做法:搜索、分面筛选、卡图墙、弹层详情;筛选面板直接复用 `CarddexFilters` |
 | 联动 | 四项全要:卡池显示「持有 N」、`只看我有的` 开关、缺卡清单、卡组完成度 |
 | 页首统计 | 不要。工具条只报「N 项」,不出现总额、估值、收集率 |
 | 默认视图 | 「我有的」,并记住用户切换过的视图与排序规则 |
@@ -66,13 +66,14 @@
 - 分段按钮选中态是朱砂实底 + 米白字;筛选按钮右上角 17px 朱砂圆点显示启用条数
 - 卡格:1px 边、圆角 10px、卡面底色;悬停上移 2px。卡图下方两行字 —— 名称 12px、`印本号 · 简中 · 异画` 10px
 - 步进条 28px 高,`−` / 数字 / `＋` 三栏;持有数 > 0 时数字为朱砂 600,未持有为弱字 400
-- 未持有的卡图降饱和(`grayscale(.6) opacity(.55)`),不做额外徽章
+- 未持有的卡不做处理;点工具条「突出持有」才把未持有的卡图降饱和(`grayscale(.6) opacity(.55)`),再点取消
+- 筛选面板与卡牌查询同一个组件:草稿制,改动先进草稿,底部「重置 / 应用」;卡池多出语言、版本两个 toggle 组(排在最上),数值范围插在它们之后;关键词芯片只显示图标,`title` 与 `aria-label` 出文字,查不到图标时回落文字
 - 网格 `repeat(auto-fill, minmax(118px,1fr))`,间距 22×14;≥1500px 放宽到 138px;≤600px 两列
 - 无限滚动每次 48 张,距底 500px 开始加载;点卡图开详情弹层(不显示「标记」按钮),点 `−/＋` 不冒泡
 
 ### 手机(≤1023px)
 
-单列;工具条两行(搜索一行、分段 + 排序 + 筛选一行);排序对话框在手机上为全屏内滚;筛选变全屏抽屉,底部主按钮「查看 N 项」;网格两列、步进条 32px;无横向滚动。
+单列;工具条两行(搜索一行、分段 + 排序 + 筛选一行);排序对话框在手机上为全屏内滚;筛选变全屏浮层(面板自带标题与「重置 / 应用」,右上角关闭);网格两列、步进条 32px;无横向滚动。
 
 ### 状态
 
@@ -129,7 +130,7 @@
 | `src/tools/collection/useCollection.ts` | 乐观记账、合并、串行同步、重试 |
 | `src/tools/collection/useHeld.ts` | 只读持有量(构筑页/详情页) |
 | `src/components/collection/CollectionTile.vue` | 卡格 + 步进条 |
-| `src/components/collection/CollectionFilters.vue` | 筛选面板 |
+| `src/components/carddex/facets.ts` | 标准八面的标签/顺序/图标规则 |
 | `src/components/view/CollectionView.vue` | 页面 |
 | `scripts/verify-collection.mjs` | 纯逻辑回归 |
 | `scripts/verify-collection-ui.mjs` | 浏览器验收(REST 夹具) |
@@ -137,6 +138,7 @@
 改动:
 
 - `src/components/carddex/query.ts`:新增 `buildPrintCards`(每个印本单独一格,不合并语言)
+- `src/components/carddex/CarddexFilters.vue`:泛化成唯一筛选面板,新增 `groups` / `selections` / `numericAfter` / `icons` / `title` / `eyebrow`;`apply` 多回传一份 toggle 选择
 - `src/components/carddex/CardDetailModal.vue`:新增 `showPin`(默认 `true`),卡池页传 `false`
 - `src/components/admin/EditorialGate.vue`:标题/说明/按钮文案可配置,默认值不变
 - `src/tools/catalog.ts`:登记 `collection`;栏目菜单的登录过滤改为「只隐藏需登录的项,整组都需登录时才收敛到栏目首页」

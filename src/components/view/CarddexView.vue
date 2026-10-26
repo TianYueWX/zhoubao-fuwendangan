@@ -695,6 +695,7 @@ onBeforeUnmount(() => {
           :options="options"
           :bounds="bounds"
           :sections="ui.sections"
+          :icons="icons"
           @apply="applyFilters"
           @section="toggleSection"
         />
@@ -710,6 +711,7 @@ onBeforeUnmount(() => {
           :options="options"
           :bounds="bounds"
           :sections="ui.sections"
+          :icons="icons"
           @apply="applyFilters"
           @section="toggleSection"
           @close="mobileFilterOpen = false"

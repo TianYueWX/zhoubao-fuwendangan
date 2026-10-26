@@ -9,6 +9,7 @@ import type {
   CarddexQueryState,
   DisplayCard,
   FilterType,
+  NumberRange,
   NumericFilters,
   SortField,
   SortRule,
@@ -178,10 +179,14 @@ export function activeFilterCount(input: {
   languages: string[];
   versions: string[];
   numeric: NumericFilters;
+  /** 三个数值范围各自的默认区间（卡表到齐后才知道），不传退回 0–99 哨兵 */
+  bounds?: Record<"energy" | "returnEnergy" | "power", NumberRange>;
 }): number {
   let count = input.filters.length + input.languages.length + input.versions.length;
-  for (const range of Object.values(input.numeric)) {
-    if (range.min > 0 || range.max < 99) count += 1;
+  for (const key of ["energy", "returnEnergy", "power"] as const) {
+    const range = input.numeric[key];
+    const reference = input.bounds?.[key] ?? { min: 0, max: 99 };
+    if (range.min !== reference.min || range.max !== reference.max) count += 1;
   }
   return count;
 }

@@ -12,6 +12,29 @@ export type FilterType =
   | "keyword"
   | "advancedTag";
 
+/**
+ * 筛选面板里的一个分面组。
+ *
+ * `cycle` 是卡牌查询的八个标准分面（包含 / 必须 / 排除 三态循环，可右键清除）；
+ * `toggle` 是卡池新增的两个轴（语言 / 版本），只有选中与未选中两种状态。
+ * 两者共用同一套外壳：标题、计数、折叠、芯片。
+ */
+export type FacetKind = "cycle" | "toggle";
+
+export interface FacetGroupDef {
+  /** cycle 组用 FilterType；toggle 组用任意稳定 id（language / version） */
+  id: string;
+  kind: FacetKind;
+  /** [中文, English] */
+  label: [string, string];
+  /** 候选值；不传则回落到面板的 options[group.id] */
+  options?: string[];
+  /** 值 → 显示文案（语言码 SC → 简中） */
+  display?: Record<string, string>;
+  /** 图标来源：颜色用本地符文图，关键词查 card_icons */
+  icon?: "rune" | "keyword";
+}
+
 export interface CardBase {
   id: string;
   cardNo: string;
